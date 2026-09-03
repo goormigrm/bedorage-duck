@@ -4,6 +4,10 @@
 
 ## 2026-09-03
 
+### 다른 PC 에서 이어가기 문서
+- `README.md` 신설: 클론·설치·실행·커밋 작성자 설정·gh 로그인·Claude 이어가기 한 줄·명령·구조·조작·고지.
+- `HANDOVER.md` 에 "다른 PC 에서 이어가기" 절차(pull 먼저, OneDrive 충돌 주의), `docs/PREP.md` 에 F-1 노트북 준비물 체크리스트.
+
 ### P2P 두 브라우저 검증 통과 · 백그라운드 탭에서도 도는 틱
 - `src/game/ticker.ts`: 전용 Web Worker 가 16ms 마다 신호 → 시뮬레이션이 탭이 뒤에 있어도 진행된다(rAF 는 렌더만). 상대가 창을 잠깐 뒤로 보내도 락스텝이 멈추지 않는다.
 - `lockstep.ts`: ArrayBuffer 로 도착한 입력 패킷도 처리.

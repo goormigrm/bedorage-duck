@@ -47,6 +47,15 @@
 | gh CLI | 2.97.0, goormigrm 로그인 ✅ |
 | 작업 폴더 | `C:\Users\tkdrm\OneDrive\Desktop\철FPS` — OneDrive 동기화 폴더. `.git` 충돌 방지를 위해 커밋 직후 푸시 습관 |
 
+## F-1. 다른 PC(노트북)에서 작업할 때 준비할 것
+
+- [ ] Node.js 20 이상 설치 (https://nodejs.org, LTS 또는 24)
+- [ ] git 설치, `git config --global user.name` 은 굳이 안 해도 됨 (저장소 안에서 로컬 설정)
+- [ ] GitHub CLI 설치 후 `gh auth login` (푸시·배포 상태 확인용). 없으면 git push 시 브라우저 로그인 창으로도 가능
+- [ ] `git clone https://github.com/goormigrm/bedorage-duck.git` → `npm install` → `npm run dev` 로 로컬 실행 확인
+- [ ] Claude Code 설치·로그인. 프로젝트 폴더에서 열고 "HANDOVER.md 읽고 이어서 진행해줘"
+- [ ] 두 PC 를 오갈 때 규칙: 시작은 `git pull`, 끝은 커밋·푸시. 메인 PC(OneDrive) 는 돌아온 뒤 `git pull` 먼저.
+
 ## F. 세션이 끊겼을 때 이어가는 법
 
 1. 새 Claude Code 세션을 같은 폴더에서 연다.

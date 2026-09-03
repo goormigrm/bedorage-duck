@@ -10,7 +10,17 @@
 
 - 저장소: https://github.com/goormigrm/bedorage-duck
 - 배포 주소: https://goormigrm.github.io/bedorage-duck/ (게임) · https://goormigrm.github.io/bedorage-duck/preview.html (프리뷰)
-- 로컬 폴더: `C:\Users\tkdrm\OneDrive\Desktop\철FPS` (폴더명은 한글이지만 저장소명은 bedorage-duck)
+- 로컬 폴더(메인 PC): `C:\Users\tkdrm\OneDrive\Desktop\철FPS` (폴더명은 한글이지만 저장소명은 bedorage-duck). 다른 PC 는 clone 한 곳이 작업 폴더.
+
+## 다른 PC 에서 이어가기 (노트북 등)
+
+1. `git clone https://github.com/goormigrm/bedorage-duck.git` → `cd bedorage-duck` → `npm install` → `npm run dev`
+2. 커밋 작성자는 저장소별 설정이라 다시: `git config user.name goormigrm` · `git config user.email 1117tkdrms@gmail.com`
+3. 푸시 권한: `gh auth login` (또는 git 자격증명 관리자로 GitHub 로그인). `gh` 는 배포 상태 확인(`gh run list`)에도 쓴다.
+4. Claude Code 새 세션에서 **"HANDOVER.md 읽고 이어서 진행해줘"**. Claude 의 로컬 메모리는 PC 마다 따로라 새 PC 에선 비어 있고, 이 문서가 정본이다.
+5. 작업 후에는 반드시 커밋·푸시. 두 PC 를 오가므로 세션 시작 시 `git pull` 부터 (Claude 에게 시키면 된다).
+6. 메인 PC 는 OneDrive 폴더 안이라 `.git` 이 동기화 충돌을 겪을 수 있다. 다른 PC 에서 푸시한 뒤 메인 PC 로 돌아오면 `git pull` 을 먼저 하고, 충돌 시 원격(main) 을 기준으로 맞춘다.
+7. 준비물·권한 체크는 `docs/PREP.md`. 브라우저 자동 검증용 `.claude/launch.json` 은 저장소에 포함돼 있다.
 
 ## 실행
 
