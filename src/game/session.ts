@@ -12,6 +12,7 @@ import { CtlMessage, RoomLink } from '../net/room'
 import { VIEW_H, VIEW_W } from '../render/hud'
 import { Renderer3D } from '../render3d/renderer3d'
 import { LocalInput } from './localInput'
+import { Ticker } from './ticker'
 
 export interface SessionConfig {
   mode: 'solo' | 'p2p'
@@ -46,6 +47,8 @@ export class Session {
   private disposed = false
   private hashes = new Map<number, number>()
   private names: [string, string]
+  private ticker: Ticker
+  private lastTick = performance.now()
 
   constructor(
     host: HTMLElement,
@@ -93,7 +96,10 @@ export class Session {
     window.addEventListener('keydown', this.onKey)
     window.addEventListener('resize', this.fit)
     this.fit()
+    this.ticker = new Ticker(() => this.tick())
+    this.ticker.start()
     this.raf = requestAnimationFrame(this.frame)
+    ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase }
   }
 
   private fit = (): void => {
@@ -192,50 +198,56 @@ export class Session {
     if (this.cfg.link) this.lockstep = new Lockstep(this.cfg.link, this.cfg.delay ?? 3)
   }
 
+  /** 시뮬레이션 진행 (워커 타이머가 16ms 마다 호출, 탭이 뒤에 있어도 돈다) */
+  private tick(): void {
+    if (this.disposed) return
+    const now = performance.now()
+    const dt = Math.min(0.25, (now - this.lastTick) / 1000)
+    this.lastTick = now
+    if (this.paused || this.state.phase === 'over') return
+    const lp = this.cfg.localPlayer
+    const me = this.state.players[lp]
+    this.acc += dt * 1000
+    let steps = 0
+    while (this.acc >= TICK_MS && steps < 8) {
+      const t = this.state.tick
+      const localIn = this.input.sample(this.renderer, me.x, me.y)
+      let inputs: [Input, Input]
+      if (this.lockstep) {
+        this.lockstep.pushLocal(t, localIn)
+        if (!this.lockstep.hasBoth(t)) {
+          if (this.stallSince < 0) this.stallSince = now
+          break
+        }
+        this.stallSince = -1
+        const [l, r] = this.lockstep.get(t)
+        inputs = lp === 0 ? [l, r] : [r, l]
+      } else {
+        const botIn = botInput(this.state, this.map, lp === 0 ? 1 : 0, this.bot, this.cfg.difficulty ?? 'normal')
+        inputs = lp === 0 ? [localIn, botIn] : [botIn, localIn]
+      }
+      this.prev = snapshot(this.state)
+      step(this.state, this.map, inputs)
+      this.renderer.onEvents(this.state.events, this.state, lp)
+      if (this.lockstep && this.state.tick % 60 === 0) {
+        const h = hashState(this.state)
+        this.hashes.set(this.state.tick, h)
+        if (this.hashes.size > 10) this.hashes.delete(Math.min(...this.hashes.keys()))
+        this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h })
+        this.lockstep.prune(this.state.tick)
+      }
+      for (const e of this.state.events) if (e.type === 'over') this.onOver()
+      this.acc -= TICK_MS
+      steps++
+    }
+    if (this.acc > TICK_MS * 8) this.acc = TICK_MS * 8
+  }
+
   private frame = (now: number): void => {
     if (this.disposed) return
     const dt = Math.min(0.1, (now - this.last) / 1000)
     this.last = now
     const lp = this.cfg.localPlayer
-    const me = this.state.players[lp]
-
-    if (!this.paused && this.state.phase !== 'over') {
-      this.acc += dt * 1000
-      let steps = 0
-      while (this.acc >= TICK_MS && steps < 6) {
-        const t = this.state.tick
-        const localIn = this.input.sample(this.renderer, me.x, me.y)
-        let inputs: [Input, Input]
-        if (this.lockstep) {
-          this.lockstep.pushLocal(t, localIn)
-          if (!this.lockstep.hasBoth(t)) {
-            if (this.stallSince < 0) this.stallSince = now
-            break
-          }
-          this.stallSince = -1
-          const [l, r] = this.lockstep.get(t)
-          inputs = lp === 0 ? [l, r] : [r, l]
-        } else {
-          const botIn = botInput(this.state, this.map, lp === 0 ? 1 : 0, this.bot, this.cfg.difficulty ?? 'normal')
-          inputs = lp === 0 ? [localIn, botIn] : [botIn, localIn]
-        }
-        this.prev = snapshot(this.state)
-        step(this.state, this.map, inputs)
-        this.renderer.onEvents(this.state.events, this.state, lp)
-        if (this.lockstep && this.state.tick % 60 === 0) {
-          const h = hashState(this.state)
-          this.hashes.set(this.state.tick, h)
-          if (this.hashes.size > 10) this.hashes.delete(Math.min(...this.hashes.keys()))
-          this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h })
-          this.lockstep.prune(this.state.tick)
-        }
-        for (const e of this.state.events) if (e.type === 'over') this.onOver()
-        this.acc -= TICK_MS
-        steps++
-      }
-      if (this.lockstep && this.acc > TICK_MS * 6) this.acc = TICK_MS * 6
-    }
-
     let message = this.message
     if (this.lockstep && this.stallSince >= 0 && now - this.stallSince > 400) message = '상대 입력 대기 중…'
     const alpha = Math.min(1, this.acc / TICK_MS)
@@ -303,6 +315,7 @@ export class Session {
     if (this.disposed) return
     this.disposed = true
     cancelAnimationFrame(this.raf)
+    this.ticker.stop()
     this.input.dispose()
     window.removeEventListener('keydown', this.onKey)
     window.removeEventListener('resize', this.fit)

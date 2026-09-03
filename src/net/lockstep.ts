@@ -42,7 +42,8 @@ export class Lockstep {
     this.link.sendInput(new Uint8Array(buf))
   }
 
-  private receive(buf: Uint8Array): void {
+  private receive(raw: Uint8Array | ArrayBuffer): void {
+    const buf = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
     if (buf.byteLength < 5) return
     const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
     const latest = v.getUint32(0)
