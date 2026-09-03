@@ -1,8 +1,8 @@
 import { GameMap, TILE, isWall } from './map'
 
 /**
- * 원(반지름 r)을 (dx, dy) 만큼 옮기되 벽 타일에 걸리면 축별로 밀어낸다.
- * X 축 이동 → 충돌 해소 → Y 축 이동 → 충돌 해소. 결정론적.
+ * 원(반지름 r)을 (dx, dy) 만큼 옮기고 벽 타일과 겹치면 밀어낸다.
+ * 모서리에 닿으면 모서리 법선 방향으로 밀어내므로 미끄러지며 지나간다. 결정론적.
  */
 export function moveCircle(
   map: GameMap,
@@ -12,14 +12,23 @@ export function moveCircle(
   dx: number,
   dy: number,
 ): { x: number; y: number } {
-  x += dx
-  x = resolveAxis(map, x, y, r, true)
-  y += dy
-  y = resolveAxis(map, x, y, r, false)
+  // 한 번에 너무 멀리 가면 터널링 → 절반씩 두 번
+  const steps = Math.abs(dx) > r * 0.8 || Math.abs(dy) > r * 0.8 ? 2 : 1
+  for (let s = 0; s < steps; s++) {
+    x += dx / steps
+    y += dy / steps
+    for (let iter = 0; iter < 2; iter++) {
+      const res = resolve(map, x, y, r)
+      x = res.x
+      y = res.y
+      if (!res.moved) break
+    }
+  }
   return { x, y }
 }
 
-function resolveAxis(map: GameMap, x: number, y: number, r: number, horizontal: boolean): number {
+function resolve(map: GameMap, x: number, y: number, r: number): { x: number; y: number; moved: boolean } {
+  let moved = false
   const minTx = Math.floor((x - r) / TILE)
   const maxTx = Math.floor((x + r) / TILE)
   const minTy = Math.floor((y - r) / TILE)
@@ -31,24 +40,38 @@ function resolveAxis(map: GameMap, x: number, y: number, r: number, horizontal: 
       const right = left + TILE
       const top = ty * TILE
       const bottom = top + TILE
-      // 원과 AABB 최근접점
       const cx = x < left ? left : x > right ? right : x
       const cy = y < top ? top : y > bottom ? bottom : y
       const ddx = x - cx
       const ddy = y - cy
       const d2 = ddx * ddx + ddy * ddy
       if (d2 >= r * r) continue
-      if (horizontal) {
-        // 좌우 중 가까운 쪽으로 밀어냄
-        if (x < (left + right) / 2) x = left - r
-        else x = right + r
-      } else {
-        if (y < (top + bottom) / 2) y = top - r
+      moved = true
+      if (d2 === 0) {
+        // 중심이 타일 안: 가장 얕은 축으로 탈출
+        const pl = x - left
+        const pr = right - x
+        const pt = y - top
+        const pb = bottom - y
+        const m = Math.min(pl, pr, pt, pb)
+        if (m === pl) x = left - r
+        else if (m === pr) x = right + r
+        else if (m === pt) y = top - r
         else y = bottom + r
+      } else if (ddx !== 0 && ddy !== 0) {
+        // 모서리: 법선 방향으로 밀어냄 (슬라이딩)
+        const d = Math.sqrt(d2)
+        const push = r - d
+        x += (ddx / d) * push
+        y += (ddy / d) * push
+      } else if (ddx !== 0) {
+        x = ddx > 0 ? right + r : left - r
+      } else {
+        y = ddy > 0 ? bottom + r : top - r
       }
     }
   }
-  return horizontal ? x : y
+  return { x, y, moved }
 }
 
 /** 원-원 겹침 */

@@ -400,15 +400,23 @@ export class Renderer {
       if (a0 && a1) {
         tx = (p0.x + p1.x) / 2
         ty = (p0.y + p1.y) / 2
-        const dx = Math.abs(p0.x - p1.x) + 360
-        const dy = Math.abs(p0.y - p1.y) + 260
+        const dx = Math.abs(p0.x - p1.x) + 420
+        const dy = Math.abs(p0.y - p1.y) + 300
         tz = Math.min(VIEW_W / dx, VIEW_H / dy)
-        tz = Math.max(0.85, Math.min(1.45, tz))
+        tz = Math.max(1.25, Math.min(1.9, tz))
+        // 너무 멀리 떨어져 있으면 둘의 중점 대신 살아있는 첫 플레이어 쪽으로 치우침
+        const far = Math.hypot(p0.x - p1.x, p0.y - p1.y)
+        if (far > 640) {
+          const k = Math.min(1, (far - 640) / 400)
+          tx = tx * (1 - k) + p0.x * k
+          ty = ty * (1 - k) + p0.y * k
+          tz = 1.35
+        }
       } else if (a0 || a1) {
         const p = a0 ? p0 : p1
         tx = p.x
         ty = p.y
-        tz = 1.25
+        tz = 1.5
       } else {
         tx = this.cam.x
         ty = this.cam.y

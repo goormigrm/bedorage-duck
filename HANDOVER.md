@@ -28,12 +28,13 @@ npm run build        # tsc --noEmit + vite build → dist/
 | 결정론 sim (`src/core/`) | ✅ 구현 | 이동·대시·사격·투사체·부위피해·리스폰·목표킬 승리 |
 | 봇 AI (`src/core/bot.ts`) | ✅ 구현 | easy/normal/hard, BFS 경로, 리드샷, 회피 대시 |
 | Canvas 렌더러 (`src/render/canvas.ts`) | ✅ 구현 | 맵·오리·탄·이펙트·HUD·시네마틱 카메라 |
-| 프리뷰 페이지 (`preview.html`, `src/preview.ts`) | 🔧 작업 중 | 봇 vs 봇 자동 플레이, 캡처용 |
+| 프리뷰 페이지 (`preview.html`, `src/preview.ts`) | ✅ 동작 | 봇 vs 봇 자동 플레이, 슬로모션, 타이틀 카드, 레터박스. 브라우저 탭이 앞에 있어야 애니메이션이 돈다 |
 | 게임 본편 (`index.html`, `src/main.ts`) | ⏳ 예정 | 로비(혼자 하기 / 방 만들기 / 방 참가) |
 | P2P (`src/net/`) | ⏳ 예정 | Trystero 시그널링 + 락스텝 |
-| 배포 워크플로 | ✅ 작성 | `.github/workflows/deploy.yml`, Pages Source = GitHub Actions 필요 |
+| 배포 워크플로 | ✅ 설정 | Pages 활성화됨(build_type=workflow). 배포 성공 여부는 `gh run list` 로 확인 |
 | 유저 배포 문서 | ⏳ 예정 | `docs/공지글-모음.md` |
-| 준비물 문서 | ⏳ 예정 | `docs/PREP.md` |
+| 준비물 문서 | ✅ 작성 | `docs/PREP.md` |
+| 테스트 | ✅ 5개 통과 | `tests/determinism.test.ts` |
 
 ## 핵심 설계 결정 (바꾸려면 설계서도 같이 수정)
 
@@ -70,12 +71,11 @@ src/preview.ts          프리뷰 루프 (봇 vs 봇, 슬로모션, 타이틀 �
 
 ## 다음 할 일 (우선순위 순)
 
-1. `src/preview.ts` 완성 → 브라우저 확인 → 커밋. 프리뷰가 캡처 가능한 상태가 1차 목표.
+1. (완료) 프리뷰 동작. 남은 다듬기: 봇 교전 빈도 튜닝, 효과음, 캐릭터 액세서리 디테일.
 2. `index.html` + `src/main.ts`: 로비 UI(혼자 하기 / 방 만들기 / 방 참가), 키보드·마우스 입력, 혼자 하기 모드 완성.
 3. `src/net/`: Trystero 방 생성/참가, 락스텝, 해시 검증, 리싱크.
-4. GitHub Pages 활성화 확인 (Settings → Pages → Source: GitHub Actions).
-5. `docs/공지글-모음.md`, `docs/PREP.md`, 설계서 갱신(탈출 모드 삭제, AI 모드 추가, Canvas 렌더러).
-6. `tests/determinism.test.ts`.
+4. 첫 배포 성공 확인 (`gh run list --repo goormigrm/bedorage-duck`), https://goormigrm.github.io/bedorage-duck/preview.html 접속 확인.
+5. `docs/공지글-모음.md`, 설계서 갱신(탈출 모드 삭제, AI 모드 추가, Canvas 렌더러, 방 흐름).
 
 ## 알려진 이슈 / 주의
 

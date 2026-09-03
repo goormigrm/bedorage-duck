@@ -77,7 +77,9 @@ function frame(now: number): void {
     if (hintTimer <= 0) hint.style.opacity = '0'
   }
 
-  if (!paused) {
+  // 타이틀 카드가 떠 있는 동안은 시뮬레이션을 잠시 멈춘다 (카운트다운과 겹치지 않게)
+  const titleHold = titleT < 2.6
+  if (!paused && !titleHold) {
     if (slowmoLeft > 0) {
       slowmoLeft -= rawDt
       timeScale = slowmoLeft > 0 ? 0.22 : 1
@@ -104,7 +106,7 @@ function frame(now: number): void {
 
   const alpha = Math.min(1, acc / TICK_MS)
   renderer.draw(match.prev, match.state, alpha, rawDt, {
-    showHud,
+    showHud: showHud && !titleHold,
     localPlayer: -1,
     cameraMode,
     names: match.names,
