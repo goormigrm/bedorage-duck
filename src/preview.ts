@@ -163,12 +163,29 @@ function frame(now: number): void {
 
 const SHEET = new URLSearchParams(location.search).has('sheet')
 
-/** ?sheet=1 : 캐릭터 시트 (4인 정면·측면 크게) */
+const FOCUS = new URLSearchParams(location.search).get('focus')
+
+/** ?sheet=1 : 캐릭터 시트 (정면·측면 크게). ?sheet=1&focus=<id> : 한 명만 아주 크게 */
 function drawSheet(): void {
   const ctx = renderer.ctx
   ctx.setTransform(renderer.canvas.width / VIEW_W, 0, 0, renderer.canvas.height / VIEW_H, 0, 0)
   ctx.fillStyle = '#1c1f17'
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
+  if (FOCUS) {
+    const c = CHARACTER_LIST.find((x) => x.id === FOCUS)
+    if (c) {
+      const facings = [-Math.PI / 2 + 0.35, 0.2, Math.PI - 0.3]
+      facings.forEach((f, j) => {
+        ctx.save()
+        ctx.translate(VIEW_W / 2 + (j - 1) * 400, VIEW_H / 2 + 200)
+        const s = j === 1 ? 12 : 8
+        ctx.scale(s, s)
+        drawCharacter(ctx, c, { facing: f, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
+        ctx.restore()
+      })
+      return
+    }
+  }
   const n = CHARACTER_LIST.length
   const cw = VIEW_W / n
   const wrap = (text: string, maxW: number): string[] => {
@@ -197,13 +214,13 @@ function drawSheet(): void {
       roundRect(ctx, cw * i + 12, 40, cw - 24, VIEW_H - 80, 12)
       ctx.stroke()
       ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
-      roundRect(ctx, cx - 36, 54, 72, 24, 12)
+      roundRect(ctx, cx - 44, 54, 88, 24, 12)
       ctx.fill()
       ctx.font = '600 12px "IBM Plex Sans KR", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = '#1e2219'
-      ctx.fillText('주인공', cx, 66)
+      ctx.fillText('배도라지장', cx, 66)
     }
     const big = hero ? 4.8 : 4.0
     const small = hero ? 2.8 : 2.4
@@ -285,7 +302,7 @@ function drawOverlay(_dt: number): void {
     ctx.fillText('1:1 쿼터뷰 슈터  ·  서버 없는 P2P 대전  ·  비공식 팬게임', tx0 + 6, VIEW_H / 2 + 52 + rise)
     ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#ff5a36'
-    ctx.fillText('주인공  철면덕', tx0 + 6, VIEW_H / 2 + 84 + rise)
+    ctx.fillText('철면덕 · 침착덕 · 단군덕 · 매직덕 · 주펄덕', tx0 + 6, VIEW_H / 2 + 84 + rise)
     ctx.font = '500 13px "IBM Plex Mono", monospace'
     ctx.fillStyle = '#7d8471'
     ctx.fillText('goormigrm.github.io/bedorage-duck', tx0 + 6, VIEW_H / 2 + 112 + rise)

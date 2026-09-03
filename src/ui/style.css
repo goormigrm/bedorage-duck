@@ -67,7 +67,8 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .game-ui { position: absolute; inset: 0; pointer-events: none; }
 .game-ui .top-right { position: absolute; top: 14px; right: 16px; display: flex; gap: 8px; pointer-events: auto; cursor: default; }
 .game-ui .btn { padding: 6px 12px; font-size: 13px; }
-.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: default; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: default; background: rgba(10,12,8,.35); }
+.overlay[hidden] { display: none; }
 .overlay .box { background: rgba(20,22,16,.9); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; min-width: 360px; text-align: center; }
 .overlay h2 { font-family: "Black Han Sans", sans-serif; font-weight: 400; font-size: 34px; margin: 0 0 8px; }
 .overlay p { color: var(--ink-2); margin: 0 0 16px; }

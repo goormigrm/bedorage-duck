@@ -78,7 +78,7 @@ export class Lobby {
 
         <div class="status" id="status"></div>
 
-        <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · 주인공 철면덕 · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
+        <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
       </div>`
 
     // 캐릭터 카드
@@ -90,7 +90,7 @@ export class Lobby {
       el.innerHTML = `
         <canvas></canvas>
         <div>
-          <b>${c.name}${c.prominence === 1 ? ' <span class="badge">주인공</span>' : ''}</b>
+          <b>${c.name}${c.prominence === 1 ? ' <span class="badge">배도라지장</span>' : ''}</b>
           <small>${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}</small>
           <div class="pv"><b style="display:inline;font-size:12px">${c.passiveName}</b> ${c.passiveDesc}</div>
         </div>`

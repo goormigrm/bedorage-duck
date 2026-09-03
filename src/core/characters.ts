@@ -22,10 +22,14 @@ export interface Look {
   /** 입술 색 (mouth: 'thick' 일 때) */
   lipColor?: number
   eyes: 'normal' | 'calm' | 'squint' | 'angry' | 'happy' | 'sharp' | 'lidded'
-  brows: 'normal' | 'thick' | 'none'
+  brows: 'normal' | 'thick' | 'none' | 'arched'
   mouth: 'flat' | 'smile' | 'thick' | 'grin' | 'frown' | 'sing' | 'pout'
   /** 귀 크기 배율 (기본 1) */
   earScale?: number
+  /** 얼굴 윤곽: round(기본) | jowl(넓은 볼·턱살, 철면수심 마스코트) */
+  faceShape?: 'round' | 'jowl'
+  /** 코: small(기본) | wide(콧구멍 보이는 큰 코) */
+  nose?: 'small' | 'wide'
   shirt: number
   /** 흰 가운·재킷 등 겉옷 색 (없으면 undefined) */
   coat?: number
@@ -65,16 +69,17 @@ export interface CharacterDef {
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   cheolmyeon: {
-    id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장이자 이 게임의 주인공. 빨간 얼굴의 차돌야차.',
+    id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장. 빨간 얼굴의 차돌야차, 크루에서 가장 단단한 남자.',
     prominence: 1,
     maxHp: 135, speed: 2.8, weapon: 'shotgun', dashCooldown: 110,
     passiveName: '차돌', passiveDesc: '최대 체력 135. 피격 시 넉백 없음.',
     bodyColor: 0xff5a36, accentColor: 0x1e1e1e,
     look: {
       // 철면수심 공식 마스코트: 빨간 얼굴, 삐죽삐죽한 검은 머리 + 정수리 흰 별, 회색 옆머리, 반쯤 감은 눈, 쭉 내민 입술, 큰 귀
-      skin: 0xd6432b, hair: 'spiky', hairColor: 0x161413, sideColor: 0x9a9a9a, crown: 'star',
-      glasses: 'none', beard: 'none', eyes: 'lidded', brows: 'thick', mouth: 'pout', earScale: 1.5,
-      shirt: 0x1e1e1e, headScale: 1.15, bodyScale: 1.35, extra: 'none',
+      skin: 0xd6432b, hair: 'spiky', hairColor: 0x161413, sideColor: 0x9c9c9c, crown: 'star',
+      glasses: 'none', beard: 'none', eyes: 'lidded', brows: 'arched', mouth: 'pout', earScale: 1.9,
+      faceShape: 'jowl', nose: 'wide', lipColor: 0xb8342a,
+      shirt: 0x1e1e1e, headScale: 1.2, bodyScale: 1.35, extra: 'none',
     },
   },
   chim: {
