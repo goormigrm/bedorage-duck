@@ -18,6 +18,8 @@ export interface CharDrawOpts {
   flash: number
   /** 시간 (초) — 미세 애니메이션용 */
   t: number
+  /** true 면 정면 고정 (3D 얼굴 텍스처용). facing 무시 */
+  frontal?: boolean
 }
 
 export function hex(c: number): string {
@@ -162,8 +164,8 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   const L = def.look
   const R = 12.5 * L.headScale
   const hy = -8 - R // 머리 중심 y
-  const cs = Math.cos(o.facing)
-  const sn = Math.sin(o.facing)
+  const cs = o.frontal ? 0 : Math.cos(o.facing)
+  const sn = o.frontal ? 0 : Math.sin(o.facing)
   // 얼굴 중심은 바라보는 쪽으로 살짝 이동 (3/4 시점)
   const fx = cs * R * 0.28
   const fy = hy + sn * R * 0.12 + R * 0.05

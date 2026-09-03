@@ -77,6 +77,7 @@ export interface MatchConfig {
   targetKills: number
   chars: [CharacterId, CharacterId]
 }
+/** 맵은 GameState 밖(정적)이라 MatchConfig 에 넣지 않고 세션 설정으로 따로 전달한다 */
 
 export interface GameState {
   tick: number

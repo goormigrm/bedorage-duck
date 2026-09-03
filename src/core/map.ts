@@ -1,12 +1,18 @@
 // 맵 데이터. 정적이므로 GameState 에 넣지 않는다.
-// 문자 그리드로 정의: # 벽, . 바닥, S 스폰 후보(바닥), o 낮은 엄폐물(탄은 통과 안 함, 이동만 막음 → MVP 에서는 벽과 동일 취급)
+// 문자 그리드는 maps.ts 의 레지스트리에서 온다: # 벽, . 바닥, S 스폰 후보, o 낮은 상자(충돌은 벽과 동일)
+
+import { DEFAULT_MAP, MAPS, MapDef, MapId, MapTheme } from './maps'
 
 export const TILE = 32
 
 export const TILE_FLOOR = 0
 export const TILE_WALL = 1
+export const TILE_CRATE = 2
 
 export interface GameMap {
+  id: MapId
+  name: string
+  theme: MapTheme
   w: number
   h: number
   tiles: Uint8Array
@@ -16,41 +22,9 @@ export interface GameMap {
   ph: number
 }
 
-// 40 x 30. "스튜디오" — 가운데 오픈 공간, 네 귀퉁이 방, 사이사이 기둥/책상.
-const STUDIO = [
-  '########################################',
-  '#S.....#..............#...........S....#',
-  '#......#..............#................#',
-  '#......#....##........#.....###........#',
-  '#...........##..............#..........#',
-  '#......#....................#....#.....#',
-  '#......#.........S...............#.....#',
-  '####.###..........................######',
-  '#........###..........####.............#',
-  '#........#...............#.............#',
-  '#..S.....#...............#.......S.....#',
-  '#........#......#####....#.............#',
-  '#...........................##.........#',
-  '#.....##....................##.....#...#',
-  '#.....##.........S.................#...#',
-  '#.................................##...#',
-  '#...#..........#####...................#',
-  '#...#.............#..........##........#',
-  '#...#......S......#..........##..S.....#',
-  '#..........#......#....................#',
-  '#....###...#.............#.............#',
-  '#........................#....####.....#',
-  '#.......#........S.......#.............#',
-  '######..#..............................#',
-  '#.......#....##..........###....#......#',
-  '#.......#....##............#....#......#',
-  '#............................#..#......#',
-  '#..S.....#.........#.........#.....S...#',
-  '#........#.........#...................#',
-  '########################################',
-]
-
-export function buildMap(rows: string[] = STUDIO): GameMap {
+export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP): GameMap {
+  const def = typeof idOrDef === 'string' ? MAPS[idOrDef] : idOrDef
+  const rows = def.rows
   const h = rows.length
   const w = rows[0].length
   const tiles = new Uint8Array(w * h)
@@ -59,17 +33,24 @@ export function buildMap(rows: string[] = STUDIO): GameMap {
     const row = rows[y]
     for (let x = 0; x < w; x++) {
       const c = row[x]
-      if (c === '#' || c === 'o') tiles[y * w + x] = TILE_WALL
+      if (c === '#') tiles[y * w + x] = TILE_WALL
+      else if (c === 'o') tiles[y * w + x] = TILE_CRATE
       else tiles[y * w + x] = TILE_FLOOR
       if (c === 'S') spawns.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 })
     }
   }
-  return { w, h, tiles, spawns, pw: w * TILE, ph: h * TILE }
+  return { id: def.id, name: def.name, theme: def.theme, w, h, tiles, spawns, pw: w * TILE, ph: h * TILE }
 }
 
+/** 이동·탄 충돌용: 벽과 상자 모두 막힘 */
 export function isWall(map: GameMap, tx: number, ty: number): boolean {
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return true
-  return map.tiles[ty * map.w + tx] === TILE_WALL
+  return map.tiles[ty * map.w + tx] !== TILE_FLOOR
+}
+
+export function tileAt(map: GameMap, tx: number, ty: number): number {
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return TILE_WALL
+  return map.tiles[ty * map.w + tx]
 }
 
 export function isWallAt(map: GameMap, px: number, py: number): boolean {

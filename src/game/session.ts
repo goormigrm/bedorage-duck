@@ -1,14 +1,16 @@
-// 게임 세션: 혼자 하기(봇) 와 1:1 대전(락스텝) 을 같은 루프로 돌린다.
+// 게임 세션: 혼자 하기(봇) 와 1:1 대전(락스텝) 을 같은 루프로 돌린다. 렌더는 Three.js.
 
 import { Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../core/bot'
 import { CHARACTERS, CharacterId } from '../core/characters'
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
+import { DEFAULT_MAP, MapId } from '../core/maps'
 import { createState, hashState, snapshot, step } from '../core/sim'
 import { GameState, TICK_MS } from '../core/state'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
-import { Renderer, VIEW_H, VIEW_W } from '../render/canvas'
+import { VIEW_H, VIEW_W } from '../render/hud'
+import { Renderer3D } from '../render3d/renderer3d'
 import { LocalInput } from './localInput'
 
 export interface SessionConfig {
@@ -17,6 +19,7 @@ export interface SessionConfig {
   targetKills: number
   seed: number
   localPlayer: 0 | 1
+  mapId?: MapId
   difficulty?: Difficulty
   link?: RoomLink
   delay?: number
@@ -24,10 +27,10 @@ export interface SessionConfig {
 }
 
 export class Session {
-  private map = buildMap()
+  private map
   private state: GameState
   private prev: GameState
-  private renderer: Renderer
+  private renderer: Renderer3D
   private input = new LocalInput()
   private bot = makeBot(1)
   private lockstep: Lockstep | null = null
@@ -42,13 +45,13 @@ export class Session {
   private message = ''
   private disposed = false
   private hashes = new Map<number, number>()
-  private pendingRematch = false
   private names: [string, string]
 
   constructor(
     host: HTMLElement,
     private cfg: SessionConfig,
   ) {
+    this.map = buildMap(cfg.mapId ?? DEFAULT_MAP)
     this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars }, this.map)
     this.prev = snapshot(this.state)
     this.bot = makeBot(cfg.seed ^ 0x9e37)
@@ -56,7 +59,6 @@ export class Session {
     host.innerHTML = `
       <div class="game-root">
         <div class="game-stage" id="stage">
-          <canvas id="game" width="${VIEW_W}" height="${VIEW_H}"></canvas>
           <div class="game-ui">
             <div class="top-right"><button class="btn secondary" id="btn-lobby">로비로</button></div>
             <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Esc</b> 메뉴</div>
@@ -67,8 +69,10 @@ export class Session {
     this.root = host.querySelector('.game-root') as HTMLElement
     this.stage = host.querySelector('#stage') as HTMLElement
     this.overlay = host.querySelector('#overlay') as HTMLElement
-    const canvas = host.querySelector('#game') as HTMLCanvasElement
-    this.renderer = new Renderer(canvas, this.map)
+    this.renderer = new Renderer3D(this.stage, this.map)
+    // 캔버스가 UI 아래에 오도록 UI 를 맨 뒤로
+    const ui = this.stage.querySelector('.game-ui') as HTMLElement
+    this.stage.appendChild(ui)
     this.input.attach(this.stage)
     ;(host.querySelector('#btn-lobby') as HTMLButtonElement).onclick = () => this.exit()
 
@@ -143,7 +147,6 @@ export class Session {
     if (this.disposed) return
     switch (m.t) {
       case 'hash': {
-        // 게스트: 호스트 해시와 비교. 호스트: 게스트 해시와 비교 후 불일치면 리싱크 전송.
         const mine = this.hashes.get(m.tick)
         if (mine === undefined) return
         if (mine !== m.h && this.cfg.link?.role === 'host') {
@@ -157,7 +160,6 @@ export class Session {
         const snap = m.state as GameState
         this.state = snap
         this.state.events = []
-        // 내 예전 틱까지 다시 진행
         while (this.state.tick < target && this.lockstep.hasBoth(this.state.tick)) {
           const [l, r] = this.lockstep.get(this.state.tick)
           step(this.state, this.map, [r, l])
@@ -167,15 +169,13 @@ export class Session {
         setTimeout(() => (this.message = ''), 1200)
         break
       }
-      case 'rematch': {
+      case 'rematch':
         this.restart(m.seed)
         break
-      }
-      case 'leave': {
+      case 'leave':
         this.showOverlay('상대가 나갔습니다', '', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
         this.paused = true
         break
-      }
       default:
         break
     }
@@ -188,11 +188,8 @@ export class Session {
     this.hashes.clear()
     this.acc = 0
     this.paused = false
-    this.pendingRematch = false
     this.hideOverlay()
-    if (this.cfg.link) {
-      this.lockstep = new Lockstep(this.cfg.link, this.cfg.delay ?? 3)
-    }
+    if (this.cfg.link) this.lockstep = new Lockstep(this.cfg.link, this.cfg.delay ?? 3)
   }
 
   private frame = (now: number): void => {
@@ -289,7 +286,6 @@ export class Session {
           { label: '로비로', primary: false, onClick: () => this.exit() },
         ])
       } else {
-        this.pendingRematch = true
         this.showOverlay(title, desc + ' · 호스트가 다시 시작하길 기다리는 중', [
           { label: '로비로', primary: false, onClick: () => this.exit() },
         ])
@@ -310,7 +306,7 @@ export class Session {
     this.input.dispose()
     window.removeEventListener('keydown', this.onKey)
     window.removeEventListener('resize', this.fit)
+    this.renderer.dispose()
     this.root.remove()
-    void this.pendingRematch
   }
 }

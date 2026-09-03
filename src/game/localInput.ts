@@ -2,7 +2,11 @@
 
 import { radToAngle } from '../core/fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from '../core/input'
-import { Renderer, VIEW_H, VIEW_W } from '../render/canvas'
+import { VIEW_H, VIEW_W } from '../render/hud'
+
+interface AimSource {
+  screenToWorld(sx: number, sy: number): { x: number; y: number }
+}
 
 export class LocalInput {
   private keys = new Set<string>()
@@ -63,7 +67,7 @@ export class LocalInput {
   }
 
   /** 내 캐릭터 월드 위치를 받아 조준각을 계산한다 */
-  sample(renderer: Renderer, meX: number, meY: number): Input {
+  sample(renderer: AimSource, meX: number, meY: number): Input {
     const k = this.keys
     let mx = 0
     let my = 0

@@ -16,7 +16,7 @@ import {
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
 } from './state'
-import { PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, partThresholds } from './weapons'
+import { PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, partThresholds } from './weapons'
 
 const MAX_RECOIL_MUL = 3
 
@@ -296,7 +296,7 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState): void {
   const [th, tb] = partThresholds(b.ads, dist)
   const r = rand(state.rng)
   const part = r < th ? PART_HEAD : r < tb ? 1 : PART_LEGS
-  let dmg = b.damage * PART_MULT[part]
+  let dmg = b.damage * PART_MULT[part] * falloff(WEAPONS[b.weapon], dist)
   const shooter = state.players[b.owner]
   if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
   dmg = Math.round(dmg)

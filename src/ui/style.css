@@ -63,8 +63,9 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 /* ---- 게임 화면 ---- */
 .game-root { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; cursor: none; }
 .game-stage { position: relative; width: 1280px; height: 720px; transform-origin: center; }
-.game-stage canvas { display: block; width: 1280px; height: 720px; }
-.game-ui { position: absolute; inset: 0; pointer-events: none; }
+.game-stage canvas { position: absolute; left: 0; top: 0; display: block; width: 1280px; height: 720px; }
+.game-stage canvas.hud { pointer-events: none; }
+.game-ui { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .game-ui .top-right { position: absolute; top: 14px; right: 16px; display: flex; gap: 8px; pointer-events: auto; cursor: default; }
 .game-ui .btn { padding: 6px 12px; font-size: 13px; }
 .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: default; background: rgba(10,12,8,.35); }
@@ -82,3 +83,29 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .char.hero.on { border-color: #ff5a36; box-shadow: 0 0 0 1px #ff5a36 inset; }
 .char .badge { font: 600 10px "IBM Plex Sans KR", sans-serif; color: #1e2219; background: #ff5a36; border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: 2px; }
 .status .row span { font-size: 14px; }
+
+/* ---- 방 목록 · 방 화면 ---- */
+.chars { grid-template-columns: repeat(5, minmax(0,1fr)); }
+@media (max-width: 900px) { .chars { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.char { grid-template-columns: 56px minmax(0,1fr); padding: 10px; }
+.char canvas { width: 56px; height: 56px; }
+.char.hero { grid-column: auto; background: var(--panel); border-color: var(--line); }
+.hintline { color: var(--ink-3); font-size: 12.5px; }
+.rooms { display: flex; flex-direction: column; gap: 6px; min-height: 60px; max-height: 220px; overflow-y: auto; }
+.rooms .empty { color: var(--ink-3); font-size: 13px; padding: 8px 0; }
+.room { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+.room small { color: var(--ink-3); }
+.room .btn { padding: 6px 12px; font-size: 13px; }
+.code-sm { font: 600 12px "IBM Plex Mono", monospace; letter-spacing: .12em; color: var(--duck); }
+.pill { font: 500 10px "IBM Plex Mono", monospace; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--ink-3); margin-right: 4px; }
+.pill.ok { color: var(--ok); border-color: currentColor; }
+.room-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.slots { display: grid; grid-template-columns: minmax(0,1fr) 48px minmax(0,1fr); gap: 10px; align-items: stretch; margin-top: 12px; }
+.slot { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.slot.ready { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }
+.slot .who { font: 500 11px "IBM Plex Mono", monospace; color: var(--ink-3); letter-spacing: .06em; }
+.slot .cname { font-family: "Black Han Sans", sans-serif; font-size: 26px; line-height: 1.2; margin: 4px 0; }
+.slot .rd { font-size: 12.5px; color: var(--ink-2); }
+.slot.ready .rd { color: var(--ok); }
+.slots .vs { display: flex; align-items: center; justify-content: center; font-family: "Black Han Sans", sans-serif; color: var(--ink-3); }
+.row input.code { width: auto; flex: 1; font-size: 16px; padding: 8px 10px; }
