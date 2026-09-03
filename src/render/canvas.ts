@@ -96,7 +96,9 @@ const WALL_FRONT = '#464c37'
 const WALL_EDGE = '#2e3325'
 const OUTSIDE = '#1c1f17'
 const OUTLINE = '#2b2412'
-const WALL_H = 12
+const WALL_H = 34
+/** 쿼터뷰 투영: 화면 y = 월드 y × PITCH (카메라를 기울인 효과) */
+export const PITCH = 0.72
 
 export class Renderer {
   readonly ctx: CanvasRenderingContext2D
@@ -139,7 +141,7 @@ export class Renderer {
   screenToWorld(sx: number, sy: number): { x: number; y: number } {
     return {
       x: (sx - VIEW_W / 2) / this.cam.zoom + this.cam.x,
-      y: (sy - VIEW_H / 2) / this.cam.zoom + this.cam.y,
+      y: ((sy - VIEW_H / 2) / this.cam.zoom + this.cam.y) / PITCH,
     }
   }
 
@@ -187,7 +189,7 @@ export class Renderer {
       switch (e.type) {
         case 'fire': {
           const w = WEAPONS[e.weapon]
-          this.muzzles.push({ x: e.x, y: e.y, rad: angleToRad(e.aim), life: 0.07, size: w.pellets > 1 ? 22 : 14 })
+          this.muzzles.push({ x: e.x, y: e.y * PITCH - 10, rad: angleToRad(e.aim), life: 0.07, size: w.pellets > 1 ? 22 : 14 })
           const v = this.ducks[e.p]
           v.vsx -= 0.18
           v.vsy += 0.12
@@ -200,7 +202,7 @@ export class Renderer {
             const a = rad + Math.PI + (Math.random() - 0.5) * 1.6
             const sp = 1.5 + Math.random() * 3
             this.particles.push({
-              x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.25, max: 0.25,
+              x: e.x, y: e.y * PITCH - 10, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.25, max: 0.25,
               size: 2, color: '#f2e6b3', gravity: 0.15, shape: 'dot', rot: 0, vr: 0,
             })
           }
@@ -213,14 +215,14 @@ export class Renderer {
           v.vsy -= 0.3
           const head = e.part === PART_HEAD
           this.texts.push({
-            x: e.x, y: e.y - 10, text: head ? `${e.dmg} 헤드` : `${e.dmg}`,
+            x: e.x, y: e.y * PITCH - 28, text: head ? `${e.dmg} 헤드` : `${e.dmg}`,
             life: 0.8, max: 0.8, color: head ? '#ffd84a' : '#ffffff', big: head,
           })
           for (let i = 0; i < 6; i++) {
             const a = Math.random() * Math.PI * 2
             const sp = 1 + Math.random() * 2.5
             this.particles.push({
-              x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 0.4, max: 0.4,
+              x: e.x, y: e.y * PITCH - 14, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 0.4, max: 0.4,
               size: 3, color: '#e04a3a', gravity: 0.12, shape: 'dot', rot: 0, vr: 0,
             })
           }
@@ -236,12 +238,12 @@ export class Renderer {
             const a = Math.random() * Math.PI * 2
             const sp = 1.5 + Math.random() * 4
             this.particles.push({
-              x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5, life: 1.4, max: 1.4,
+              x: e.x, y: e.y * PITCH - 12, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5, life: 1.4, max: 1.4,
               size: 4 + Math.random() * 3, color: col, gravity: 0.06, shape: 'feather',
               rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3,
             })
           }
-          this.rings.push({ x: e.x, y: e.y, life: 0.5, max: 0.5, color: '#ffffff', r0: 8, r1: 60 })
+          this.rings.push({ x: e.x, y: e.y * PITCH, life: 0.5, max: 0.5, color: '#ffffff', r0: 8, r1: 60 })
           const killer = CHARACTERS[state.players[e.by].char]
           const victim = CHARACTERS[state.players[e.p].char]
           this.banner = { text: `${killer.name}  ▶  ${victim.name}`, sub: `${state.players[e.by].kills} / ${state.targetKills}`, life: 1.6, max: 1.6, color: hex(killer.bodyColor) }
@@ -249,7 +251,7 @@ export class Renderer {
           break
         }
         case 'respawn': {
-          this.rings.push({ x: e.x, y: e.y, life: 0.6, max: 0.6, color: '#9fe0ff', r0: 40, r1: 6 })
+          this.rings.push({ x: e.x, y: e.y * PITCH, life: 0.6, max: 0.6, color: '#9fe0ff', r0: 40, r1: 6 })
           const v = this.ducks[e.p]
           v.sx = 0.2
           v.sy = 1.6
@@ -292,7 +294,10 @@ export class Renderer {
     ctx.translate(-this.cam.x, -this.cam.y)
 
     // 바닥
+    ctx.save()
+    ctx.scale(1, PITCH)
     ctx.drawImage(this.floor, 0, 0)
+    ctx.restore()
 
     // 플레이어 보간 위치
     const pos: { x: number; y: number }[] = [0, 1].map((i) => {
@@ -400,24 +405,24 @@ export class Renderer {
       const a1 = curr.players[1].alive
       if (a0 && a1) {
         tx = (p0.x + p1.x) / 2
-        ty = (p0.y + p1.y) / 2
+        ty = ((p0.y + p1.y) / 2) * PITCH
         const dx = Math.abs(p0.x - p1.x) + 420
-        const dy = Math.abs(p0.y - p1.y) + 300
+        const dy = Math.abs(p0.y - p1.y) * PITCH + 300
         tz = Math.min(VIEW_W / dx, VIEW_H / dy)
-        tz = Math.max(1.25, Math.min(1.9, tz))
+        tz = Math.max(1.4, Math.min(2.0, tz))
         // 너무 멀리 떨어져 있으면 둘의 중점 대신 살아있는 첫 플레이어 쪽으로 치우침
         const far = Math.hypot(p0.x - p1.x, p0.y - p1.y)
         if (far > 640) {
           const k = Math.min(1, (far - 640) / 400)
           tx = tx * (1 - k) + p0.x * k
-          ty = ty * (1 - k) + p0.y * k
-          tz = 1.35
+          ty = ty * (1 - k) + p0.y * PITCH * k
+          tz = 1.5
         }
       } else if (a0 || a1) {
         const p = a0 ? p0 : p1
         tx = p.x
-        ty = p.y
-        tz = 1.5
+        ty = p.y * PITCH
+        tz = 1.6
       } else {
         tx = this.cam.x
         ty = this.cam.y
@@ -426,19 +431,19 @@ export class Renderer {
       const me = curr.players[lp]
       const p = lp === 0 ? p0 : p1
       tx = p.x
-      ty = p.y
+      ty = p.y * PITCH
       if (me.alive && me.ads) {
         const r = angleToRad(me.aim)
         tx += Math.cos(r) * 110
-        ty += Math.sin(r) * 110
+        ty += Math.sin(r) * 110 * PITCH
       }
-      tz = 1.1
+      tz = 1.5
     }
     // 맵 밖이 덜 보이도록 클램프
     const halfW = VIEW_W / 2 / tz
     const halfH = VIEW_H / 2 / tz
     tx = Math.max(halfW - 40, Math.min(this.map.pw - halfW + 40, tx))
-    ty = Math.max(halfH - 40, Math.min(this.map.ph - halfH + 40, ty))
+    ty = Math.max(halfH - 40, Math.min(this.map.ph * PITCH - halfH + 40, ty))
     if (!this.camInit) {
       this.cam.x = tx
       this.cam.y = ty
@@ -458,24 +463,49 @@ export class Renderer {
     for (let tx = 0; tx < m.w; tx++) {
       if (!isWall(m, tx, ty)) continue
       const x = tx * TILE
-      const y = ty * TILE
+      const y0 = ty * TILE * PITCH
+      const th = TILE * PITCH
       const below = isWall(m, tx, ty + 1)
       const above = isWall(m, tx, ty - 1)
-      // 앞면
+      const left = isWall(m, tx - 1, ty)
+      const right = isWall(m, tx + 1, ty)
       if (!below) {
-        ctx.fillStyle = WALL_FRONT
-        ctx.fillRect(x, y + TILE - WALL_H, TILE, WALL_H)
+        // 바닥 그림자
+        ctx.fillStyle = 'rgba(0,0,0,0.16)'
+        ctx.fillRect(x, y0 + th, TILE, 7)
+        // 앞면
+        const g = ctx.createLinearGradient(0, y0 + th - WALL_H, 0, y0 + th)
+        g.addColorStop(0, WALL_FRONT)
+        g.addColorStop(1, '#31362a')
+        ctx.fillStyle = g
+        ctx.fillRect(x, y0 + th - WALL_H, TILE, WALL_H)
+        ctx.strokeStyle = WALL_EDGE
+        ctx.lineWidth = 1
+        ctx.strokeRect(x + 0.5, y0 + th - WALL_H + 0.5, TILE - 1, WALL_H - 1)
       }
       // 윗면
       ctx.fillStyle = WALL_TOP
-      ctx.fillRect(x, y - WALL_H, TILE, TILE)
+      ctx.fillRect(x, y0 - WALL_H, TILE, th)
       if (!above) {
         ctx.fillStyle = WALL_TOP_LIGHT
-        ctx.fillRect(x, y - WALL_H, TILE, 3)
+        ctx.fillRect(x, y0 - WALL_H, TILE, 3)
       }
       ctx.strokeStyle = WALL_EDGE
       ctx.lineWidth = 1
-      ctx.strokeRect(x + 0.5, y - WALL_H + 0.5, TILE - 1, TILE - 1)
+      ctx.beginPath()
+      if (!above) {
+        ctx.moveTo(x, y0 - WALL_H + 0.5)
+        ctx.lineTo(x + TILE, y0 - WALL_H + 0.5)
+      }
+      if (!left) {
+        ctx.moveTo(x + 0.5, y0 - WALL_H)
+        ctx.lineTo(x + 0.5, y0 - WALL_H + th)
+      }
+      if (!right) {
+        ctx.moveTo(x + TILE - 0.5, y0 - WALL_H)
+        ctx.lineTo(x + TILE - 0.5, y0 - WALL_H + th)
+      }
+      ctx.stroke()
     }
   }
 
@@ -491,7 +521,7 @@ export class Renderer {
       if (v.deadT < 0 || v.deadT > 1.2) return
       const k = 1 - v.deadT / 1.2
       ctx.save()
-      ctx.translate(pos.x, pos.y + 8)
+      ctx.translate(pos.x, pos.y * PITCH + 6)
       drawFlat(ctx, c, Math.min(1, k * 1.5))
       ctx.restore()
       return
@@ -506,14 +536,14 @@ export class Renderer {
 
     // 그림자
     ctx.fillStyle = 'rgba(0,0,0,0.22)'
-    ellipse(ctx, pos.x, pos.y + 13, 15 * sx * c.look.bodyScale, 6)
+    ellipse(ctx, pos.x, pos.y * PITCH + 12, 15 * sx * c.look.bodyScale, 5)
     ctx.fill()
 
     // 스폰 보호 링
     if (p.invuln > 0) {
       ctx.strokeStyle = `rgba(159,224,255,${0.35 + 0.3 * Math.sin(this.t * 12)})`
       ctx.lineWidth = 2
-      circle(ctx, pos.x, pos.y - 8, PLAYER_RADIUS + 12)
+      ellipse(ctx, pos.x, pos.y * PITCH + 10, PLAYER_RADIUS + 10, (PLAYER_RADIUS + 10) * PITCH)
       ctx.stroke()
     }
 
@@ -522,7 +552,7 @@ export class Renderer {
     if (weaponBehind) this.drawWeapon(pos, rad, w.length, w.color)
 
     ctx.save()
-    ctx.translate(pos.x, pos.y - bob)
+    ctx.translate(pos.x, pos.y * PITCH - bob)
     ctx.scale(sx, sy)
     drawCharacter(ctx, c, { facing: rad, sx, sy, walk: v.walk, moving: p.moving, flash: v.flash, t: this.t })
     ctx.restore()
@@ -532,7 +562,7 @@ export class Renderer {
     // 이름표 + 미니 체력바 (머리 위)
     const maxHp = c.maxHp
     const hpK = Math.max(0, p.hp / maxHp)
-    const ty = pos.y - 8 - 25 * c.look.headScale - 12
+    const ty = pos.y * PITCH - 8 - 25 * c.look.headScale - 12
     ctx.font = '600 11px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
@@ -552,7 +582,8 @@ export class Renderer {
   private drawWeapon(pos: { x: number; y: number }, rad: number, length: number, color: number): void {
     const ctx = this.ctx
     ctx.save()
-    ctx.translate(pos.x + Math.cos(rad) * 6, pos.y + 3 + Math.sin(rad) * 6)
+    ctx.translate(pos.x + Math.cos(rad) * 6, pos.y * PITCH + 2 + Math.sin(rad) * 6 * PITCH)
+    ctx.scale(1, PITCH)
     ctx.rotate(rad)
     ctx.fillStyle = hex(color)
     ctx.strokeStyle = OUTLINE
@@ -573,7 +604,7 @@ export class Renderer {
     for (const b of curr.bullets) {
       const pb = prevById.get(b.id) ?? { x: b.px, y: b.py }
       const x = pb.x + (b.x - pb.x) * alpha
-      const y = pb.y + (b.y - pb.y) * alpha
+      const y = (pb.y + (b.y - pb.y) * alpha) * PITCH - 10
       const w = WEAPONS[b.weapon]
       const trail = Math.min(26, w.speed * 1.4)
       const l = Math.hypot(b.vx, b.vy) || 1
@@ -583,7 +614,7 @@ export class Renderer {
       ctx.lineWidth = 3
       ctx.lineCap = 'round'
       ctx.beginPath()
-      ctx.moveTo(x - ux * trail, y - uy * trail)
+      ctx.moveTo(x - ux * trail, y - uy * PITCH * trail)
       ctx.lineTo(x, y)
       ctx.stroke()
       ctx.fillStyle = '#fff3b0'
@@ -594,6 +625,7 @@ export class Renderer {
       const k = m.life / 0.07
       ctx.save()
       ctx.translate(m.x, m.y)
+      ctx.scale(1, PITCH)
       ctx.rotate(m.rad)
       ctx.fillStyle = `rgba(255,230,120,${0.9 * k})`
       ctx.beginPath()
@@ -638,7 +670,7 @@ export class Renderer {
       ctx.strokeStyle = r.color
       ctx.globalAlpha = 1 - k
       ctx.lineWidth = 3
-      circle(ctx, r.x, r.y, rad)
+      ellipse(ctx, r.x, r.y, rad, rad * PITCH)
       ctx.stroke()
     }
     ctx.globalAlpha = 1

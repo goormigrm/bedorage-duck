@@ -1,7 +1,7 @@
 // 프리뷰(트레일러 캡처용) 페이지: 봇 vs 봇 자동 플레이 + 시네마틱 카메라 + 슬로모션.
 
 import { Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from './core/bot'
-import { CHARACTER_LIST, CharacterId } from './core/characters'
+import { CHARACTERS, CHARACTER_LIST, CharacterId, PROTAGONIST } from './core/characters'
 import { Input } from './core/input'
 import { buildMap } from './core/map'
 import { createState, snapshot, step } from './core/sim'
@@ -35,6 +35,7 @@ interface Match {
   names: [string, string]
   subs: [string, string]
 }
+let matchCount = 0
 let match = newMatch()
 
 // URL 파라미터: ?ff=900 (900틱 빨리감기) · ?notitle=1 (타이틀 카드 생략) · ?diff=hard,normal · ?kills=5
@@ -60,11 +61,24 @@ let match = newMatch()
   }
 }
 
+/** 주인공(철면덕)은 항상 P1. 상대는 노출 우선순위 가중 무작위 (침착덕이 가장 자주). */
 function pickChars(): [CharacterId, CharacterId] {
-  const a = Math.floor(Math.random() * CHARACTER_LIST.length)
-  let b = Math.floor(Math.random() * (CHARACTER_LIST.length - 1))
-  if (b >= a) b++
-  return [CHARACTER_LIST[a].id, CHARACTER_LIST[b].id]
+  const others = CHARACTER_LIST.filter((c) => c.id !== PROTAGONIST.id)
+  // 가중치: prominence 2 → 4, 3 → 3, 4 → 2, 5 → 1
+  const weights = others.map((c) => Math.max(1, 6 - c.prominence))
+  const total = weights.reduce((a, b) => a + b, 0)
+  let r = Math.random() * total
+  let pick = others[0]
+  for (let i = 0; i < others.length; i++) {
+    r -= weights[i]
+    if (r <= 0) {
+      pick = others[i]
+      break
+    }
+  }
+  // 첫 경기는 항상 철면덕 vs 침착덕
+  if (matchCount++ === 0) pick = CHARACTERS.chim
+  return [PROTAGONIST.id, pick.id]
 }
 
 function newMatch(): Match {
@@ -157,31 +171,71 @@ function drawSheet(): void {
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   const n = CHARACTER_LIST.length
   const cw = VIEW_W / n
+  const wrap = (text: string, maxW: number): string[] => {
+    const words = text.split(' ')
+    const lines: string[] = []
+    let cur = ''
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w
+      if (ctx.measureText(t).width > maxW && cur) {
+        lines.push(cur)
+        cur = w
+      } else cur = t
+    }
+    if (cur) lines.push(cur)
+    return lines
+  }
   CHARACTER_LIST.forEach((c, i) => {
     const cx = cw * i + cw / 2
-    ctx.fillStyle = '#2a2e24'
-    roundRect(ctx, cw * i + 16, 40, cw - 32, VIEW_H - 80, 12)
+    const hero = c.prominence === 1
+    ctx.fillStyle = hero ? '#33382a' : '#2a2e24'
+    roundRect(ctx, cw * i + 12, 40, cw - 24, VIEW_H - 80, 12)
     ctx.fill()
+    if (hero) {
+      ctx.strokeStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
+      ctx.lineWidth = 2
+      roundRect(ctx, cw * i + 12, 40, cw - 24, VIEW_H - 80, 12)
+      ctx.stroke()
+      ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
+      roundRect(ctx, cx - 36, 54, 72, 24, 12)
+      ctx.fill()
+      ctx.font = '600 12px "IBM Plex Sans KR", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#1e2219'
+      ctx.fillText('주인공', cx, 66)
+    }
+    const big = hero ? 4.8 : 4.0
+    const small = hero ? 2.8 : 2.4
     const facings = [-Math.PI / 2 + 0.5, 0, Math.PI * 0.8]
     facings.forEach((f, j) => {
       ctx.save()
-      ctx.translate(cx + (j - 1) * 84, 300)
-      ctx.scale(j === 1 ? 4.2 : 2.6, j === 1 ? 4.2 : 2.6)
+      ctx.translate(cx + (j - 1) * 70, 300)
+      ctx.scale(j === 1 ? big : small, j === 1 ? big : small)
       drawCharacter(ctx, c, { facing: f, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
       ctx.restore()
     })
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+    ctx.font = `400 ${hero ? 44 : 36}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
     ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
-    ctx.fillText(c.name, cx, 480)
-    ctx.font = '500 15px "IBM Plex Sans KR", sans-serif'
+    ctx.fillText(c.name, cx, 478)
+    ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#b3b8a5'
-    ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, cx, 512)
-    ctx.font = '400 13px "IBM Plex Sans KR", sans-serif'
+    ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, cx, 508)
+    ctx.font = '400 12.5px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#8f957f'
-    ctx.fillText(`${c.passiveName}: ${c.passiveDesc}`, cx, 540)
-    ctx.fillText(c.tagline, cx, 566)
+    let y = 536
+    for (const line of wrap(`${c.passiveName}: ${c.passiveDesc}`, cw - 48)) {
+      ctx.fillText(line, cx, y)
+      y += 18
+    }
+    y += 6
+    ctx.fillStyle = '#6f7565'
+    for (const line of wrap(c.tagline, cw - 48)) {
+      ctx.fillText(line, cx, y)
+      y += 18
+    }
   })
   ctx.font = '600 12px "IBM Plex Mono", monospace'
   ctx.textAlign = 'left'
@@ -212,19 +266,29 @@ function drawOverlay(_dt: number): void {
     ctx.fillStyle = 'rgba(14,16,12,0.72)'
     ctx.fillRect(0, 0, VIEW_W, VIEW_H)
     const rise = (1 - Math.min(1, titleT / (T_IN + 0.3))) * 24
-    ctx.textAlign = 'center'
+    // 주인공 철면덕 초상 (왼쪽, 크게)
+    ctx.save()
+    ctx.translate(VIEW_W / 2 - 330, VIEW_H / 2 + 120 + rise * 0.5)
+    ctx.scale(6.5, 6.5)
+    drawCharacter(ctx, PROTAGONIST, { facing: 0.35, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
+    ctx.restore()
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
+    const tx0 = VIEW_W / 2 - 150
     ctx.font = '400 128px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#f5f2e6'
-    ctx.fillText('배도라지', VIEW_W / 2 - 70, VIEW_H / 2 - 30 + rise)
+    ctx.fillText('배도라지', tx0, VIEW_H / 2 - 40 + rise)
     ctx.fillStyle = '#ffd84a'
-    ctx.fillText('덕', VIEW_W / 2 + 200, VIEW_H / 2 - 30 + rise)
+    ctx.fillText('덕', tx0 + 470, VIEW_H / 2 - 40 + rise)
     ctx.font = '500 20px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#b3b8a5'
-    ctx.fillText('1:1 쿼터뷰 슈터  ·  서버 없는 P2P 대전  ·  비공식 팬게임', VIEW_W / 2, VIEW_H / 2 + 60 + rise)
+    ctx.fillText('1:1 쿼터뷰 슈터  ·  서버 없는 P2P 대전  ·  비공식 팬게임', tx0 + 6, VIEW_H / 2 + 52 + rise)
+    ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
+    ctx.fillStyle = '#ff5a36'
+    ctx.fillText('주인공  철면덕', tx0 + 6, VIEW_H / 2 + 84 + rise)
     ctx.font = '500 13px "IBM Plex Mono", monospace'
     ctx.fillStyle = '#7d8471'
-    ctx.fillText('goormigrm.github.io/bedorage-duck', VIEW_W / 2, VIEW_H / 2 + 96 + rise)
+    ctx.fillText('goormigrm.github.io/bedorage-duck', tx0 + 6, VIEW_H / 2 + 112 + rise)
     ctx.globalAlpha = 1
   }
 

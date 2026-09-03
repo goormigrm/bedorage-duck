@@ -106,6 +106,19 @@ export function drawBody(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
     ctx.fill()
     ctx.stroke()
   }
+  // 넥타이
+  if (L.tie !== undefined) {
+    ctx.fillStyle = hex(L.tie)
+    ctx.beginPath()
+    ctx.moveTo(-2, -5)
+    ctx.lineTo(2, -5)
+    ctx.lineTo(1.5, 4)
+    ctx.lineTo(0, 6)
+    ctx.lineTo(-1.5, 4)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  }
   // 목
   ctx.fillStyle = shade(L.skin, 0.9)
   rrect(ctx, -3.5, -9, 7, 5, 2)
@@ -282,6 +295,24 @@ function drawHair(ctx: CanvasRenderingContext2D, L: Look, R: number, hy: number,
       ctx.stroke()
       break
     }
+    case 'side': {
+      // 옆으로 넘긴 짧은 머리 (가르마)
+      ctx.fillStyle = hex(L.hairColor)
+      ctx.beginPath()
+      ctx.moveTo(-R * 1.0, hy + R * 0.05)
+      ctx.lineTo(-R * 1.0, hy - R * 0.35)
+      ctx.quadraticCurveTo(-R * 0.75, hy - R * 1.12, R * 0.2, hy - R * 1.08)
+      ctx.quadraticCurveTo(R * 0.95, hy - R * 1.0, R * 1.0, hy - R * 0.35)
+      ctx.lineTo(R * 1.0, hy - R * 0.1)
+      // 앞머리: 한쪽으로 쓸어넘긴 사선
+      ctx.quadraticCurveTo(R * 0.7, hy - R * 0.55, R * 0.15, hy - R * 0.72)
+      ctx.quadraticCurveTo(-R * 0.35, hy - R * 0.4, -R * 0.7, hy - R * 0.55)
+      ctx.quadraticCurveTo(-R * 0.95, hy - R * 0.4, -R * 1.0, hy + R * 0.05)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      break
+    }
     case 'short':
     case 'flat': {
       const flat = L.hair === 'flat'
@@ -362,6 +393,25 @@ function drawEyes(
         ctx.moveTo(fx + s * eyeDx - R * 0.22, eyeY - R * 0.03)
         ctx.lineTo(fx + s * eyeDx + R * 0.22, eyeY - R * 0.03)
         ctx.stroke()
+      }
+      break
+    }
+    case 'sharp': {
+      // 매서운 눈: 위 눈꺼풀이 바깥→안쪽으로 내려오는 좁은 눈 + 작은 눈동자
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = '#fff'
+        ctx.strokeStyle = OUTLINE
+        ctx.lineWidth = 1.2
+        ctx.beginPath()
+        ctx.moveTo(fx + s * eyeDx - s * R * 0.22, eyeY + R * 0.02)
+        ctx.lineTo(fx + s * eyeDx + s * R * 0.2, eyeY - R * 0.1)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY + R * 0.22, fx + s * eyeDx - s * R * 0.22, eyeY + R * 0.02)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+        ctx.fillStyle = '#1a1a1a'
+        circle(ctx, fx + s * eyeDx + pupilDx, eyeY + R * 0.04 + pupilDy * 0.5, R * 0.08)
+        ctx.fill()
       }
       break
     }
