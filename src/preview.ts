@@ -35,6 +35,29 @@ interface Match {
 }
 let match = newMatch()
 
+// URL 파라미터: ?ff=900 (900틱 빨리감기) · ?notitle=1 (타이틀 카드 생략) · ?diff=hard,normal · ?kills=5
+{
+  const q = new URLSearchParams(location.search)
+  const d = q.get('diff')
+  if (d) {
+    const [a, b] = d.split(',') as Difficulty[]
+    if (a && b) diff = [a, b]
+  }
+  if (q.get('notitle')) titleT = 100
+  const ff = Number(q.get('ff') ?? 0)
+  if (ff > 0) {
+    titleT = 100
+    for (let i = 0; i < ff; i++) {
+      match.prev = snapshot(match.state)
+      step(match.state, map, [
+        botInput(match.state, map, 0, match.bots[0], diff[0]),
+        botInput(match.state, map, 1, match.bots[1], diff[1]),
+      ])
+      if (i >= ff - 3) renderer.onEvents(match.state.events, match.state, -1)
+    }
+  }
+}
+
 function pickChars(): [CharacterId, CharacterId] {
   const a = Math.floor(Math.random() * CHARACTER_LIST.length)
   let b = Math.floor(Math.random() * (CHARACTER_LIST.length - 1))
