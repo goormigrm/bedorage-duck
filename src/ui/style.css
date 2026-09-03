@@ -1,0 +1,76 @@
+:root {
+  --bg: #0e100c;
+  --panel: #1b1f17;
+  --panel-2: #242a1f;
+  --ink: #f0eee3;
+  --ink-2: #b3b8a5;
+  --ink-3: #7d8471;
+  --line: #343a2c;
+  --duck: #ffd84a;
+  --duck-ink: #1e2219;
+  --ok: #8cc486;
+  --risk: #e4735b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+body { font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+#app { min-height: 100%; }
+
+/* ---- 로비 ---- */
+.lobby { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+.lobby h1 { font-family: "Black Han Sans", sans-serif; font-weight: 400; font-size: 64px; line-height: 1; margin: 0 0 4px; letter-spacing: -.01em; }
+.lobby h1 span { color: var(--duck); }
+.lobby .tag { color: var(--ink-2); margin: 0 0 28px; font-size: 15px; }
+.lobby .tag b { color: var(--ink); font-weight: 600; }
+.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+@media (max-width: 760px) { .modes { grid-template-columns: minmax(0,1fr); } }
+.mode { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+.mode h2 { font-family: "Black Han Sans", sans-serif; font-weight: 400; font-size: 24px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.mode h2 .k { font: 500 11px "IBM Plex Mono", monospace; color: var(--duck); border: 1px solid currentColor; border-radius: 999px; padding: 1px 7px; letter-spacing: .06em; }
+.mode p { margin: 0; color: var(--ink-2); font-size: 13.5px; min-height: 42px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row label { font: 500 11px "IBM Plex Mono", monospace; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; min-width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { background: transparent; border: 0; color: var(--ink-2); padding: 6px 12px; font: 500 13px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--duck); color: var(--duck-ink); font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--duck); outline-offset: -2px; }
+input.code { font: 600 22px "IBM Plex Mono", monospace; letter-spacing: .2em; text-transform: uppercase; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; width: 100%; }
+input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
+.btn { background: var(--duck); color: var(--duck-ink); border: 0; border-radius: 6px; padding: 10px 16px; font: 700 15px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
+.btn.secondary { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.chars { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 22px; }
+@media (max-width: 760px) { .chars { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.char { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; text-align: left; color: var(--ink); display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 10px; align-items: center; }
+.char.on { border-color: var(--duck); box-shadow: 0 0 0 1px var(--duck) inset; }
+.char canvas { width: 64px; height: 64px; }
+.char b { display: block; font-size: 15px; }
+.char small { display: block; color: var(--ink-3); font-size: 11.5px; line-height: 1.4; }
+.char .pv { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+.section-t { font: 500 11px "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px; }
+.status { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-top: 18px; display: none; }
+.status.show { display: block; }
+.status .code-big { font: 600 40px "IBM Plex Mono", monospace; letter-spacing: .25em; color: var(--duck); margin: 4px 0; }
+.status .link { font: 500 13px "IBM Plex Mono", monospace; color: var(--ink-2); word-break: break-all; }
+.status .st { color: var(--ink-2); margin-top: 8px; }
+.status .st.ok { color: var(--ok); }
+.status .st.bad { color: var(--risk); }
+.foot { margin-top: 32px; color: var(--ink-3); font-size: 12px; font-family: "IBM Plex Mono", monospace; line-height: 1.7; }
+.foot a { color: var(--ink-2); }
+
+/* ---- 게임 화면 ---- */
+.game-root { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; cursor: none; }
+.game-stage { position: relative; width: 1280px; height: 720px; transform-origin: center; }
+.game-stage canvas { display: block; width: 1280px; height: 720px; }
+.game-ui { position: absolute; inset: 0; pointer-events: none; }
+.game-ui .top-right { position: absolute; top: 14px; right: 16px; display: flex; gap: 8px; pointer-events: auto; cursor: default; }
+.game-ui .btn { padding: 6px 12px; font-size: 13px; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: default; }
+.overlay .box { background: rgba(20,22,16,.9); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; min-width: 360px; text-align: center; }
+.overlay h2 { font-family: "Black Han Sans", sans-serif; font-weight: 400; font-size: 34px; margin: 0 0 8px; }
+.overlay p { color: var(--ink-2); margin: 0 0 16px; }
+.overlay .row { justify-content: center; }
+.keys { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 500 11px "IBM Plex Mono", monospace; color: var(--ink-3); background: rgba(20,22,16,.6); padding: 4px 10px; border-radius: 4px; white-space: nowrap; }
+.keys b { color: var(--duck); font-weight: 600; }
