@@ -86,25 +86,57 @@ export function drawBody(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   rrect(ctx, -bw, -6, bw * 2, bh, 6)
   ctx.fill()
   ctx.stroke()
-  // 가운
+  // 가운 / 재킷
   if (L.coat !== undefined) {
+    const panel = (dir: 1 | -1) => {
+      ctx.beginPath()
+      ctx.moveTo(dir * bw, -4)
+      ctx.lineTo(dir * bw * 0.35, -6)
+      ctx.lineTo(dir * bw * 0.3, 7)
+      ctx.lineTo(dir * bw, 7)
+      ctx.closePath()
+    }
     ctx.fillStyle = hex(L.coat)
+    for (const d of [-1, 1] as const) {
+      panel(d)
+      ctx.fill()
+      ctx.stroke()
+      if (L.coatDots !== undefined) {
+        ctx.save()
+        panel(d)
+        ctx.clip()
+        ctx.fillStyle = hex(L.coatDots)
+        for (let yy = -5; yy <= 7; yy += 3.2) {
+          for (let xx = 0; xx <= bw; xx += 3.2) {
+            const off = ((yy + 5) / 3.2) % 2 === 1 ? 1.6 : 0
+            circle(ctx, d * (bw * 0.3 + xx + off), yy, 0.8)
+            ctx.fill()
+          }
+        }
+        ctx.restore()
+      }
+    }
+  }
+  // 나비넥타이
+  if (L.bowTie !== undefined) {
+    ctx.fillStyle = hex(L.bowTie)
+    ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.moveTo(-bw, -4)
-    ctx.lineTo(-bw * 0.35, -6)
-    ctx.lineTo(-bw * 0.3, 7)
-    ctx.lineTo(-bw, 7)
+    ctx.moveTo(-5, -7)
+    ctx.lineTo(0, -4.5)
+    ctx.lineTo(-5, -2)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
     ctx.beginPath()
-    ctx.moveTo(bw, -4)
-    ctx.lineTo(bw * 0.35, -6)
-    ctx.lineTo(bw * 0.3, 7)
-    ctx.lineTo(bw, 7)
+    ctx.moveTo(5, -7)
+    ctx.lineTo(0, -4.5)
+    ctx.lineTo(5, -2)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
+    circle(ctx, 0, -4.5, 1.4)
+    ctx.fill()
   }
   // 넥타이
   if (L.tie !== undefined) {
@@ -141,15 +173,26 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   ctx.lineJoin = 'round'
 
   // 귀
+  const es = L.earScale ?? 1
   ctx.fillStyle = skin
   ctx.strokeStyle = OUTLINE
   ctx.lineWidth = 1.4
-  ellipse(ctx, -R * 0.98, hy + R * 0.05, R * 0.2, R * 0.28)
+  ellipse(ctx, -R * 0.98, hy + R * 0.05, R * 0.2 * es, R * 0.28 * es)
   ctx.fill()
   ctx.stroke()
-  ellipse(ctx, R * 0.98, hy + R * 0.05, R * 0.2, R * 0.28)
+  ellipse(ctx, R * 0.98, hy + R * 0.05, R * 0.2 * es, R * 0.28 * es)
   ctx.fill()
   ctx.stroke()
+  if (es > 1.2) {
+    ctx.strokeStyle = shade(L.skin, 0.7)
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.arc(-R * 0.98, hy + R * 0.05, R * 0.12 * es, -0.6, 2.2)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(R * 0.98, hy + R * 0.05, R * 0.12 * es, Math.PI - 2.2, Math.PI + 0.6)
+    ctx.stroke()
+  }
 
   // 머리(얼굴) 바탕
   ctx.fillStyle = skin
@@ -167,7 +210,7 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   // 수염 (얼굴 위, 머리카락 아래)
   drawBeard(ctx, L, R, fx, fy, hy)
 
-  // 머리카락
+  // 머리카락 (모자를 쓰면 옆머리만 보이도록 짧은 머리는 그대로 두고 모자가 덮는다)
   drawHair(ctx, L, R, hy, cs)
 
   // 눈썹
@@ -202,7 +245,28 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   drawMouth(ctx, L, R, fx, fy)
 
   // 안경
-  if (L.glasses !== 'none') {
+  if (L.glasses === 'sunglasses') {
+    const lens = hex(L.lensColor ?? 0x223a8a)
+    ctx.strokeStyle = '#151515'
+    ctx.lineWidth = 1.6
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = lens
+      circle(ctx, fx + s * eyeDx, eyeY, R * 0.3)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ellipse(ctx, fx + s * eyeDx - R * 0.08, eyeY - R * 0.1, R * 0.1, R * 0.06, -0.6)
+      ctx.fill()
+    }
+    ctx.beginPath()
+    ctx.moveTo(fx - eyeDx + R * 0.3, eyeY)
+    ctx.lineTo(fx + eyeDx - R * 0.3, eyeY)
+    ctx.moveTo(fx - eyeDx - R * 0.3, eyeY)
+    ctx.lineTo(-R * 0.98, eyeY - R * 0.05)
+    ctx.moveTo(fx + eyeDx + R * 0.3, eyeY)
+    ctx.lineTo(R * 0.98, eyeY - R * 0.05)
+    ctx.stroke()
+  } else if (L.glasses !== 'none') {
     ctx.strokeStyle = '#1d1d1d'
     ctx.lineWidth = 1.5
     if (L.glasses === 'rect') {
@@ -230,17 +294,36 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
 
   // 모자/머리띠
   if (L.extra === 'cap') {
-    ctx.fillStyle = hex(def.accentColor)
+    const band = hex(L.capBand ?? 0xf4f4f0)
     ctx.strokeStyle = OUTLINE
     ctx.lineWidth = 1.5
+    // 챙 (바라보는 쪽으로)
+    ctx.fillStyle = band
+    ellipse(ctx, cs * R * 0.75, hy - R * 0.28, R * 0.62, R * 0.17)
+    ctx.fill()
+    ctx.stroke()
+    // 돔
+    ctx.fillStyle = hex(def.accentColor)
     ctx.beginPath()
-    ctx.arc(0, hy - R * 0.1, R * 0.95, Math.PI, Math.PI * 2)
+    ctx.moveTo(-R * 1.02, hy - R * 0.25)
+    ctx.quadraticCurveTo(-R * 0.95, hy - R * 1.25, 0, hy - R * 1.22)
+    ctx.quadraticCurveTo(R * 0.95, hy - R * 1.25, R * 1.02, hy - R * 0.25)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
-    ellipse(ctx, cs * R * 0.7, hy - R * 0.1, R * 0.55, R * 0.16)
-    ctx.fill()
-    ctx.stroke()
+    // 라벨
+    if (L.capText) {
+      ctx.fillStyle = band
+      const lx = cs * R * 0.28
+      rrect(ctx, lx - R * 0.36, hy - R * 1.0, R * 0.72, R * 0.4, R * 0.08)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = hex(def.accentColor)
+      ctx.font = `700 ${Math.max(3, R * 0.3)}px "IBM Plex Sans KR", "Malgun Gothic", sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(L.capText, lx, hy - R * 0.79)
+    }
   } else if (L.extra === 'headband') {
     ctx.fillStyle = hex(def.accentColor)
     ctx.strokeStyle = OUTLINE
@@ -248,6 +331,28 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
     rrect(ctx, -R, hy - R * 0.55, R * 2, R * 0.28, 2)
     ctx.fill()
     ctx.stroke()
+  } else if (L.extra === 'mic') {
+    // 입 앞에 든 마이크 (바라보는 쪽)
+    const mx = fx + cs * R * 0.55
+    const my = fy + R * 0.62
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 1.4
+    ctx.fillStyle = '#2b2b2b'
+    ctx.beginPath()
+    ctx.moveTo(mx, my)
+    ctx.lineTo(mx + cs * R * 0.25, my + R * 0.55)
+    ctx.lineWidth = 3
+    ctx.strokeStyle = '#2b2b2b'
+    ctx.stroke()
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 1.2
+    ctx.fillStyle = '#8f8f8f'
+    circle(ctx, mx, my, R * 0.19)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    circle(ctx, mx - R * 0.06, my - R * 0.06, R * 0.06)
+    ctx.fill()
   }
 
   // 피격 플래시
@@ -293,6 +398,75 @@ function drawHair(ctx: CanvasRenderingContext2D, L: Look, R: number, hy: number,
       ctx.fill()
       ctx.globalAlpha = 1
       ctx.stroke()
+      break
+    }
+    case 'spiky': {
+      // 회색 옆머리 밴드 (삭발한 옆면)
+      if (L.sideColor !== undefined) {
+        ctx.fillStyle = hex(L.sideColor)
+        ctx.beginPath()
+        ctx.arc(0, hy, R * 1.0, Math.PI * 1.02, Math.PI * 1.98)
+        ctx.arc(0, hy - R * 0.05, R * 0.62, Math.PI * 1.98, Math.PI * 1.02, true)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+      }
+      // 삐죽삐죽한 검은 머리
+      ctx.fillStyle = hex(L.hairColor)
+      ctx.beginPath()
+      const spikes = 9
+      const baseR = R * 0.62
+      ctx.moveTo(-R * 0.98, hy - R * 0.1)
+      for (let i = 0; i <= spikes; i++) {
+        const a = Math.PI + (i / spikes) * Math.PI
+        const tip = baseR + R * (0.75 + 0.25 * ((i * 7) % 3) / 2)
+        const ax = Math.cos(a)
+        const ay = Math.sin(a)
+        const mid = a - (Math.PI / spikes) * 0.5
+        if (i > 0) ctx.lineTo(Math.cos(mid) * baseR * 1.05, hy + Math.sin(mid) * baseR * 0.95)
+        ctx.lineTo(ax * tip * (0.9 + 0.15 * (i % 2)), hy + ay * tip)
+      }
+      ctx.lineTo(R * 0.98, hy - R * 0.1)
+      ctx.quadraticCurveTo(0, hy - R * 0.55, -R * 0.98, hy - R * 0.1)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      if (L.crown === 'star') {
+        ctx.fillStyle = '#ffffff'
+        ctx.beginPath()
+        const cxs = 0
+        const cys = hy - R * 0.95
+        for (let i = 0; i < 8; i++) {
+          const a = -Math.PI / 2 + (i * Math.PI) / 4
+          const r = i % 2 === 0 ? R * 0.26 : R * 0.1
+          ctx.lineTo(cxs + Math.cos(a) * r, cys + Math.sin(a) * r)
+        }
+        ctx.closePath()
+        ctx.fill()
+      }
+      break
+    }
+    case 'bowl': {
+      // 이마를 덮는 풍성한 머리 (앞머리 내림)
+      ctx.fillStyle = hex(L.hairColor)
+      ctx.beginPath()
+      ctx.moveTo(-R * 1.08, hy + R * 0.25)
+      ctx.lineTo(-R * 1.08, hy - R * 0.3)
+      ctx.quadraticCurveTo(-R * 0.9, hy - R * 1.2, R * 0.05, hy - R * 1.18)
+      ctx.quadraticCurveTo(R * 1.0, hy - R * 1.15, R * 1.08, hy - R * 0.3)
+      ctx.lineTo(R * 1.08, hy + R * 0.25)
+      // 앞머리: 비스듬히 내려온 뱅
+      ctx.lineTo(R * 0.95, hy + R * 0.1)
+      ctx.quadraticCurveTo(R * 0.7, hy - R * 0.2, R * 0.45, hy - R * 0.28)
+      ctx.quadraticCurveTo(R * 0.1, hy - R * 0.4, -R * 0.2, hy - R * 0.22 + cs * R * 0.05)
+      ctx.quadraticCurveTo(-R * 0.6, hy - R * 0.05, -R * 0.95, hy + R * 0.12)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      // 광택
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'
+      ellipse(ctx, -R * 0.3, hy - R * 0.85, R * 0.35, R * 0.1, -0.4)
+      ctx.fill()
       break
     }
     case 'side': {
@@ -368,6 +542,39 @@ function drawEyes(
         ctx.fillStyle = '#1a1a1a'
         circle(ctx, fx + s * eyeDx + pupilDx, eyeY + pupilDy, R * 0.11)
         ctx.fill()
+      }
+      break
+    }
+    case 'lidded': {
+      // 무겁게 내려온 눈꺼풀 + 옆을 보는 눈동자 (철면수심 마스코트)
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = '#fff'
+        ctx.strokeStyle = OUTLINE
+        ctx.lineWidth = 1.3
+        ctx.beginPath()
+        ctx.moveTo(fx + s * eyeDx - R * 0.24, eyeY)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY - R * 0.16, fx + s * eyeDx + R * 0.24, eyeY)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY + R * 0.2, fx + s * eyeDx - R * 0.24, eyeY)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+        ctx.fillStyle = '#1a1a1a'
+        circle(ctx, fx + s * eyeDx + pupilDx * 2 + s * R * 0.03, eyeY + R * 0.03, R * 0.085)
+        ctx.fill()
+        // 눈꺼풀 (위 절반 덮음)
+        ctx.fillStyle = shade(L.skin, 0.92)
+        ctx.beginPath()
+        ctx.moveTo(fx + s * eyeDx - R * 0.26, eyeY - R * 0.02)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY - R * 0.2, fx + s * eyeDx + R * 0.26, eyeY - R * 0.02)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY - R * 0.06, fx + s * eyeDx - R * 0.26, eyeY - R * 0.02)
+        ctx.closePath()
+        ctx.fill()
+        ctx.strokeStyle = OUTLINE
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(fx + s * eyeDx - R * 0.26, eyeY - R * 0.02)
+        ctx.quadraticCurveTo(fx + s * eyeDx, eyeY - R * 0.06, fx + s * eyeDx + R * 0.26, eyeY - R * 0.02)
+        ctx.stroke()
       }
       break
     }
@@ -467,7 +674,7 @@ function drawMouth(ctx: CanvasRenderingContext2D, L: Look, R: number, fx: number
       ctx.stroke()
       break
     case 'thick': {
-      ctx.fillStyle = '#c9695a'
+      ctx.fillStyle = hex(L.lipColor ?? 0xc9695a)
       ctx.lineWidth = 1.3
       ellipse(ctx, fx, my, R * 0.26, R * 0.13)
       ctx.fill()
@@ -476,6 +683,38 @@ function drawMouth(ctx: CanvasRenderingContext2D, L: Look, R: number, fx: number
       ctx.moveTo(fx - R * 0.24, my)
       ctx.lineTo(fx + R * 0.24, my)
       ctx.stroke()
+      break
+    }
+    case 'pout': {
+      // 쭉 내민 입술 (오리 입 모양)
+      ctx.fillStyle = hex(L.lipColor ?? 0xb9382a)
+      ctx.lineWidth = 1.4
+      ctx.beginPath()
+      ctx.moveTo(fx - R * 0.3, my)
+      ctx.quadraticCurveTo(fx - R * 0.1, my - R * 0.2, fx + R * 0.02, my - R * 0.1)
+      ctx.quadraticCurveTo(fx + R * 0.14, my - R * 0.2, fx + R * 0.3, my)
+      ctx.quadraticCurveTo(fx + R * 0.14, my + R * 0.24, fx, my + R * 0.16)
+      ctx.quadraticCurveTo(fx - R * 0.14, my + R * 0.24, fx - R * 0.3, my)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(fx - R * 0.26, my + R * 0.01)
+      ctx.quadraticCurveTo(fx, my + R * 0.06, fx + R * 0.26, my + R * 0.01)
+      ctx.stroke()
+      break
+    }
+    case 'sing': {
+      // 노래하듯 크게 벌린 입 (세로 타원)
+      ctx.fillStyle = '#6b2424'
+      ctx.lineWidth = 1.4
+      ellipse(ctx, fx, my + R * 0.08, R * 0.16, R * 0.22)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#fff'
+      ctx.beginPath()
+      ctx.ellipse(fx, my - R * 0.1, R * 0.13, R * 0.05, 0, 0, Math.PI)
+      ctx.fill()
       break
     }
     case 'grin': {
@@ -505,6 +744,29 @@ function drawBeard(ctx: CanvasRenderingContext2D, L: Look, R: number, fx: number
   switch (L.beard) {
     case 'none':
       return
+    case 'mustache': {
+      // 콧수염 + 턱 둘레 점박이 수염 (침착맨 아바타)
+      ctx.fillStyle = col
+      ctx.globalAlpha = 0.95
+      ctx.beginPath()
+      ctx.moveTo(fx - R * 0.34, fy + R * 0.42)
+      ctx.quadraticCurveTo(fx - R * 0.12, fy + R * 0.28, fx, fy + R * 0.38)
+      ctx.quadraticCurveTo(fx + R * 0.12, fy + R * 0.28, fx + R * 0.34, fy + R * 0.42)
+      ctx.quadraticCurveTo(fx + R * 0.12, fy + R * 0.44, fx, fy + R * 0.44)
+      ctx.quadraticCurveTo(fx - R * 0.12, fy + R * 0.44, fx - R * 0.34, fy + R * 0.42)
+      ctx.closePath()
+      ctx.fill()
+      // 점박이
+      ctx.globalAlpha = 0.85
+      for (let i = 0; i < 14; i++) {
+        const a = Math.PI * 0.18 + (i / 13) * Math.PI * 0.64
+        const rr = R * (0.8 + ((i * 5) % 3) * 0.05)
+        circle(ctx, fx * 0.5 + Math.cos(a) * rr, hy + R * 0.12 + Math.sin(a) * rr * 0.85, R * 0.04)
+        ctx.fill()
+      }
+      ctx.globalAlpha = 1
+      break
+    }
     case 'stubble': {
       ctx.fillStyle = col
       ctx.globalAlpha = 0.28
