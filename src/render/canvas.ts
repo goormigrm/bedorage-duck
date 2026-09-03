@@ -1,6 +1,7 @@
 // Canvas 2D 렌더러. sim 상태(prev, curr)를 보간해 그린다. sim 을 절대 변경하지 않는다.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
+import { drawCharacter, drawFlat } from './character'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap, TILE, isWall } from '../core/map'
 import { GameState, PLAYER_RADIUS, PlayerState, SimEvent } from '../core/state'
@@ -484,43 +485,35 @@ export class Renderer {
     const c = CHARACTERS[p.char]
     const w = WEAPONS[p.weapon]
     const rad = angleToRad(p.aim)
-    const cs = Math.cos(rad)
     const sn = Math.sin(rad)
 
     if (!p.alive) {
       if (v.deadT < 0 || v.deadT > 1.2) return
       const k = 1 - v.deadT / 1.2
       ctx.save()
-      ctx.globalAlpha = Math.min(1, k * 1.5)
       ctx.translate(pos.x, pos.y + 8)
-      ctx.scale(1.35, 0.35)
-      ctx.fillStyle = hex(c.bodyColor)
-      ctx.strokeStyle = OUTLINE
-      ctx.lineWidth = 2
-      circle(ctx, 0, 0, PLAYER_RADIUS)
-      ctx.fill()
-      ctx.stroke()
+      drawFlat(ctx, c, Math.min(1, k * 1.5))
       ctx.restore()
       return
     }
 
     if (p.moving) v.walk += dt * 14
     else v.walk = 0
-    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 3 : 0
+    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 2.5 : 0
     const stretch = p.moving ? 1 + Math.sin(v.walk * 2) * 0.03 : 1
     const sx = v.sx / stretch
     const sy = v.sy * stretch
 
     // 그림자
     ctx.fillStyle = 'rgba(0,0,0,0.22)'
-    ellipse(ctx, pos.x, pos.y + 13, 15 * sx, 6)
+    ellipse(ctx, pos.x, pos.y + 13, 15 * sx * c.look.bodyScale, 6)
     ctx.fill()
 
     // 스폰 보호 링
     if (p.invuln > 0) {
       ctx.strokeStyle = `rgba(159,224,255,${0.35 + 0.3 * Math.sin(this.t * 12)})`
       ctx.lineWidth = 2
-      circle(ctx, pos.x, pos.y, PLAYER_RADIUS + 6)
+      circle(ctx, pos.x, pos.y - 8, PLAYER_RADIUS + 12)
       ctx.stroke()
     }
 
@@ -531,155 +524,15 @@ export class Renderer {
     ctx.save()
     ctx.translate(pos.x, pos.y - bob)
     ctx.scale(sx, sy)
-
-    // 발
-    ctx.fillStyle = '#ef8f2b'
-    ctx.strokeStyle = OUTLINE
-    ctx.lineWidth = 1.5
-    const fo = p.moving ? Math.sin(v.walk) * 4 : 0
-    ellipse(ctx, -6, 13 + fo * 0.5, 5, 3)
-    ctx.fill()
-    ctx.stroke()
-    ellipse(ctx, 6, 13 - fo * 0.5, 5, 3)
-    ctx.fill()
-    ctx.stroke()
-
-    // 몸통
-    ctx.fillStyle = hex(c.bodyColor)
-    ctx.strokeStyle = OUTLINE
-    ctx.lineWidth = 2
-    circle(ctx, 0, 0, PLAYER_RADIUS)
-    ctx.fill()
-    ctx.stroke()
-    // 배
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
-    ellipse(ctx, 0, 5, 8, 6)
-    ctx.fill()
-    // 날개 (조준 반대쪽)
-    ctx.fillStyle = hex(darken(c.bodyColor, 0.85))
-    ctx.strokeStyle = OUTLINE
-    ctx.lineWidth = 1.5
-    ellipse(ctx, -cs * 9, 3 + Math.abs(sn) * 2, 5, 7)
-    ctx.fill()
-    ctx.stroke()
-
-    // 액세서리(뒤)
-    if (c.accessory === 'collar') {
-      ctx.fillStyle = '#fafafa'
-      ctx.strokeStyle = OUTLINE
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      ctx.ellipse(0, 6, 12, 7, 0, 0, Math.PI)
-      ctx.closePath()
-      ctx.fill()
-      ctx.stroke()
-    }
-
-    // 눈
-    const ex = cs * 5
-    const ey = -4 + sn * 2
-    ctx.fillStyle = '#ffffff'
-    ctx.strokeStyle = OUTLINE
-    ctx.lineWidth = 1.2
-    circle(ctx, ex, ey, 4)
-    ctx.fill()
-    ctx.stroke()
-    ctx.fillStyle = '#1a1a1a'
-    circle(ctx, ex + cs * 1.5, ey + sn * 1.2, 2)
-    ctx.fill()
-
-    // 부리
-    ctx.save()
-    ctx.translate(cs * 9, -1 + sn * 4)
-    ctx.rotate(rad)
-    ctx.fillStyle = '#f39c2b'
-    ctx.strokeStyle = OUTLINE
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.moveTo(0, -4)
-    ctx.lineTo(10, -1)
-    ctx.lineTo(10, 1)
-    ctx.lineTo(0, 4)
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
-    ctx.restore()
-
-    // 액세서리(앞)
-    ctx.strokeStyle = OUTLINE
-    switch (c.accessory) {
-      case 'glasses': {
-        ctx.lineWidth = 1.6
-        ctx.strokeStyle = '#111'
-        circle(ctx, ex, ey, 5.5)
-        ctx.stroke()
-        circle(ctx, ex - cs * 9, ey, 5.5)
-        ctx.stroke()
-        ctx.beginPath()
-        ctx.moveTo(ex - 3, ey)
-        ctx.lineTo(ex - cs * 9 + 3, ey)
-        ctx.stroke()
-        break
-      }
-      case 'cap': {
-        ctx.fillStyle = hex(c.accentColor)
-        ctx.strokeStyle = OUTLINE
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.arc(0, -8, 11, Math.PI, Math.PI * 2)
-        ctx.closePath()
-        ctx.fill()
-        ctx.stroke()
-        // 챙
-        ctx.beginPath()
-        ctx.ellipse(cs * 9, -8, 7, 2.5, 0, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.stroke()
-        break
-      }
-      case 'headband': {
-        ctx.fillStyle = hex(c.accentColor)
-        ctx.strokeStyle = OUTLINE
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.rect(-13, -11, 26, 5)
-        ctx.fill()
-        ctx.stroke()
-        // 꼬리
-        ctx.beginPath()
-        ctx.moveTo(-cs * 12, -9)
-        ctx.lineTo(-cs * 22, -14 + Math.sin(this.t * 6) * 2)
-        ctx.lineTo(-cs * 20, -6)
-        ctx.closePath()
-        ctx.fill()
-        ctx.stroke()
-        break
-      }
-      case 'collar': {
-        // 청진기 느낌의 작은 원
-        ctx.fillStyle = '#cfd8dc'
-        ctx.lineWidth = 1
-        circle(ctx, cs * -3, 8, 2.2)
-        ctx.fill()
-        ctx.stroke()
-        break
-      }
-    }
-
-    // 피격 플래시
-    if (v.flash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(1, v.flash * 8)})`
-      circle(ctx, 0, 0, PLAYER_RADIUS + 1)
-      ctx.fill()
-    }
+    drawCharacter(ctx, c, { facing: rad, sx, sy, walk: v.walk, moving: p.moving, flash: v.flash, t: this.t })
     ctx.restore()
 
     if (!weaponBehind) this.drawWeapon(pos, rad, w.length, w.color)
 
-    // 이름표 + 미니 체력바
+    // 이름표 + 미니 체력바 (머리 위)
     const maxHp = c.maxHp
     const hpK = Math.max(0, p.hp / maxHp)
-    const ty = pos.y - 30
+    const ty = pos.y - 8 - 25 * c.look.headScale - 12
     ctx.font = '600 11px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
@@ -1103,9 +956,3 @@ export function hex(c: number): string {
   return '#' + c.toString(16).padStart(6, '0')
 }
 
-function darken(c: number, k: number): number {
-  const r = Math.round(((c >> 16) & 255) * k)
-  const g = Math.round(((c >> 8) & 255) * k)
-  const b = Math.round((c & 255) * k)
-  return (r << 16) | (g << 8) | b
-}

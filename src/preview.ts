@@ -7,6 +7,8 @@ import { buildMap } from './core/map'
 import { createState, snapshot, step } from './core/sim'
 import { GameState, TICK_MS } from './core/state'
 import { Renderer, VIEW_H, VIEW_W, roundRect } from './render/canvas'
+import { drawCharacter } from './render/character'
+import { WEAPONS } from './core/weapons'
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 const stage = document.getElementById('stage') as HTMLDivElement
@@ -127,6 +129,11 @@ function frame(now: number): void {
     if (restartAt > 0 && titleT >= restartAt) restart()
   }
 
+  if (SHEET) {
+    drawSheet()
+    requestAnimationFrame(frame)
+    return
+  }
   const alpha = Math.min(1, acc / TICK_MS)
   renderer.draw(match.prev, match.state, alpha, rawDt, {
     showHud: showHud && !titleHold,
@@ -138,6 +145,48 @@ function frame(now: number): void {
   })
   drawOverlay(rawDt)
   requestAnimationFrame(frame)
+}
+
+const SHEET = new URLSearchParams(location.search).has('sheet')
+
+/** ?sheet=1 : 캐릭터 시트 (4인 정면·측면 크게) */
+function drawSheet(): void {
+  const ctx = renderer.ctx
+  ctx.setTransform(renderer.canvas.width / VIEW_W, 0, 0, renderer.canvas.height / VIEW_H, 0, 0)
+  ctx.fillStyle = '#1c1f17'
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H)
+  const n = CHARACTER_LIST.length
+  const cw = VIEW_W / n
+  CHARACTER_LIST.forEach((c, i) => {
+    const cx = cw * i + cw / 2
+    ctx.fillStyle = '#2a2e24'
+    roundRect(ctx, cw * i + 16, 40, cw - 32, VIEW_H - 80, 12)
+    ctx.fill()
+    const facings = [-Math.PI / 2 + 0.5, 0, Math.PI * 0.8]
+    facings.forEach((f, j) => {
+      ctx.save()
+      ctx.translate(cx + (j - 1) * 84, 300)
+      ctx.scale(j === 1 ? 4.2 : 2.6, j === 1 ? 4.2 : 2.6)
+      drawCharacter(ctx, c, { facing: f, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
+      ctx.restore()
+    })
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+    ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
+    ctx.fillText(c.name, cx, 480)
+    ctx.font = '500 15px "IBM Plex Sans KR", sans-serif'
+    ctx.fillStyle = '#b3b8a5'
+    ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, cx, 512)
+    ctx.font = '400 13px "IBM Plex Sans KR", sans-serif'
+    ctx.fillStyle = '#8f957f'
+    ctx.fillText(`${c.passiveName}: ${c.passiveDesc}`, cx, 540)
+    ctx.fillText(c.tagline, cx, 566)
+  })
+  ctx.font = '600 12px "IBM Plex Mono", monospace'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = 'rgba(245,242,230,0.55)'
+  ctx.fillText('BEDORAGE DUCK · CHARACTER SHEET', 18, 30)
 }
 
 function drawOverlay(_dt: number): void {
