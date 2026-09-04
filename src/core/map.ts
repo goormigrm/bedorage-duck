@@ -76,24 +76,136 @@ function generate(map: GameMap, def: MapDef, seed: number): void {
   const area = (map.w - 2) * (map.h - 2)
   const g = def.gen
   const k = area / 1064 // 40x30 기준 1
-  // 1) 벽 덩어리
-  const blocks = Math.round(g.blocks * k)
-  for (let i = 0; i < blocks; i++) placeWallShape(map, rng, g.maxLen)
+  // 1) 뼈대 — 맵 성격을 정하는 부분
+  if (g.style === 'rooms') {
+    // 넓을수록 더 잘게 나눈다
+    carveRooms(map, rng, g.density + (map.scale === 4 ? 2 : map.scale === 2 ? 1 : 0))
+  } else if (g.style === 'pillars') {
+    placePillars(map, rng, g.density)
+  } else {
+    for (let i = 0; i < Math.round(g.density * k); i++) placeWallShape(map, rng, g.maxLen)
+  }
   // 2) 상자 군집
-  const crates = Math.round(g.crates * k)
-  for (let i = 0; i < crates; i++) placeCluster(map, rng, TILE_CRATE, randInt(rng, 1, 5))
+  for (let i = 0; i < Math.round(g.crates * k); i++) placeCluster(map, rng, TILE_CRATE, randInt(rng, 1, 5))
   // 3) 모래주머니 진지: 중앙 + (넓은 맵이면) 사분면
   const forts: [number, number][] = [[map.w / 2, map.h / 2]]
-  if (map.scale >= 2) {
-    forts.push([map.w * 0.25, map.h * 0.5], [map.w * 0.75, map.h * 0.5])
-  }
-  if (map.scale === 4) {
-    forts.push([map.w * 0.5, map.h * 0.25], [map.w * 0.5, map.h * 0.75])
-  }
+  if (map.scale >= 2) forts.push([map.w * 0.25, map.h * 0.5], [map.w * 0.75, map.h * 0.5])
+  if (map.scale === 4) forts.push([map.w * 0.5, map.h * 0.25], [map.w * 0.5, map.h * 0.75])
   for (const [fx, fy] of forts) placeFort(map, Math.round(fx), Math.round(fy))
   // 4) 흩어진 모래주머니 줄
-  const bags = Math.round(g.sandbags * k)
-  for (let i = 0; i < bags; i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 7))
+  for (let i = 0; i < Math.round(g.sandbags * k); i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 7))
+  // 5) 갇힌 곳이 생겼으면 뚫는다
+  ensureConnected(map)
+}
+
+/** 영역을 재귀로 갈라 방과 문을 만든다 (실내 맵) */
+function carveRooms(map: GameMap, rng: Rng, depth: number): void {
+  const MIN = 6
+  const put = (x: number, y: number, tile: number) => {
+    if (x < 1 || y < 1 || x >= map.w - 1 || y >= map.h - 1) return
+    map.tiles[y * map.w + x] = tile
+  }
+  const split = (x0: number, y0: number, x1: number, y1: number, d: number): void => {
+    const w = x1 - x0 + 1
+    const h = y1 - y0 + 1
+    if (d <= 0) return
+    const canH = h >= MIN * 2 + 1
+    const canV = w >= MIN * 2 + 1
+    if (!canH && !canV) return
+    const horiz = canH && (!canV || (h > w || (h === w && randInt(rng, 0, 2) === 0)))
+    if (horiz) {
+      const y = y0 + MIN + randInt(rng, 0, h - MIN * 2)
+      for (let x = x0; x <= x1; x++) put(x, y, TILE_WALL)
+      // 문 1~2개 (3칸 폭)
+      for (let i = 0, n = 1 + randInt(rng, 0, 2); i < n; i++) {
+        const dx = x0 + 1 + randInt(rng, 0, Math.max(1, w - 4))
+        for (let j = 0; j < 3; j++) put(dx + j, y, TILE_FLOOR)
+      }
+      split(x0, y0, x1, y - 1, d - 1)
+      split(x0, y + 1, x1, y1, d - 1)
+    } else {
+      const x = x0 + MIN + randInt(rng, 0, w - MIN * 2)
+      for (let y = y0; y <= y1; y++) put(x, y, TILE_WALL)
+      for (let i = 0, n = 1 + randInt(rng, 0, 2); i < n; i++) {
+        const dy = y0 + 1 + randInt(rng, 0, Math.max(1, h - 4))
+        for (let j = 0; j < 3; j++) put(x, dy + j, TILE_FLOOR)
+      }
+      split(x0, y0, x - 1, y1, d - 1)
+      split(x + 1, y0, x1, y1, d - 1)
+    }
+  }
+  split(1, 1, map.w - 2, map.h - 2, depth)
+}
+
+/** 기둥을 격자로 세운다 (주차장) */
+function placePillars(map: GameMap, rng: Rng, gap: number): void {
+  for (let ty = 3; ty < map.h - 4; ty += gap) {
+    for (let tx = 3; tx < map.w - 4; tx += gap) {
+      if (randInt(rng, 0, 9) === 0) continue // 가끔 비운다
+      const jx = tx + randInt(rng, 0, 2)
+      const jy = ty + randInt(rng, 0, 2)
+      if (free(map, jx, jy, 2, 2, 1)) fill(map, jx, jy, 2, 2, TILE_WALL)
+    }
+  }
+}
+
+/** 갇힌 바닥이 없도록 벽을 뚫어 잇는다 (생성 방식과 무관한 안전장치) */
+function ensureConnected(map: GameMap): void {
+  const total = map.w * map.h
+  for (let pass = 0; pass < 12; pass++) {
+    let start = -1
+    for (let i = 0; i < total; i++) {
+      if (map.tiles[i] === TILE_FLOOR) {
+        start = i
+        break
+      }
+    }
+    if (start < 0) return
+    const seen = new Uint8Array(total)
+    const queue = [start]
+    seen[start] = 1
+    let head = 0
+    while (head < queue.length) {
+      const cur = queue[head++]
+      const cx = cur % map.w
+      const cy = (cur / map.w) | 0
+      if (cx > 0 && !seen[cur - 1] && map.tiles[cur - 1] === TILE_FLOOR) { seen[cur - 1] = 1; queue.push(cur - 1) }
+      if (cx < map.w - 1 && !seen[cur + 1] && map.tiles[cur + 1] === TILE_FLOOR) { seen[cur + 1] = 1; queue.push(cur + 1) }
+      if (cy > 0 && !seen[cur - map.w] && map.tiles[cur - map.w] === TILE_FLOOR) { seen[cur - map.w] = 1; queue.push(cur - map.w) }
+      if (cy < map.h - 1 && !seen[cur + map.w] && map.tiles[cur + map.w] === TILE_FLOOR) { seen[cur + map.w] = 1; queue.push(cur + map.w) }
+    }
+    // 닿지 않은 바닥 찾기
+    let stray = -1
+    for (let i = 0; i < total; i++) {
+      if (map.tiles[i] === TILE_FLOOR && !seen[i]) {
+        stray = i
+        break
+      }
+    }
+    if (stray < 0) return
+    // 닿은 곳 중 가장 가까운 칸으로 직선을 뚫는다
+    const sx = stray % map.w
+    const sy = (stray / map.w) | 0
+    let best = start
+    let bestD = Infinity
+    for (let i = 0; i < total; i++) {
+      if (!seen[i]) continue
+      const d = Math.abs((i % map.w) - sx) + Math.abs(((i / map.w) | 0) - sy)
+      if (d < bestD) {
+        bestD = d
+        best = i
+      }
+    }
+    let cx = sx
+    let cy = sy
+    const tx = best % map.w
+    const ty = (best / map.w) | 0
+    while (cx !== tx || cy !== ty) {
+      if (cx !== tx) cx += cx < tx ? 1 : -1
+      else cy += cy < ty ? 1 : -1
+      if (cx > 0 && cy > 0 && cx < map.w - 1 && cy < map.h - 1) map.tiles[cy * map.w + cx] = TILE_FLOOR
+    }
+  }
 }
 
 function free(map: GameMap, x0: number, y0: number, w: number, h: number, clear: number): boolean {

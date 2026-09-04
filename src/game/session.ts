@@ -7,15 +7,18 @@ import { Input } from '../core/input'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, snapshot, step, syncSandbags } from '../core/sim'
+import { angleToRad } from '../core/fixedmath'
 import { GameState, TICK_MS, isTeamMatch } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
 import { TEAM_NAMES, VIEW_H, VIEW_W } from '../render/hud'
+import { worldDirToScreen } from '../render3d/camera'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
+import { TouchControls, enterLandscape, isTouchDevice } from './touch'
 import { Ticker } from './ticker'
 
 export interface SessionConfig {
@@ -51,6 +54,7 @@ export class Session {
   private prev: GameState
   private renderer: Renderer3D
   private input = new LocalInput()
+  private touch: TouchControls | null = null
   private sfx = new Sfx()
   private bots: BotMemory[] = []
   private lockstep: Lockstep | null = null
@@ -100,7 +104,11 @@ export class Session {
     // 캔버스가 UI 아래에 오도록 UI 를 맨 뒤로
     const ui = this.stage.querySelector('.game-ui') as HTMLElement
     this.stage.appendChild(ui)
-    this.input.attach(this.stage)
+    if (isTouchDevice()) {
+      this.touch = new TouchControls(this.root)
+      void enterLandscape()
+    }
+    this.input.attach(this.stage, this.touch)
     ;(host.querySelector('#btn-lobby') as HTMLButtonElement).onclick = () => this.exit()
     const muteBtn = host.querySelector('#btn-mute') as HTMLButtonElement
     const syncMute = () => (muteBtn.textContent = this.sfx.muted ? '소리 꺼짐' : '소리 켜짐')
@@ -213,6 +221,14 @@ export class Session {
   }
 
   // ---------- 캐릭터 교체 창 ----------
+  /** 터치 메뉴 버튼 */
+  private pollTouchMenu(): void {
+    if (this.touch?.takeMenu()) {
+      if (this.overlay.hidden) this.showMenu()
+      else this.hideOverlay()
+    }
+  }
+
   private showPicker(): void {
     const box = this.overlay.querySelector('#overlay-box') as HTMLElement
     box.classList.add('picker')
@@ -231,6 +247,7 @@ export class Session {
     this.overlay.hidden = false
     this.pickerOpen = true
     this.input.pickerOpen = true
+    this.touch?.setVisible(false)
   }
 
   private hidePicker(): void {
@@ -240,6 +257,7 @@ export class Session {
     this.overlay.hidden = true
     this.pickerOpen = false
     this.input.pickerOpen = false
+    this.touch?.setVisible(true)
   }
 
   // ---------- 대전: 피어 ----------
@@ -401,6 +419,7 @@ export class Session {
     const lp = this.cfg.localPlayer
     let message = this.message
     if (this.lockstep && this.stallSince >= 0 && now - this.stallSince > 400) message = '상대 입력 대기 중…'
+    this.pollTouchMenu()
     const alpha = Math.min(1, this.acc / TICK_MS)
     const choosing = this.state.players[lp].choosing && this.state.phase === 'playing'
     if (choosing && !this.pickerOpen) this.showPicker()
@@ -414,9 +433,19 @@ export class Session {
       subLabels: sub,
       ping: this.cfg.link ? this.cfg.link.rtt : undefined,
       message,
-      cursor: this.input.mouse,
+      cursor: this.aimCursor(),
     })
     this.raf = requestAnimationFrame(this.frame)
+  }
+
+  /** 조준선 화면 좌표. 터치면 화면 중앙에서 조준 방향으로 띄운다 */
+  private aimCursor(): { x: number; y: number } {
+    if (!this.touch) return this.input.mouse
+    const me = this.state.players[this.cfg.localPlayer]
+    const r = angleToRad(me.aim)
+    const d = worldDirToScreen(Math.cos(r), Math.sin(r))
+    const len = Math.hypot(d.x, d.y) || 1
+    return { x: VIEW_W / 2 + (d.x / len) * 190, y: VIEW_H / 2 + (d.y / len) * 190 }
   }
 
   private subLabel(i: number): string {
@@ -478,6 +507,7 @@ export class Session {
     cancelAnimationFrame(this.raf)
     this.ticker.stop()
     this.input.dispose()
+    this.touch?.dispose()
     this.sfx.dispose()
     window.removeEventListener('keydown', this.onKey)
     window.removeEventListener('resize', this.fit)

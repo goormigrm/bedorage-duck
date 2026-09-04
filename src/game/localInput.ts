@@ -3,7 +3,8 @@
 import { radToAngle } from '../core/fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from '../core/input'
 import { VIEW_H, VIEW_W } from '../render/hud'
-import { moveDirFromScreen } from '../render3d/camera'
+import { moveDirFromScreen, screenDirToWorldAngle } from '../render3d/camera'
+import { TouchControls } from './touch'
 
 interface AimSource {
   screenToWorld(sx: number, sy: number): { x: number; y: number }
@@ -21,8 +22,11 @@ export class LocalInput {
   pendingChar = 0
   /** 캐릭터 선택 창이 열려 있을 때 1~5 키 → pendingChar */
   pickerOpen = false
+  /** 모바일 터치 조작 (없으면 null) */
+  touch: TouchControls | null = null
 
-  attach(stage: HTMLElement): void {
+  attach(stage: HTMLElement, touch: TouchControls | null = null): void {
+    this.touch = touch
     const onKey = (e: KeyboardEvent, down: boolean) => {
       const k = e.key.toLowerCase()
       if (['w', 'a', 's', 'd', ' ', 'r', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) {
@@ -89,17 +93,27 @@ export class LocalInput {
     if (k.has('d') || k.has('arrowright')) sx += 1
     if (k.has('w') || k.has('arrowup')) sy -= 1
     if (k.has('s') || k.has('arrowdown')) sy += 1
-    const { mx, my } = moveDirFromScreen(sx, sy)
-    const w = renderer.screenToWorld(this.mouse.x, this.mouse.y)
-    const dx = w.x - meX
-    const dy = w.y - meY
-    if (dx !== 0 || dy !== 0) this.lastAim = radToAngle(Math.atan2(dy, dx))
+    let { mx, my } = moveDirFromScreen(sx, sy)
+    const t = this.touch
+    if (t && (t.move.x !== 0 || t.move.y !== 0)) {
+      const d = moveDirFromScreen(t.move.x, t.move.y)
+      mx = d.mx
+      my = d.my
+    }
+    if (t && t.aim) {
+      this.lastAim = screenDirToWorldAngle(t.aim.x, t.aim.y)
+    } else {
+      const w = renderer.screenToWorld(this.mouse.x, this.mouse.y)
+      const dx = w.x - meX
+      const dy = w.y - meY
+      if (dx !== 0 || dy !== 0) this.lastAim = radToAngle(Math.atan2(dy, dx))
+    }
     let buttons = 0
-    if (this.mouseDown.has(0)) buttons |= BTN_FIRE
-    if (this.mouseDown.has(2)) buttons |= BTN_ADS
-    if (k.has(' ') || k.has('shift')) buttons |= BTN_DASH
-    if (k.has('r')) buttons |= BTN_RELOAD
-    if (this.swapPressed) {
+    if (this.mouseDown.has(0) || t?.firing) buttons |= BTN_FIRE
+    if (this.mouseDown.has(2) || t?.ads) buttons |= BTN_ADS
+    if (k.has(' ') || k.has('shift') || t?.takeDash()) buttons |= BTN_DASH
+    if (k.has('r') || t?.reload) buttons |= BTN_RELOAD
+    if (this.swapPressed || t?.takeSwap()) {
       buttons |= BTN_SWAP
       this.swapPressed = false
     }

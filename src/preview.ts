@@ -247,23 +247,38 @@ function runSheet(): void {
   // 7명 이상이면 두 줄 (홀수 인덱스는 뒷줄)
   const twoRows = list.length > 6
   const cols = twoRows ? Math.ceil(list.length / 2) : list.length
+  const GAP = 2.5
+  /** 단체 사진처럼: 앞줄 6명, 뒷줄 6명은 단 위에 반 칸 어긋나게 */
   const slot = (i: number) => {
-    const col = twoRows ? Math.floor(i / 2) : i
-    const row = twoRows ? i % 2 : 0
-    // 카메라가 -z 쪽에 있으므로 뒷줄은 +z (맵 안쪽)
-    // 뒷줄은 반 칸 어긋나게 세워 앞줄 사이로 보이게
-    return { x: map.w / 2 - (col - (cols - 1) / 2) * 1.75 + row * 0.875, z: cz + row * 1.9 }
+    const row = twoRows && i >= cols ? 1 : 0
+    const col = row === 1 ? i - cols : i
+    return {
+      x: map.w / 2 - (col - (cols - 1) / 2) * GAP + row * GAP * 0.5,
+      y: row * 1.3,
+      z: cz + row * 3.0,
+      row,
+    }
   }
   const rigs = list.map((c, i) => {
     const rig = buildCharacter(c)
     const p = slot(i)
-    rig.root.position.set(p.x, 0, p.z)
+    rig.root.position.set(p.x, p.y, p.z)
     scene.add(rig.root)
     return rig
   })
+  // 뒷줄이 딛고 설 단
+  if (twoRows) {
+    const riser = new THREE.Mesh(
+      new THREE.BoxGeometry(cols * GAP + 2.4, 1.3, 2.4),
+      new THREE.MeshStandardMaterial({ color: 0x59614a, roughness: 0.9 }),
+    )
+    riser.position.set(map.w / 2 + GAP * 0.5, 0.65, cz + 3.0)
+    riser.receiveShadow = true
+    scene.add(riser)
+  }
   const cam = renderer.threeCamera
-  const cx = map.w / 2
-  const dist = focus ? 3.2 : 4.6 + cols * 0.8
+  const cx = map.w / 2 + (twoRows ? GAP * 0.25 : 0)
+  const dist = focus ? 3.2 : 4.8 + cols * 1.15
   let t = 0
   let lastT = performance.now()
   const loop = (now: number) => {
@@ -276,9 +291,9 @@ function runSheet(): void {
       r.legL.rotation.x = swing
       r.legR.rotation.x = -swing
     })
-    cam.position.set(cx, 1.9, cz - dist)
-    cam.lookAt(cx, focus ? 1.05 : 0.9, cz)
-    renderer.setSun(cx + 4, 12, cz - 8)
+    cam.position.set(cx, focus ? 1.9 : 3.3, cz - dist)
+    cam.lookAt(cx, focus ? 1.05 : 1.35, cz + (twoRows ? 1.4 : 0))
+    renderer.setSun(cx + 3, 9, cz - 7)
     renderer.renderRaw()
     const ctx = renderer.hud.ctx
     renderer.hud.begin(dt)
@@ -286,23 +301,26 @@ function runSheet(): void {
     ctx.textBaseline = 'alphabetic'
     list.forEach((c, i) => {
       const p = slot(i)
-      const back = twoRows && i % 2 === 1
-      const v = new THREE.Vector3(p.x, back ? rigs[i].height + 0.1 : -0.15, p.z).project(cam)
+      // 앞줄은 발밑에, 뒷줄은 머리 위에 이름을 단다 (서로 가리지 않게)
+      const back = p.row === 1
+      const anchor = back ? p.y + rigs[i].height + 0.15 : p.y - 0.12
+      const v = new THREE.Vector3(p.x, anchor, p.z).project(cam)
       const sx = ((v.x + 1) / 2) * VIEW_W
       const sy = ((1 - v.y) / 2) * VIEW_H
-      ctx.font = `400 ${focus ? 40 : twoRows ? 20 : 26}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
+      const top = back ? sy - 46 : sy + 26
+      ctx.font = `400 ${focus ? 40 : 22}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
       ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
-      ctx.fillText(c.name, sx, back ? sy - 6 : sy + 30)
-      if (!twoRows || focus) {
-        ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
-        ctx.fillStyle = '#a9b4c0'
-        ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, sx, sy + 52)
-      }
+      ctx.fillText(c.name, sx, top)
+      ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
+      ctx.fillStyle = '#c3ccd6'
+      ctx.fillText(`${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, sx, top + 18)
+      ctx.fillStyle = '#8c968f'
+      ctx.fillText(c.basedOn, sx, top + 34)
     })
-    ctx.font = '600 12px "IBM Plex Mono", monospace'
+    ctx.font = '600 13px "IBM Plex Mono", monospace'
     ctx.textAlign = 'left'
-    ctx.fillStyle = 'rgba(245,242,230,0.55)'
-    ctx.fillText('BEDORAGE DUCK · CHARACTER SHEET (3D)', 18, 30)
+    ctx.fillStyle = 'rgba(245,242,230,0.6)'
+    ctx.fillText('BEDORAGE DUCK · 배도라지 덕 · 캐릭터 12명', 22, 34)
     requestAnimationFrame(loop)
   }
   requestAnimationFrame(loop)
@@ -371,6 +389,46 @@ function fit(): void {
 }
 window.addEventListener('resize', fit)
 fit()
+
+// 스크린샷 캡처용 훅(?shot=1). 탭이 뒤에 있어 rAF 가 멈춰도 밖에서 한 틱씩 돌리고 그릴 수 있다.
+if (q.has('shot')) {
+  ;(window as unknown as { __cap: unknown }).__cap = {
+    /** n 틱 진행 */
+    tick(n = 1) {
+      for (let i = 0; i < n; i++) {
+        match.prev = snapshot(match.state)
+        step(match.state, map, botInputs(match))
+        renderer.onEvents(match.state.events, match.state, -1, match.names)
+      }
+    },
+    /** 현재 상태를 한 장 그린다. local >= 0 이면 그 플레이어 시점(시야 제한 포함) */
+    draw(hud = true, local = -1, cursor?: { x: number; y: number }) {
+      renderer.draw(match.prev, match.state, 1, 1 / 60, {
+        showHud: hud,
+        localPlayer: local,
+        cameraMode: local >= 0 ? 'follow' : cameraMode,
+        names: match.names,
+        subLabels: match.subs,
+        timeScale: 1,
+        cursor,
+      })
+    },
+    state: () => match.state,
+    names: () => match.names,
+    map: () => map,
+    /** 게임 좌표 -> 화면(1280x720) 좌표. 조준경 커서 자리를 잡을 때 쓴다 */
+    project(gx: number, gy: number, h = 0.55) {
+      const r = renderer as unknown as {
+        worldToScreen(x: number, y: number, z: number): { x: number; y: number }
+      }
+      return r.worldToScreen(gx / 32, h, gy / 32)
+    },
+    restart,
+    setCamera(m: 'follow' | 'both') {
+      cameraMode = m
+    },
+  }
+}
 
 void document.fonts.ready.then(() => {
   if (q.has('sheet')) runSheet()

@@ -325,7 +325,7 @@ describe('맵 생성', () => {
 
   it('모든 빈 칸이 서로 연결된다 (갇히는 곳 없음)', () => {
     for (const def of MAP_LIST) {
-      for (let seed = 1; seed <= 6; seed++) {
+      for (let seed = 1; seed <= 10; seed++) {
         const m = buildMap(def.id as MapId, seed % 3 === 0 ? 2 : 1, seed * 91)
         const open: number[] = []
         for (let i = 0; i < m.tiles.length; i++) if (m.tiles[i] === TILE_FLOOR) open.push(i)

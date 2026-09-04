@@ -142,7 +142,13 @@ export class Renderer3D {
     container.appendChild(hudCanvas)
     this.hud = new Hud(hudCanvas)
 
-    this.gl = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' })
+    this.gl = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+      // 스크린샷을 뜰 때만 켠다(기본은 성능 우선). 주소 뒤 ?shot=1
+      preserveDrawingBuffer: typeof location !== 'undefined' && location.search.includes('shot=1'),
+    })
     this.gl.shadowMap.enabled = true
     this.gl.shadowMap.type = THREE.PCFSoftShadowMap
     this.gl.outputColorSpace = THREE.SRGBColorSpace
