@@ -5,8 +5,32 @@ import { CHARACTERS, CharacterDef } from '../core/characters'
 import { GameState, PlayerState, STAMINA_MAX, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 
-export const VIEW_W = 1280
-export const VIEW_H = 720
+/** 기준 논리 해상도. 카메라 시야 보정의 기준점이기도 하다 */
+export const BASE_W = 1280
+export const BASE_H = 720
+
+/**
+ * 실제로 그리는 논리 해상도. **높이는 720 고정, 폭만 화면 비율에 맞춰 늘린다.**
+ * 폰 가로(20:9 등)에서 1280×720 을 그대로 쓰면 좌우에 검은 여백이 크게 남기 때문이다.
+ * 폭이 늘어난 만큼 좌우로 더 보이면 넓은 화면이 유리해지므로,
+ * 렌더러가 세로 시야(fov)를 줄여 **보이는 월드 면적을 일정하게** 유지한다(renderer3d.resize).
+ * `let` 이라 import 한 쪽에서도 갱신된 값을 본다(ES 모듈 live binding).
+ */
+export let VIEW_W = BASE_W
+export let VIEW_H = BASE_H
+
+/**
+ * 화면 비율(가로/세로)에 맞춰 논리 폭을 정한다. 바뀌었으면 true (캔버스·카메라 갱신 필요).
+ * 하한은 기준 비율(16:9) — 더 좁히면 가운데 점수판과 오른쪽 위 버튼이 겹친다.
+ */
+export function setViewAspect(aspect: number): boolean {
+  const a = Math.min(2.4, Math.max(BASE_W / BASE_H, aspect || BASE_W / BASE_H))
+  const w = Math.round((BASE_H * a) / 2) * 2 // 짝수로 맞춰 흐릿함 방지
+  if (w === VIEW_W) return false
+  VIEW_W = w
+  VIEW_H = BASE_H
+  return true
+}
 
 export const TEAM_NAMES = ['A팀', 'B팀']
 export const TEAM_COLORS = ['#5aa9ff', '#ff6a5a']

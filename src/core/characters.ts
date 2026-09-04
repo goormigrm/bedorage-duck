@@ -95,6 +95,12 @@ export interface CharacterDef {
   bodyColor: number
   accentColor: number
   look: Look
+  /**
+   * 봇 밸런스 표(`tools/balance.ts`·`tests/balance.test.ts`)에서 제외.
+   * 근접 무기처럼 봇이 제대로 못 쓰는 캐릭터를 넣으면 자기 승률도, 상대 승률도 함께 왜곡된다.
+   * 제외한 캐릭터는 `tools/melee.ts` 로 따로 본다.
+   */
+  skipBotBalance?: boolean
 }
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
@@ -253,6 +259,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     prominence: 12,
     maxHp: 260, speed: 3.7, weapon: 'pan', dashCooldown: 34,
     passiveName: '방패', passiveDesc: '앞에서 오는 총알을 절반 확률로 막는다(피해 1당 기력 0.55). 기력 회복 1.8배, 짧은 쿨다운으로 굴러서 붙는다.',
+    skipBotBalance: true, // 봇이 근접 운용을 못 해 표가 실제와 반대로 나온다 → tools/melee.ts 로 본다
     bodyColor: 0x5aa9ff, accentColor: 0x16161a,
     look: {
       // 사진: 검은 볼캡(작은 빨간 핀), 검은 티, 파란 앞치마, 짧은 머리, 옅은 수염
@@ -269,6 +276,13 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 export const CHARACTER_LIST: CharacterDef[] = Object.values(CHARACTERS).sort(
   (a, b) => a.prominence - b.prominence,
 )
+
+/**
+ * 봇 밸런스 표에 넣을 캐릭터.
+ * 승빠덕(후라이팬)은 봇이 "굴러서 붙고 막으며 버티는" 운용을 못 해서 표가 실제와 반대로 나온다
+ * (사람이 쓰면 오히려 강한데 표에서는 최하위). 그래서 표에서 빼고 `tools/melee.ts` 로 따로 본다.
+ */
+export const BOT_BALANCE_LIST: CharacterDef[] = CHARACTER_LIST.filter((c) => !c.skipBotBalance)
 
 export const PROTAGONIST: CharacterDef = CHARACTERS.cheolmyeon
 

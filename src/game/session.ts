@@ -13,7 +13,7 @@ import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
-import { TEAM_NAMES, VIEW_H, VIEW_W } from '../render/hud'
+import { TEAM_NAMES, VIEW_H, VIEW_W, setViewAspect } from '../render/hud'
 import { worldDirToScreen } from '../render3d/camera'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
@@ -165,8 +165,16 @@ export class Session {
   }
 
   private fit = (): void => {
-    const s = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H)
-    this.stage.style.transform = `scale(${s})`
+    const w = window.innerWidth
+    const h = window.innerHeight
+    // 화면 비율에 맞춰 논리 폭을 바꾼다 → 폰 가로에서 좌우 검은 여백이 거의 사라진다
+    if (setViewAspect(w / h)) this.renderer.resize()
+    this.stage.style.width = `${VIEW_W}px`
+    this.stage.style.height = `${VIEW_H}px`
+    // flex 로 가운데 두면 화면보다 큰 요소가 한쪽으로 쏠린다(폰에서 오른쪽으로 붙던 원인).
+    // 절반씩 되돌리는 translate 로 정확히 가운데에 놓는다.
+    const s = Math.min(w / VIEW_W, h / VIEW_H)
+    this.stage.style.transform = `translate(-50%, -50%) scale(${s})`
     this.renderer.resize()
   }
 
@@ -430,6 +438,8 @@ export class Session {
     let message = this.message
     if (this.lockstep && this.stallSince >= 0 && now - this.stallSince > 400) message = '상대 입력 대기 중…'
     this.pollTouchMenu()
+    // 발소리는 sim 이벤트가 아니라 이동 상태로 낸다(틱마다 이벤트를 만들면 패킷이 무거워진다)
+    this.sfx.updateSteps(this.state, lp, dt)
     const alpha = Math.min(1, this.acc / TICK_MS)
     const choosing = this.state.players[lp].choosing && this.state.phase === 'playing'
     if (choosing && !this.pickerOpen) this.showPicker()

@@ -4,7 +4,7 @@
 // 봇 실력은 사람과 다르므로 절대적인 값이 아니라 '어느 쪽이 크게 기우는가'를 보는 용도다.
 
 import { Difficulty, botInput, makeBot } from '../src/core/bot'
-import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../src/core/characters'
+import { BOT_BALANCE_LIST, CHARACTERS, CharacterId } from '../src/core/characters'
 import { Input } from '../src/core/input'
 import { buildMap } from '../src/core/map'
 import { MapId } from '../src/core/maps'
@@ -105,7 +105,8 @@ function pct(a: number, b: number): string {
 
 function run(): void {
   const ffa = process.argv.includes('ffa')
-  const ids = CHARACTER_LIST.map((c) => c.id)
+  // 승빠덕(근접)은 봇이 제대로 운용하지 못해 표가 실제와 반대로 나온다 → 표에서 빼고 tools/melee.ts 로 본다
+  const ids = BOT_BALANCE_LIST.map((c) => c.id)
   let matches = 0
   let totalTicks = 0
   let timeouts = 0
@@ -113,9 +114,11 @@ function run(): void {
   if (ffa) {
     for (const seed of SEEDS) {
       for (const mapId of MAPS) {
-        // 12가지 조합으로 돌려 모두가 골고루 만난다
-        for (let i = 0; i < ids.length; i++) {
-          const group = [ids[i], ids[(i + 3) % 12], ids[(i + 6) % 12], ids[(i + 9) % 12]]
+        // 인원 수만큼 조합을 돌려 모두가 골고루 만난다
+        const n = ids.length
+        const gap = Math.max(1, Math.floor(n / 4))
+        for (let i = 0; i < n; i++) {
+          const group = [ids[i], ids[(i + gap) % n], ids[(i + gap * 2) % n], ids[(i + gap * 3) % n]]
           const r = match(group, seed + i, mapId)
           matches++
           totalTicks += r.ticks

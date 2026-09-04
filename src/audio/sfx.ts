@@ -3,7 +3,9 @@
 // 브라우저 자동재생 정책: 첫 클릭/키 입력 전에는 소리가 나지 않는다 (그 전 이벤트는 버린다).
 
 import { GameState, SimEvent } from '../core/state'
-import { PART_HEAD, WeaponId } from '../core/weapons'
+import { CHARACTERS } from '../core/characters'
+import { PART_HEAD, WEAPONS, WeaponId } from '../core/weapons'
+import { worldDirToScreen } from '../render3d/camera'
 
 const STORAGE_KEY = 'bd.muted'
 const MASTER = 0.8
@@ -11,7 +13,29 @@ const BGM_LEVEL = 0.15
 
 interface Spatial {
   gain: number
+  /** -1(왼쪽) ~ +1(오른쪽). **화면 기준**이라 헤드폰으로 들으면 보이는 방향과 일치한다 */
   pan: number
+  /** 0(가까움) ~ 1(멂). 멀수록 고음을 깎아 거리감을 준다 */
+  far: number
+}
+
+/**
+ * 듣는 사람 기준 상대 위치(월드) → 스테레오 배치.
+ * **화면 기준으로 돌려서** 패닝한다. 카메라가 45° 돌아가 있어 월드 x 를 그대로 쓰면
+ * 헤드폰에서 들리는 방향과 눈에 보이는 방향이 어긋난다.
+ */
+function spatial(wdx: number, wdy: number): Spatial {
+  const d = Math.hypot(wdx, wdy)
+  const s = worldDirToScreen(wdx, wdy)
+  const sl = Math.hypot(s.x, s.y) || 1
+  // 좌우 성분이 클수록 강하게 치우친다. 정면·후면(세로 성분)은 가운데로.
+  const lr = s.x / sl
+  const near = Math.min(1, d / 90) // 아주 가까우면 가운데 (귀에 붙는 느낌 방지)
+  return {
+    gain: Math.max(0.12, 1 / (1 + (d / 420) ** 1.7)),
+    pan: Math.max(-0.9, Math.min(0.9, lr * 0.9 * near)),
+    far: Math.max(0, Math.min(1, (d - 260) / 900)),
+  }
 }
 
 export class Sfx {
@@ -29,6 +53,10 @@ export class Sfx {
   private bgmOn = false
   /** 교전 강도 0..1 (배경음 레이어) */
   private intensity = 0
+  /** 발소리: 플레이어별 걸음 위상(0~1). 1 을 넘을 때마다 한 걸음 */
+  private stepPhase: number[] = []
+  /** 발소리 좌우 번갈아 */
+  private stepFlip: boolean[] = []
 
   constructor() {
     let m = false
@@ -101,6 +129,56 @@ export class Sfx {
     return this.ensure() && this.ctx !== null && this.ctx.state === 'running' && !this.mutedFlag
   }
 
+  /**
+   * 발소리. sim 에는 발소리 이벤트가 없으므로(틱마다 생기면 패킷·해시가 무거워진다)
+   * 여기서 이동 상태를 보고 걸음 위상을 직접 굴린다. 소리만 내므로 sim 과 무관하다.
+   * 대시(구르기) 중에는 발소리 대신 구르는 소리가 이미 나므로 건너뛴다.
+   */
+  updateSteps(state: GameState, localPlayer: number, dt: number): void {
+    if (!this.ready() || state.phase !== 'playing') return
+    const n = state.players.length
+    if (this.stepPhase.length !== n) {
+      this.stepPhase = new Array(n).fill(0)
+      this.stepFlip = new Array(n).fill(false)
+    }
+    let lx = 0
+    let ly = 0
+    const me = localPlayer >= 0 ? state.players[localPlayer] : null
+    if (me) {
+      lx = me.x
+      ly = me.y
+    }
+    for (let i = 0; i < n; i++) {
+      const p = state.players[i]
+      if (!p.alive || p.left || !p.moving || p.dashTimer > 0) {
+        this.stepPhase[i] = 0.55 // 멈췄다 다시 걸으면 곧바로 한 걸음
+        continue
+      }
+      // 캐릭터 속도에 맞춰 보폭을 조절한다 (빠를수록 자주)
+      const c = CHARACTERS[p.char]
+      const w = WEAPONS[p.weapon]
+      let speed = c.speed * w.moveMul
+      if (p.ads) speed *= 0.6
+      if (p.legInjury > 0) speed *= 0.7
+      this.stepPhase[i] += dt * (speed * 0.78)
+      if (this.stepPhase[i] < 1) continue
+      this.stepPhase[i] -= 1
+      // 내 발소리는 항상 가운데에서 작게, 남의 발소리는 방향·거리대로
+      const sp: Spatial = i === localPlayer ? { gain: 0.5, pan: 0, far: 0 } : spatial(p.x - lx, p.y - ly)
+      if (sp.gain < 0.14) continue // 너무 멀면 생략 (소리 폭주 방지)
+      this.stepFlip[i] = !this.stepFlip[i]
+      this.foot(sp, this.stepFlip[i], i === localPlayer)
+    }
+  }
+
+  /** 한 걸음: 낮은 툭 + 짧은 스침. 좌우 발을 조금 다르게 해서 기계적이지 않게 */
+  private foot(s: Spatial, right: boolean, mine: boolean): void {
+    const { node, t0 } = this.bus(s, mine ? 0.3 : 0.62)
+    const f = right ? 132 : 118
+    this.tone(node, t0, 0.055, 'sine', f, f * 0.55, 0.5, 0.002)
+    this.noiseBurst(node, t0, 0.045, 'bandpass', right ? 2100 : 1750, 700, 0.16, 1.4)
+  }
+
   // ---------- 이벤트 ----------
   onEvents(events: SimEvent[], state: GameState, localPlayer: number): void {
     // 카운트다운 초 알림은 이벤트가 아니라 상태에서
@@ -133,12 +211,7 @@ export class Sfx {
         ly /= n
       }
     }
-    const sp = (x: number, y: number): Spatial => {
-      const dx = x - lx
-      const dy = y - ly
-      const d = Math.hypot(dx, dy)
-      return { gain: Math.max(0.25, 1 - d / 1100), pan: Math.max(-0.8, Math.min(0.8, dx / 600)) }
-    }
+    const sp = (x: number, y: number): Spatial => spatial(x - lx, y - ly)
     const at = (p: number) => {
       const q = state.players[p]
       return sp(q.x, q.y)
@@ -209,7 +282,16 @@ export class Sfx {
     const pan = ctx.createStereoPanner()
     pan.pan.value = s.pan
     g.connect(pan)
-    pan.connect(this.master!)
+    // 멀수록 고음을 깎는다. 좌우(패닝)만으로는 거리가 안 느껴지기 때문 — 공기 흡수 흉내.
+    if (s.far > 0.15) {
+      const lp = ctx.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.value = 16000 - 13000 * s.far
+      pan.connect(lp)
+      lp.connect(this.master!)
+    } else {
+      pan.connect(this.master!)
+    }
     return { node: g, t0: ctx.currentTime }
   }
 
@@ -317,10 +399,18 @@ export class Sfx {
     this.noiseBurst(node, t0, 0.2, 'bandpass', 500, 2400, 0.5, 0.6)
   }
 
+  /** 재장전: 탄창 빼기 → 끼우기(딸깍) → 노리쇠. 세 박자가 있어야 재장전으로 들린다 */
   private reload(s: Spatial): void {
-    const { node, t0 } = this.bus(s, 0.7)
-    this.tone(node, t0, 0.03, 'square', 1800, 900, 0.25)
-    this.tone(node, t0 + 0.13, 0.04, 'square', 1200, 600, 0.3)
+    const { node, t0 } = this.bus(s, 0.85)
+    // 탄창 빼기 (금속 스침)
+    this.noiseBurst(node, t0, 0.07, 'bandpass', 2600, 1500, 0.3, 2)
+    this.tone(node, t0, 0.05, 'square', 900, 520, 0.18)
+    // 새 탄창 끼우기 (묵직한 딸깍)
+    this.tone(node, t0 + 0.16, 0.05, 'square', 1500, 700, 0.32)
+    this.noiseBurst(node, t0 + 0.16, 0.05, 'lowpass', 1200, 400, 0.3)
+    // 노리쇠 (챠락)
+    this.noiseBurst(node, t0 + 0.34, 0.06, 'highpass', 3200, 2200, 0.34, 1.2)
+    this.tone(node, t0 + 0.34, 0.04, 'square', 2100, 1100, 0.22)
   }
 
   private wall(s: Spatial): void {
@@ -329,22 +419,22 @@ export class Sfx {
   }
 
   private blip(): void {
-    const { node, t0 } = this.bus({ gain: 1, pan: 0 }, 0.5)
+    const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.5)
     this.tone(node, t0, 0.08, 'sine', 880, 1320, 0.4, 0.005)
   }
 
   private tick(sec: number): void {
-    const { node, t0 } = this.bus({ gain: 1, pan: 0 }, 0.5)
+    const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.5)
     this.tone(node, t0, 0.12, 'sine', sec === 1 ? 880 : 660, sec === 1 ? 880 : 660, 0.5, 0.005)
   }
 
   private start(): void {
-    const { node, t0 } = this.bus({ gain: 1, pan: 0 }, 0.6)
+    const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.6)
     for (const f of [440, 554, 659, 880]) this.tone(node, t0, 0.35, 'triangle', f, f, 0.3, 0.005)
   }
 
   private over(): void {
-    const { node, t0 } = this.bus({ gain: 1, pan: 0 }, 0.7)
+    const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.7)
     for (const f of [392, 494, 587, 784]) this.tone(node, t0, 0.9, 'triangle', f, f, 0.28, 0.02)
     this.tone(node, t0, 0.8, 'sine', 98, 98, 0.35, 0.02)
   }

@@ -7,7 +7,7 @@ import { angleToRad } from '../core/fixedmath'
 import { GameMap, SANDBAG_HP, TILE } from '../core/map'
 import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
-import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
+import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
 import { PITCH, YAW } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
@@ -19,6 +19,8 @@ export type { RenderOptions }
 
 export { YAW }
 const FOLLOW_DIST = 15.5
+/** 기준 세로 시야각. 화면이 넓어지면 resize() 가 이 값을 줄여 보이는 면적을 유지한다 */
+const BASE_FOV = 40
 const GUN_H = 0.95
 
 interface Particle {
@@ -155,7 +157,7 @@ export class Renderer3D {
     this.gl.toneMapping = THREE.ACESFilmicToneMapping
     this.gl.toneMappingExposure = 1.05
 
-    this.camera = new THREE.PerspectiveCamera(40, VIEW_W / VIEW_H, 0.5, 140)
+    this.camera = new THREE.PerspectiveCamera(BASE_FOV, VIEW_W / VIEW_H, 0.5, 140)
     this.scene.background = new THREE.Color(map.theme.outside)
     this.scene.fog = new THREE.Fog(map.theme.fog, 34, 70)
     this.world = buildWorld(map)
@@ -187,6 +189,15 @@ export class Renderer3D {
     this.dpr = Math.min(2, window.devicePixelRatio || 1)
     this.gl.setPixelRatio(this.dpr)
     this.gl.setSize(VIEW_W, VIEW_H, false)
+    // 폭이 넓어진 만큼 좌우로 더 보이면 넓은 화면이 유리해진다.
+    // 세로 시야를 sqrt(기준비율/현재비율) 만큼 좁혀 **보이는 월드 면적**을 일정하게 맞춘다.
+    const a = VIEW_W / VIEW_H
+    const a0 = BASE_W / BASE_H
+    const halfBase = ((BASE_FOV / 2) * Math.PI) / 180
+    const half = Math.atan(Math.tan(halfBase) * Math.sqrt(a0 / a))
+    this.camera.aspect = a
+    this.camera.fov = (half * 2 * 180) / Math.PI
+    this.camera.updateProjectionMatrix()
     this.hud.resize()
   }
 
