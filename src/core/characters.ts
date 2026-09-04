@@ -1,6 +1,8 @@
 import { WeaponId } from './weapons'
 
-export type CharacterId = 'cheolmyeon' | 'chim' | 'dangun' | 'magic' | 'jupeol'
+export type CharacterId =
+  | 'cheolmyeon' | 'chim' | 'dangun' | 'magic' | 'jupeol'
+  | 'uwon' | 'giyeol' | 'pungwol' | 'oknyang' | 'tongdak' | 'juwoojae' | 'seungwoo'
 
 /** 이모지풍 캐리커처 외형 정의. 렌더러가 이 데이터만 보고 그린다. */
 export interface Look {
@@ -137,6 +139,91 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf0c49c, hair: 'none', hairColor: 0x2a2320, glasses: 'none', beard: 'goatee',
       eyes: 'squint', brows: 'normal', mouth: 'thick', shirt: 0x243a5e,
       headScale: 1.05, bodyScale: 1.1, extra: 'none',
+    },
+  },
+  // ---- 2차 멤버 (외형은 참고 사진을 받으면 다듬는다) ----
+  uwon: {
+    id: 'uwon', name: '우원덕', basedOn: '우원박', tagline: '배우. 구른 뒤에도 잠깐 무적, 연기력으로 탄을 피한다.',
+    prominence: 6,
+    maxHp: 95, speed: 3.5, weapon: 'pistol', dashCooldown: 80,
+    passiveName: '연기', passiveDesc: '대시가 끝난 뒤에도 0.2초 무적.',
+    bodyColor: 0xff9f6b, accentColor: 0x8a2b2b,
+    look: {
+      skin: 0xf2cdb0, hair: 'side', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
+      eyes: 'sharp', brows: 'thick', mouth: 'smile', shirt: 0x8a2b2b,
+      headScale: 1.0, bodyScale: 1.0, extra: 'none',
+    },
+  },
+  giyeol: {
+    id: 'giyeol', name: '기열덕', basedOn: '기열킹', tagline: '뇌절의 왕. 연속으로 맞히면 점점 아프다.',
+    prominence: 7,
+    maxHp: 100, speed: 3.2, weapon: 'smg', dashCooldown: 90,
+    passiveName: '뇌절', passiveDesc: '연속 명중마다 피해 +8% (최대 +40%). 빗나가면 초기화.',
+    bodyColor: 0x7bd389, accentColor: 0x1f6f3f,
+    look: {
+      skin: 0xf3d2b4, hair: 'short', hairColor: 0x3a2a1a, glasses: 'none', beard: 'stubble',
+      eyes: 'angry', brows: 'thick', mouth: 'grin', shirt: 0x2e8b57,
+      headScale: 1.05, bodyScale: 1.15, extra: 'none',
+    },
+  },
+  pungwol: {
+    id: 'pungwol', name: '풍월덕', basedOn: '풍월량', tagline: '바람처럼. 대시 쿨다운이 절반이지만 체력은 낮다.',
+    prominence: 8,
+    maxHp: 85, speed: 3.7, weapon: 'rifle', dashCooldown: 45,
+    passiveName: '바람', passiveDesc: '대시 쿨다운 절반. 체력 85.',
+    bodyColor: 0x8fd3ff, accentColor: 0x3a6ea5,
+    look: {
+      skin: 0xf1c9a5, hair: 'buzz', hairColor: 0x1a1614, glasses: 'round', beard: 'stubble',
+      eyes: 'calm', brows: 'normal', mouth: 'flat', shirt: 0x3a6ea5,
+      headScale: 0.95, bodyScale: 0.95, extra: 'none',
+    },
+  },
+  oknyang: {
+    id: 'oknyang', name: '옥냥덕', basedOn: '옥냥이', tagline: '실질적 리더. 정조준해도 느려지지 않는다.',
+    prominence: 9,
+    maxHp: 100, speed: 3.0, weapon: 'sniper', dashCooldown: 90,
+    passiveName: '냉정', passiveDesc: '정조준 중 이동 속도 감소 없음.',
+    bodyColor: 0xd9d9d9, accentColor: 0x555555,
+    look: {
+      skin: 0xf3d4bb, hair: 'flat', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
+      eyes: 'squint', brows: 'normal', mouth: 'smile', shirt: 0x555555,
+      headScale: 1.0, bodyScale: 1.0, extra: 'none',
+    },
+  },
+  tongdak: {
+    id: 'tongdak', name: '통닭덕', basedOn: '통닭천사', tagline: '치킨의 천사. 킬을 하면 배가 부르다.',
+    prominence: 10,
+    maxHp: 120, speed: 2.9, weapon: 'shotgun', dashCooldown: 100,
+    passiveName: '치킨', passiveDesc: '킬 시 체력 50 회복.',
+    bodyColor: 0xffc857, accentColor: 0xb8621b,
+    look: {
+      skin: 0xf2c9a0, hair: 'none', hairColor: 0x2a2320, glasses: 'none', beard: 'full',
+      eyes: 'happy', brows: 'normal', mouth: 'grin', shirt: 0xe0a030,
+      headScale: 1.1, bodyScale: 1.3, extra: 'none',
+    },
+  },
+  juwoojae: {
+    id: 'juwoojae', name: '주우재덕', basedOn: '주우재', tagline: '런웨이 위의 모델. 다리가 길어 대시가 멀리 간다.',
+    prominence: 11,
+    maxHp: 100, speed: 3.3, weapon: 'rifle', dashCooldown: 85,
+    passiveName: '런웨이', passiveDesc: '대시 거리 +50%.',
+    bodyColor: 0xf0e0c0, accentColor: 0x8c7b64,
+    look: {
+      skin: 0xf4d7bd, hair: 'side', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
+      eyes: 'sharp', brows: 'thick', mouth: 'smile', shirt: 0x1c1c1c, coat: 0xc9bfae,
+      headScale: 0.95, bodyScale: 0.9, extra: 'none',
+    },
+  },
+  seungwoo: {
+    id: 'seungwoo', name: '승우덕', basedOn: '승우아빠', tagline: '요리사. 다시 태어나는 게 빠르고 든든하다.',
+    prominence: 12,
+    maxHp: 110, speed: 3.0, weapon: 'pistol', dashCooldown: 90,
+    passiveName: '요리', passiveDesc: '리스폰 2초, 스폰 보호 3초.',
+    bodyColor: 0xffb3c6, accentColor: 0x9c2f4f,
+    look: {
+      skin: 0xf1cdb2, hair: 'short', hairColor: 0x1f1a17, glasses: 'none', beard: 'goatee',
+      eyes: 'calm', brows: 'normal', mouth: 'smile', shirt: 0xf4f4f4,
+      headScale: 1.05, bodyScale: 1.2, extra: 'none',
     },
   },
 }

@@ -240,15 +240,24 @@ function runSheet(): void {
   const scene = renderer.threeScene
   // 맵 북쪽 바깥(벽 앞)에 세운다. 벽이 배경이 된다.
   const cz = -3.2
+  // 7명 이상이면 두 줄 (홀수 인덱스는 뒷줄)
+  const twoRows = list.length > 6
+  const cols = twoRows ? Math.ceil(list.length / 2) : list.length
+  const slot = (i: number) => {
+    const col = twoRows ? Math.floor(i / 2) : i
+    const row = twoRows ? i % 2 : 0
+    return { x: map.w / 2 - (col - (cols - 1) / 2) * 1.75, z: cz - row * 1.7 }
+  }
   const rigs = list.map((c, i) => {
     const rig = buildCharacter(c)
-    rig.root.position.set(map.w / 2 - (i - (list.length - 1) / 2) * 1.6, 0, cz)
+    const p = slot(i)
+    rig.root.position.set(p.x, 0, p.z)
     scene.add(rig.root)
     return rig
   })
   const cam = renderer.threeCamera
   const cx = map.w / 2
-  const dist = focus ? 3.2 : 4.2 + list.length * 0.7
+  const dist = focus ? 3.2 : 4.2 + cols * 0.78
   let t = 0
   let lastT = performance.now()
   const loop = (now: number) => {
@@ -270,15 +279,19 @@ function runSheet(): void {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
     list.forEach((c, i) => {
-      const v = new THREE.Vector3(map.w / 2 - (i - (list.length - 1) / 2) * 1.6, -0.15, cz).project(cam)
+      const p = slot(i)
+      const back = twoRows && i % 2 === 1
+      const v = new THREE.Vector3(p.x, back ? 2.4 : -0.15, p.z).project(cam)
       const sx = ((v.x + 1) / 2) * VIEW_W
       const sy = ((1 - v.y) / 2) * VIEW_H
-      ctx.font = `400 ${focus ? 40 : 26}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
+      ctx.font = `400 ${focus ? 40 : twoRows ? 20 : 26}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
       ctx.fillStyle = '#' + c.bodyColor.toString(16).padStart(6, '0')
-      ctx.fillText(c.name, sx, sy + 30)
-      ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#b3b8a5'
-      ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, sx, sy + 52)
+      ctx.fillText(c.name, sx, back ? sy - 6 : sy + 30)
+      if (!twoRows || focus) {
+        ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
+        ctx.fillStyle = '#a9b4c0'
+        ctx.fillText(`${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`, sx, sy + 52)
+      }
     })
     ctx.font = '600 12px "IBM Plex Mono", monospace'
     ctx.textAlign = 'left'

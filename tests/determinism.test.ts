@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { Difficulty, botInput, makeBot } from '../src/core/bot'
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../src/core/characters'
 import { atan2A, radToAngle } from '../src/core/fixedmath'
-import { BTN_SWAP, Input } from '../src/core/input'
+import { BTN_DASH, BTN_SWAP, Input } from '../src/core/input'
 import { GameMap, buildMap } from '../src/core/map'
 import { MAP_LIST, MapId, expandRows, scaleForPlayers } from '../src/core/maps'
 import { createState, dropPlayer, hashState, snapshot, step } from '../src/core/sim'
-import { GameState, teamKills } from '../src/core/state'
+import { DASH_TICKS, GameState, teamKills } from '../src/core/state'
 
 const map = buildMap()
 
@@ -165,6 +165,39 @@ describe('캐릭터 교체 (Tab)', () => {
     step(s, map, [{ ...idle(), buttons: BTN_SWAP }, idle()])
     expect(s.players[0].alive).toBe(true)
     expect(s.players[0].choosing).toBe(false)
+  })
+})
+
+describe('12명 전원', () => {
+  it('모든 캐릭터 조합이 결정론적으로 돌고 경기가 끝난다', () => {
+    const ids = CHARACTER_LIST.map((c) => c.id)
+    expect(ids.length).toBe(12)
+    for (let g = 0; g < 3; g++) {
+      const chars = ids.slice(g * 4, g * 4 + 4)
+      const o: RunOpts = { seed: 500 + g, chars, diffs: ['hard', 'hard', 'hard', 'hard'], targetKills: 2, maxTicks: 60 * 300 }
+      const a = runBots(o)
+      const b = runBots(o)
+      expect(a.hashes).toEqual(b.hashes)
+      expect(a.state.phase).toBe('over')
+    }
+  })
+
+  it('대시(구르기) 중에는 맞지 않는다', () => {
+    const s = createState({ seed: 3, targetKills: 99, chars: ['chim', 'cheolmyeon'] }, map)
+    s.phase = 'playing'
+    s.phaseTimer = 0
+    const a = s.players[0]
+    const b = s.players[1]
+    // 둘을 가까이 마주 세우고, b 가 a 를 향해 쏘는 동안 a 는 대시
+    a.x = 200; a.y = 200; a.invuln = 0
+    b.x = 320; b.y = 200; b.invuln = 0
+    const aimLeft = 512
+    const idle: Input = { mx: 0, my: 0, aim: 0, buttons: 0, char: 0 }
+    step(s, map, [{ mx: 0, my: 1, aim: 0, buttons: BTN_DASH, char: 0 }, idle])
+    expect(a.dashTimer).toBe(DASH_TICKS)
+    const hpBefore = a.hp
+    for (let t = 0; t < 6; t++) step(s, map, [idle, { mx: 0, my: 0, aim: aimLeft, buttons: 1, char: 0 }])
+    expect(a.hp).toBe(hpBefore)
   })
 })
 

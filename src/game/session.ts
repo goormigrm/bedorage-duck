@@ -217,12 +217,12 @@ export class Session {
     const box = this.overlay.querySelector('#overlay-box') as HTMLElement
     box.classList.add('picker')
     const cur = this.state.players[this.cfg.localPlayer].char
-    box.innerHTML = `<h2>캐릭터 교체</h2><p>고르는 동안은 소환되지 않습니다. 고르면 상대에게서 먼 곳에 리스폰. <b>1~5</b> 키 또는 클릭 · <b>Esc</b> 그대로</p><div class="pick-grid"></div>`
+    box.innerHTML = `<h2>캐릭터 교체</h2><p>고르는 동안은 소환되지 않습니다. 고르면 상대에게서 먼 곳에 리스폰. <b>1~9</b> 키 또는 클릭 · <b>Esc</b> 그대로</p><div class="pick-grid"></div>`
     const grid = box.querySelector('.pick-grid') as HTMLElement
     CHARACTER_LIST.forEach((c, i) => {
       const el = document.createElement('button')
       el.className = 'pick' + (c.id === cur ? ' on' : '')
-      el.innerHTML = `<canvas></canvas><b>${c.name}</b><small>${WEAPONS[c.weapon].name} · HP ${c.maxHp}<br>${c.passiveName}</small><span class="key">${i + 1}</span>`
+      el.innerHTML = `<canvas></canvas><b>${c.name}</b><small>${WEAPONS[c.weapon].name} · HP ${c.maxHp}<br>${c.passiveName}</small>${i < 9 ? `<span class="key">${i + 1}</span>` : ''}`
       el.onclick = () => (this.input.pendingChar = i + 1)
       grid.appendChild(el)
       const cv = el.querySelector('canvas') as HTMLCanvasElement

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { CHARACTERS } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap } from '../core/map'
-import { GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
+import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex } from '../render/hud'
 import { PITCH, YAW } from './camera'
@@ -522,11 +522,25 @@ export class Renderer3D {
     rig.legL.rotation.x = swing
     rig.legR.rotation.x = -swing
     const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 0.05 : 0
-    rig.body.position.y = bob
+    rig.body.position.set(0, bob, 0)
     rig.body.rotation.z = p.moving ? Math.sin(v.walk) * 0.07 : 0
     rig.arms.rotation.x = p.moving ? Math.sin(v.walk * 2) * 0.05 : 0
-    // 대시 중 앞으로 기울기
-    rig.body.rotation.x = p.dashTimer > 0 ? 0.35 : 0
+    rig.body.rotation.x = 0
+    // 대시 = 구르기: 대시 방향으로 한 바퀴 구르며 살짝 뜬다 (몸통 중심을 축으로)
+    if (p.dashTimer > 0) {
+      const dashMax = p.char === 'juwoojae' ? Math.round(DASH_TICKS * 1.5) : DASH_TICKS
+      const k = 1 - p.dashTimer / dashMax
+      const world = Math.atan2(p.dashDy, p.dashDx) // sim 좌표 각도 (x→y=z)
+      const local = world - this.aimSmooth[i] // root 가 조준 방향으로 돌아 있으므로
+      const dx = Math.sin(local)
+      const dz = Math.cos(local)
+      const axis = new THREE.Vector3(dz, 0, -dx).normalize()
+      const q = new THREE.Quaternion().setFromAxisAngle(axis, k * Math.PI * 2)
+      rig.body.quaternion.copy(q)
+      const c = new THREE.Vector3(0, rig.centerY, 0).applyQuaternion(q)
+      const hop = Math.sin(k * Math.PI) * 0.18
+      rig.body.position.set(-c.x, rig.centerY - c.y + hop, -c.z)
+    }
     // 정조준: 팔을 조금 더 앞으로
     rig.arms.position.z = p.ads ? 0.18 : 0.1
     root.scale.set(v.sx, v.sy, v.sx)

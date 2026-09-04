@@ -54,6 +54,8 @@ export interface PlayerState {
   left: boolean
   /** 캐릭터 고르는 중: 소환되지 않아 맞지도 않는다. 고르면 먼 곳에 리스폰 */
   choosing: boolean
+  /** 연속 명중 수 (기열덕 패시브). 빗나가면 0 */
+  streak: number
 }
 
 export interface Bullet {
@@ -71,6 +73,8 @@ export interface Bullet {
   ox: number
   oy: number
   weapon: WeaponId
+  /** 누군가를 맞혔는가 (빗나감 판정용) */
+  hitSomeone: boolean
 }
 
 export type SimEvent =

@@ -94,6 +94,8 @@ export interface CharacterRig {
   weapon: WeaponDef
   /** 이름표 높이 (발 기준) */
   height: number
+  /** 몸통(달걀) 중심 높이 — 구르기 회전축 */
+  centerY: number
   /** 피격 플래시용 재질 목록 */
   flashMats: THREE.MeshLambertMaterial[]
   setFlash(k: number): void
@@ -177,7 +179,7 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
 
   const height = LEG_H + R * EGG_Y * 2 + R * 0.35
   const rig: CharacterRig = {
-    root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, flashMats,
+    root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, centerY, flashMats,
     setFlash(k: number) {
       const e = k > 0 ? new THREE.Color(k, k, k) : new THREE.Color(0, 0, 0)
       for (const m of flashMats) m.emissive.copy(e)

@@ -90,6 +90,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     aliveTicks: 0,
     left: false,
     choosing: false,
+    streak: 0,
   }
 }
 
@@ -227,7 +228,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   } else if (mx !== 0 || my !== 0) {
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     let speed = c.speed * w.moveMul
-    if (p.ads) speed *= 0.6
+    if (p.ads && c.id !== 'oknyang') speed *= 0.6 // 옥냥덕 패시브: 정조준해도 느려지지 않음
     if (p.legInjury > 0) speed *= 0.7
     const r = moveCircle(map, p.x, p.y, PLAYER_RADIUS, mx * inv * speed, my * inv * speed)
     p.x = r.x
@@ -246,9 +247,10 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     p.dashDx = mx * inv
     p.dashDy = my * inv
-    p.dashTimer = DASH_TICKS
+    p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.5) : DASH_TICKS // 주우재덕: 대시 거리 +50%
     p.dashCooldown = c.dashCooldown
     p.ads = false
+    if (c.id === 'uwon') p.invuln = Math.max(p.invuln, p.dashTimer + 12) // 우원덕: 대시가 끝난 뒤에도 0.2초 무적
     state.events.push({ type: 'dash', p: p.id })
   }
 
@@ -299,6 +301,7 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
       ox: p.x,
       oy: p.y,
       weapon: p.weapon,
+      hitSomeone: false,
     }
     state.bullets.push(b)
   }
@@ -334,7 +337,7 @@ function stepBullets(state: GameState, map: GameMap): void {
       const shooter = state.players[b.owner]
       // 적 중 이 선분에 처음(인덱스 순) 걸리는 사람. 탄 길이가 짧아 둘이 동시에 걸리는 일은 드물다.
       for (const victim of state.players) {
-        if (!isEnemy(shooter, victim) || !victim.alive || victim.left || victim.invuln > 0) continue
+        if (!isEnemy(shooter, victim) || !victim.alive || victim.left || victim.invuln > 0 || victim.dashTimer > 0) continue // 대시(구르기) 중 무적
         if (segmentHitsCircle(b.px, b.py, b.x, b.y, victim.x, victim.y, PLAYER_RADIUS)) {
           applyHit(state, b, victim)
           dead = true
@@ -344,6 +347,8 @@ function stepBullets(state: GameState, map: GameMap): void {
     }
 
     if (!dead && b.life <= 0) dead = true
+    // 맞히지 못하고 사라진 탄 → 기열덕 연속 명중 초기화
+    if (dead && !b.hitSomeone) state.players[b.owner].streak = 0
     if (!dead) bullets[write++] = b
   }
   bullets.length = write
@@ -357,7 +362,10 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState): void {
   let dmg = b.damage * PART_MULT[part] * falloff(WEAPONS[b.weapon], dist)
   const shooter = state.players[b.owner]
   if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
+  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(5, shooter.streak) * 0.08 // 기열덕: 연속 명중 +8% (최대 +40%)
   dmg = Math.round(dmg)
+  b.hitSomeone = true
+  shooter.streak = Math.min(99, shooter.streak + 1)
   victim.hp -= dmg
   victim.lastHitTick = state.tick
   if (part === PART_LEGS) victim.legInjury = 180
@@ -365,9 +373,10 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState): void {
   if (victim.hp <= 0) {
     victim.hp = 0
     victim.alive = false
-    victim.respawnTimer = RESPAWN_TICKS
+    victim.respawnTimer = victim.char === 'seungwoo' ? 120 : RESPAWN_TICKS // 승우덕: 리스폰 2초
     victim.deaths++
     shooter.kills++
+    if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50) // 통닭덕: 킬 시 회복
     state.events.push({ type: 'death', p: victim.id, by: b.owner, x: victim.x, y: victim.y })
     if (teamKills(state, shooter.team) >= state.targetKills && state.phase === 'playing') {
       state.phase = 'over'
@@ -401,9 +410,10 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   p.dashTimer = 0
   p.dashCooldown = 0
   p.legInjury = 0
-  p.invuln = SPAWN_PROTECT_TICKS
+  p.invuln = c.id === 'seungwoo' ? SPAWN_PROTECT_TICKS * 2 : SPAWN_PROTECT_TICKS // 승우덕: 스폰 보호 3초
   p.aliveTicks = 0
   p.lastHitTick = -10000
+  p.streak = 0
   state.events.push({ type: 'respawn', p: p.id, x: p.x, y: p.y })
 }
 
