@@ -30,6 +30,15 @@ function collarY(u: number): number {
   return H * (COLLAR_BACK_V + (COLLAR_FRONT_V - COLLAR_BACK_V) * k)
 }
 
+/** V넥: 정면 가운데가 아래로 뾰족하게 파인 옷깃 (u 는 0..1) */
+function vNeckY(u: number): number {
+  const d = Math.abs(((u - FRONT_U + 1.5) % 1) - 0.5) // 정면에서의 u 거리 0..0.5
+  const base = collarY(u)
+  const w = 0.075
+  if (d >= w) return base
+  return base + H * 0.11 * (1 - d / w)
+}
+
 /** 옷깃 아래 영역 경로 (u 0..1 전체, 아래는 바닥까지) */
 function clothPath(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath()
@@ -49,15 +58,29 @@ export function bodyTexture(def: CharacterDef): THREE.CanvasTexture {
   c.width = W
   c.height = H
   const ctx = c.getContext('2d')!
+  const vneck = L.neck === 'v'
+  const collar = vneck ? vNeckY : collarY
 
   // 피부
   ctx.fillStyle = hex(L.skin)
   ctx.fillRect(0, 0, W, H)
 
+  // V넥 속옷: 옷깃(둥근 선) 아래는 먼저 속옷 색으로 채우고, 그 위에 V 자로 파인 겉옷을 덮는다
+  if (vneck && L.undershirt !== undefined) {
+    ctx.fillStyle = hex(L.undershirt)
+    clothPath(ctx)
+    ctx.fill()
+  }
+
   // 옷 (셔츠 또는 겉옷)
   const clothColor = L.coat !== undefined ? L.coat : L.shirt
   ctx.fillStyle = hex(clothColor)
-  clothPath(ctx)
+  ctx.beginPath()
+  ctx.moveTo(0, collar(0))
+  for (let x = 1; x <= W; x += 4) ctx.lineTo(x, collar(x / W))
+  ctx.lineTo(W, H)
+  ctx.lineTo(0, H)
+  ctx.closePath()
   ctx.fill()
   if (L.coat !== undefined) {
     // 겉옷 물방울
@@ -107,9 +130,21 @@ export function bodyTexture(def: CharacterDef): THREE.CanvasTexture {
   ctx.strokeStyle = OUTLINE
   ctx.lineWidth = 3
   ctx.beginPath()
-  ctx.moveTo(0, collarY(0))
-  for (let x = 1; x <= W; x += 8) ctx.lineTo(x, collarY(x / W))
+  ctx.moveTo(0, collar(0))
+  for (let x = 1; x <= W; x += 4) ctx.lineTo(x, collar(x / W))
   ctx.stroke()
+  // 명찰 (가슴 왼쪽 = 보는 사람 기준 오른쪽 아래)
+  if (L.badge !== undefined) {
+    const bx = W * FRONT_U + 74
+    const by = collarY(FRONT_U) + 70
+    ctx.fillStyle = hex(L.badge)
+    ctx.fillRect(bx - 26, by - 9, 52, 18)
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 2
+    ctx.strokeRect(bx - 26, by - 9, 52, 18)
+    ctx.fillStyle = '#5a4a1a'
+    ctx.fillRect(bx - 18, by - 2, 36, 3)
+  }
   // 바지 띠
   ctx.fillStyle = '#34405a'
   ctx.fillRect(0, H * PANTS_V, W, H * (1 - PANTS_V))

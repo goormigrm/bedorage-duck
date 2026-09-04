@@ -67,6 +67,14 @@ interface Ring {
   r1: number
 }
 
+/** 총성 위치 표시 (단군덕 패시브): 안 보이는 상대가 쏘면 그 자리를 잠깐 알려 준다 */
+interface Ping {
+  x: number
+  z: number
+  life: number
+  max: number
+}
+
 export class Renderer3D {
   readonly canvas: HTMLCanvasElement
   readonly hud: Hud
@@ -90,6 +98,7 @@ export class Renderer3D {
   private texts: WorldText[] = []
   private flashes: Flash[] = []
   private rings: Ring[] = []
+  private pings: Ping[] = []
   private shake = 0
   private camTarget = new THREE.Vector3()
   private camDist = FOLLOW_DIST
@@ -198,6 +207,10 @@ export class Renderer3D {
           v.vsx -= 0.12
           v.vsy += 0.08
           if (e.p === localPlayer) this.shake = Math.max(this.shake, w.pellets > 1 ? 0.12 : 0.05)
+          // 단군덕 패시브(중계): 시야 밖 상대의 총성 위치를 1.2초 표시
+          if (localPlayer >= 0 && state.players[localPlayer].char === 'dangun' && this.hidden[e.p] && state.players[e.p].team !== state.players[localPlayer].team) {
+            this.pings.push({ x: e.x * U, z: e.y * U, life: 1.2, max: 1.2 })
+          }
           break
         }
         case 'wall': {
@@ -327,6 +340,7 @@ export class Renderer3D {
       return { x: p.x, y: p.y, text: t.text, k: t.life / t.max, color: t.color, big: t.big }
     })
     this.hud.drawTexts(st)
+    this.drawPings()
     this.drawNameTags(curr, pos, opts)
     this.hud.drawVignette()
     this.hud.drawMain(curr, opts)
@@ -356,6 +370,51 @@ export class Renderer3D {
       const p = curr.players[i]
       this.hidden[i] = p.team !== me.team && !canSee(this.map, viewers, p.x, p.y)
     }
+  }
+
+  /** 총성 표시: 화면 안이면 그 자리에 퍼지는 링, 밖이면 화면 가장자리 화살표 */
+  private drawPings(): void {
+    if (this.pings.length === 0) return
+    const ctx = this.hud.ctx
+    for (const p of this.pings) {
+      const k = 1 - p.life / p.max
+      const s = this.worldToScreen(p.x, 0.5, p.z)
+      const inside = s.x > 20 && s.x < VIEW_W - 20 && s.y > 20 && s.y < VIEW_H - 20
+      ctx.globalAlpha = Math.min(1, p.life * 2)
+      if (inside) {
+        ctx.strokeStyle = '#ffd84a'
+        ctx.lineWidth = 3
+        ctx.beginPath()
+        ctx.arc(s.x, s.y, 10 + k * 26, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.fillStyle = '#ffd84a'
+        ctx.beginPath()
+        ctx.arc(s.x, s.y, 4, 0, Math.PI * 2)
+        ctx.fill()
+      } else {
+        const cx = VIEW_W / 2
+        const cy = VIEW_H / 2
+        const a = Math.atan2(s.y - cy, s.x - cx)
+        const ex = cx + Math.cos(a) * (VIEW_W / 2 - 40)
+        const ey = cy + Math.sin(a) * (VIEW_H / 2 - 40)
+        ctx.save()
+        ctx.translate(ex, ey)
+        ctx.rotate(a)
+        ctx.fillStyle = '#ffd84a'
+        ctx.beginPath()
+        ctx.moveTo(14, 0)
+        ctx.lineTo(-8, -9)
+        ctx.lineTo(-8, 9)
+        ctx.closePath()
+        ctx.fill()
+        ctx.restore()
+      }
+      ctx.font = '600 11px "IBM Plex Sans KR", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillStyle = '#ffd84a'
+      if (inside) ctx.fillText('총성', s.x, s.y - 16 - k * 26)
+    }
+    ctx.globalAlpha = 1
   }
 
   private drawNameTags(curr: GameState, pos: { x: number; z: number }[], opts: RenderOptions): void {
@@ -428,16 +487,19 @@ export class Renderer3D {
         return
       }
       root.visible = v.deadT < 1.3
-      // 넘어지기
+      // 넘어지기: 달걀이 뒤로 벌렁 넘어지며 살짝 튄다
       v.fall = Math.min(1, v.fall + dt * 3.2)
       const ease = 1 - Math.pow(1 - v.fall, 3)
-      rig.body.rotation.x = -ease * Math.PI * 0.5
-      rig.body.position.y = ease * 0.25
+      rig.body.rotation.x = -ease * Math.PI * 0.45
+      rig.body.rotation.z = ease * 0.25
+      rig.body.position.y = ease * 0.3 + Math.sin(Math.min(1, v.fall) * Math.PI) * 0.18
       setRigOpacity(rig, Math.max(0, 1 - Math.max(0, v.deadT - 0.8) * 2))
       return
     }
-    if (rig.body.rotation.x !== 0) {
+    if (v.deadT >= 0 || rig.body.position.y > 0.2) {
+      v.deadT = -1
       rig.body.rotation.x = 0
+      rig.body.rotation.z = 0
       rig.body.position.y = 0
       setRigOpacity(rig, 1)
     }
@@ -453,14 +515,16 @@ export class Renderer3D {
     v.flash = Math.max(0, v.flash - dt)
     rig.setFlash(v.flash > 0 ? Math.min(1, v.flash * 8) : 0)
 
-    // 걷기
+    // 걷기: 다리 스윙 + 달걀 몸 뒤뚱(좌우 기울기) + 통통 튀기
     if (p.moving) v.walk += dt * 13
     else v.walk *= 0.8
     const swing = p.moving ? Math.sin(v.walk) * 0.55 : Math.sin(v.walk) * 0.2
     rig.legL.rotation.x = swing
     rig.legR.rotation.x = -swing
-    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 0.04 : 0
+    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 0.05 : 0
     rig.body.position.y = bob
+    rig.body.rotation.z = p.moving ? Math.sin(v.walk) * 0.07 : 0
+    rig.arms.rotation.x = p.moving ? Math.sin(v.walk * 2) * 0.05 : 0
     // 대시 중 앞으로 기울기
     rig.body.rotation.x = p.dashTimer > 0 ? 0.35 : 0
     // 정조준: 팔을 조금 더 앞으로
@@ -557,6 +621,10 @@ export class Renderer3D {
       const rad = r.r0 + (r.r1 - r.r0) * k
       r.mesh.scale.setScalar(rad)
       ;(r.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.9
+    }
+    for (let i = this.pings.length - 1; i >= 0; i--) {
+      this.pings[i].life -= dt
+      if (this.pings[i].life <= 0) this.pings.splice(i, 1)
     }
     for (const v of this.vis) if (v.deadT >= 0) v.deadT += dt
     for (let i = 0; i < this.hitShow.length; i++) this.hitShow[i] = Math.max(0, this.hitShow[i] - dt)

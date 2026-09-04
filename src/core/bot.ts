@@ -223,7 +223,7 @@ export function botInput(
   let mode: 'fight' | 'hunt' | 'wander' = 'wander'
   if (enemy && los) {
     mode = 'fight'
-  } else if (enemy && state.tick - mem.lastSeenTick < 360) {
+  } else if (enemy && state.tick - mem.lastSeenTick < 600) {
     mode = 'hunt'
     goalX = mem.lastSeenX
     goalY = mem.lastSeenY
@@ -232,6 +232,12 @@ export function botInput(
     mode = 'hunt'
     goalX = enemy.x
     goalY = enemy.y
+  } else if (enemy && diff === 'normal') {
+    // 보통: 넓은 맵에서 영영 못 만나지 않도록, 상대 근처(±10타일)를 배회 목표로 삼는다
+    mode = 'wander'
+    if (mem.wanderX < 0 || mem.wanderTimer <= 0 || len(mem.wanderX - me.x, mem.wanderY - me.y) < 24) {
+      pickWanderNear(map, mem, enemy.x, enemy.y, 10 * TILE)
+    }
   }
 
   if (mode === 'fight' && enemy) {
@@ -309,6 +315,25 @@ export function botInput(
   mem.stuckY = me.y
   mem.lastMyHp = me.hp
   return out
+}
+
+/** 어떤 지점 근처(반경 radius px)의 바닥 타일을 배회 목표로. 못 찾으면 아무 곳 */
+function pickWanderNear(map: GameMap, mem: BotMemory, cx: number, cy: number, radius: number): void {
+  for (let tries = 0; tries < 20; tries++) {
+    const px = cx + randSigned(mem.rng) * radius
+    const py = cy + randSigned(mem.rng) * radius
+    const tx = Math.floor(px / TILE)
+    const ty = Math.floor(py / TILE)
+    if (tx <= 0 || ty <= 0 || tx >= map.w - 1 || ty >= map.h - 1) continue
+    if (!isWall(map, tx, ty)) {
+      mem.wanderX = tx * TILE + TILE / 2
+      mem.wanderY = ty * TILE + TILE / 2
+      mem.wanderTimer = randInt(mem.rng, 180, 420)
+      mem.path = []
+      return
+    }
+  }
+  pickWander(map, mem)
 }
 
 function pickWander(map: GameMap, mem: BotMemory): void {

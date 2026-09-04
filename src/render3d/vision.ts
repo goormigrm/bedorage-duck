@@ -67,6 +67,7 @@ export class Vision {
   private ctx: CanvasRenderingContext2D
   private tex: THREE.CanvasTexture
   private mat: THREE.MeshBasicMaterial
+  private sideMat: THREE.MeshBasicMaterial
   private geos: THREE.BufferGeometry[] = []
   private darkness = 'rgba(6,8,5,0.78)'
 
@@ -81,6 +82,7 @@ export class Vision {
     this.tex.magFilter = THREE.LinearFilter
     this.tex.generateMipmaps = false
     this.mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false })
+    this.sideMat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
 
     // 바닥 덮개
     const floorGeo = new THREE.PlaneGeometry(map.w, map.h)
@@ -93,7 +95,56 @@ export class Vision {
     // 벽·상자 윗면 덮개 (타일마다 사각형, uv 는 맵 좌표)
     this.group.add(this.topQuads(TILE_WALL, WALL_H + 0.02))
     this.group.add(this.topQuads(TILE_CRATE, CRATE_H + 0.02))
+    // 벽·상자 옆면 덮개: 바닥과 맞닿은 면마다 세로 사각형. 밝기는 그 앞 바닥 타일이 보이는지로 정한다
+    this.group.add(this.sideQuads(TILE_WALL, WALL_H))
+    this.group.add(this.sideQuads(TILE_CRATE, CRATE_H))
     this.fill([])
+  }
+
+  private sideQuads(tile: number, h: number): THREE.Mesh {
+    const map = this.map
+    const pos: number[] = []
+    const uv: number[] = []
+    const idx: number[] = []
+    let n = 0
+    const eps = 0.012
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]
+    for (let ty = 0; ty < map.h; ty++) {
+      for (let tx = 0; tx < map.w; tx++) {
+        if (map.tiles[ty * map.w + tx] !== tile) continue
+        for (const [dx, dy] of dirs) {
+          const nx = tx + dx
+          const ny = ty + dy
+          if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h) continue
+          if (map.tiles[ny * map.w + nx] !== 0) continue // 바닥과 맞닿은 면만
+          // 면의 네 꼭짓점 (바깥으로 eps 만큼 띄움)
+          let ax: number, az: number, bx: number, bz: number
+          if (dx === 1) { ax = tx + 1 + eps; az = ty; bx = tx + 1 + eps; bz = ty + 1 }
+          else if (dx === -1) { ax = tx - eps; az = ty + 1; bx = tx - eps; bz = ty }
+          else if (dy === 1) { ax = tx + 1; az = ty + 1 + eps; bx = tx; bz = ty + 1 + eps }
+          else { ax = tx; az = ty - eps; bx = tx + 1; bz = ty - eps }
+          pos.push(ax, 0.02, az, bx, 0.02, bz, bx, h, bz, ax, h, az)
+          const u = (nx + 0.5) / map.w
+          const v = 1 - (ny + 0.5) / map.h
+          uv.push(u, v, u, v, u, v, u, v)
+          idx.push(n, n + 1, n + 2, n, n + 2, n + 3)
+          n += 4
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    g.setIndex(idx)
+    const mesh = new THREE.Mesh(g, this.sideMat)
+    mesh.renderOrder = 11
+    this.geos.push(g)
+    return mesh
   }
 
   private topQuads(tile: number, h: number): THREE.Mesh {
@@ -167,6 +218,7 @@ export class Vision {
   dispose(): void {
     this.tex.dispose()
     this.mat.dispose()
+    this.sideMat.dispose()
     for (const g of this.geos) g.dispose()
   }
 }

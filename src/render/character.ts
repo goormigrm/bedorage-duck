@@ -596,8 +596,9 @@ function drawHair(ctx: CanvasRenderingContext2D, L: Look, R: number, hy: number,
       ctx.fill()
       break
     }
-    case 'side': {
-      // 옆으로 넘긴 짧은 머리 (가르마)
+    case 'side':
+    case 'fringe': {
+      // 옆으로 넘긴 짧은 머리 (가르마 / 앞머리)
       ctx.fillStyle = hex(L.hairColor)
       ctx.beginPath()
       ctx.moveTo(-R * 1.0, hy + R * 0.05)

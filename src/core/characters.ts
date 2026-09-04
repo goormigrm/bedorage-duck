@@ -5,7 +5,7 @@ export type CharacterId = 'cheolmyeon' | 'chim' | 'dangun' | 'magic' | 'jupeol'
 /** 이모지풍 캐리커처 외형 정의. 렌더러가 이 데이터만 보고 그린다. */
 export interface Look {
   skin: number
-  hair: 'none' | 'short' | 'buzz' | 'flat' | 'side' | 'bowl' | 'spiky'
+  hair: 'none' | 'short' | 'buzz' | 'flat' | 'side' | 'bowl' | 'spiky' | 'fringe'
   hairColor: number
   /** 옆머리(삭발한 옆면) 색. 지정하면 spiky 머리 아래 회색 밴드처럼 그림 */
   sideColor?: number
@@ -39,6 +39,12 @@ export interface Look {
   tie?: number
   /** 나비넥타이 색 */
   bowTie?: number
+  /** 옷깃 모양: round(기본) | v (V넥 스크럽) */
+  neck?: 'round' | 'v'
+  /** V넥 안에 보이는 속옷 색 */
+  undershirt?: number
+  /** 가슴 명찰 색 */
+  badge?: number
   headScale: number
   bodyScale: number
   extra: 'none' | 'cap' | 'headband' | 'mic'
@@ -99,7 +105,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'dangun', name: '단군덕', basedOn: '단군', tagline: '무대 위의 게임 캐스터. 물방울 재킷과 파란 선글라스, 마이크는 놓지 않는다.',
     prominence: 3,
     maxHp: 90, speed: 3.6, weapon: 'pistol', dashCooldown: 70,
-    passiveName: '중계', passiveDesc: '이동 속도 최상. 상대가 화면 밖에 있으면 방향 화살표가 보입니다.',
+    passiveName: '중계', passiveDesc: '이동 속도 최상. 시야 밖 상대가 총을 쏘면 그 위치가 잠깐 표시됩니다.',
     bodyColor: 0x7ee0a0, accentColor: 0x2f56b8,
     look: {
       skin: 0xf1c8a4, hair: 'bowl', hairColor: 0x161413, glasses: 'sunglasses', lensColor: 0x2d5bd6, beard: 'none',
@@ -108,15 +114,17 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     },
   },
   magic: {
-    id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '창설 멤버이자 치과의사. 스스로를 치료합니다.',
+    id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '창설 멤버이자 치과의사. 남색 스크럽에 명찰, 스스로를 치료합니다.',
     prominence: 4,
     maxHp: 150, speed: 2.9, weapon: 'smg', dashCooldown: 80,
     passiveName: '진료', passiveDesc: '최대 체력 150 (최고). 피격 후 3초가 지나면 초당 4씩 체력 회복.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
-      skin: 0xf3cfae, hair: 'short', hairColor: 0x1c1a19, glasses: 'rect', beard: 'none',
-      eyes: 'happy', brows: 'normal', mouth: 'grin', shirt: 0x3b7dd8, coat: 0xf7f7f2,
-      headScale: 1.6, bodyScale: 1.3, extra: 'none',
+      // 실제 사진 기준: 검은 짧은 머리 + 옆으로 넘긴 앞머리, 얇은 검은 사각 안경, 이 드러나는 웃음, 턱 수염 자국,
+      // 남색 V넥 스크럽(안에 검은 티) + 노란 명찰. 둥글고 넉넉한 얼굴
+      skin: 0xf1caa6, hair: 'fringe', hairColor: 0x161413, glasses: 'rect', beard: 'stubble',
+      eyes: 'happy', brows: 'normal', mouth: 'grin', shirt: 0x2b3c86, neck: 'v', undershirt: 0x1c1c1c, badge: 0xf2d16b,
+      headScale: 1.45, bodyScale: 1.3, extra: 'none', earScale: 1.1,
     },
   },
   jupeol: {

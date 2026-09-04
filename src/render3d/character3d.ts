@@ -261,6 +261,14 @@ function buildHair(
       head.add(eggCap(R, 1.045, Math.PI * 0.42, hairM, Math.PI * 1.1, Math.PI * 0.8))
       break
     }
+    case 'fringe': {
+      // 짧은 머리 + 이마 한쪽을 덮는 옆으로 넘긴 앞머리 (보는 사람 기준 왼쪽으로 쏠림)
+      head.add(eggCap(R, 1.05, Math.PI * 0.25, hairM))
+      head.add(eggCap(R, 1.045, Math.PI * 0.42, hairM, Math.PI * 1.1, Math.PI * 0.8))
+      // 앞머리: 안경 위(이마)까지만, 보는 사람 기준 오른쪽으로 쏠린 조각
+      head.add(eggCap(R, 1.05, Math.PI * 0.29, hairM, Math.PI * 0.44, Math.PI * 0.34))
+      break
+    }
     case 'buzz': {
       head.add(eggCap(R, 1.02, Math.PI * 0.3, hairM))
       break
