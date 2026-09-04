@@ -30,7 +30,8 @@ npm run dev        # http://localhost:5173/bedorage-duck/
 
 ```bash
 npm run dev                        # 개발 서버
-npm test                           # vitest 47개 (결정론·카메라·성능·밸런스·전적·자동조준·모래주머니)
+npm test                           # vitest 53개
+npx vite-node tools/melee.ts       # 후라이팬 정면 대치 (봇 표가 못 잡는 부분)
 npm run build                      # tsc --noEmit + vite build → dist/
 npx vite-node tools/balance.ts     # 밸런스 계측 (ffa 붙이면 4인)
 ```
@@ -54,7 +55,7 @@ PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크�
 | 소리 | ✅ | 절차 생성 효과음 + 132BPM 추격 배경음(교전 시 레이어 증가). `N`/버튼 음소거 |
 | 네트워크 | ✅ 탭 3개 검증 | 정원 4, 호스트 방송이 정본, N인 락스텝, 드롭 틱 합의, 리싱크(모래주머니 포함) |
 | 로비 | ✅ | 닉네임 필수, 봇 1~3·개인전/2v2, 목표 킬 5~50, 맵 미리보기, 방 목록 n/4 |
-| 밸런스 | ✅ 계측 기반 | 봇 1:1 528판 승률 42~58%. `tools/balance.ts` 로 재측정 |
+| 밸런스 | ✅ 계측 기반 | 봇 1:1 528판 승률 **42.0~56.8%**. 후라이팬은 `tools/melee.ts` 로 따로 본다 |
 | 성능 | ✅ | 4인·4배맵·봇4 틱당 0.023~0.033ms (60Hz 예산 16.6ms) |
 | 문서 | ✅ v1.0 | DESIGN·플레이 가이드·공지글·PREP 모두 v1.0 기준 |
 | 모바일 | ✅ 가로 전용 | 왼쪽 이동 스틱 + 오른쪽 누르면 사격, **조준 자동**(각속도 제한), 세로면 안내. `?touch=1` 로 PC 시험 |
@@ -74,7 +75,9 @@ PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크�
 10. **비상업 팬 프로젝트 고지 유지.** 패러디 명칭 사용.
 11. **전적은 각자 브라우저에만.** 결정적 락스텝이라 같은 방 사람들이 같은 기록을 갖는다. 전체 순위표는 저장소가 필요해서 만들지 않는다. (DESIGN 8.4)
 12. **모바일은 이동만 손으로, 조준은 자동.** 각속도를 제한해 즉시 겨누지 않는다. 조준각은 다른 입력과 똑같이 `Input` 에 실린다. (DESIGN 7.1)
-13. **캐릭터 키는 다리 길이로 표현한다.** 쿼터뷰에서 몸통만 늘리면 안 보인다. `look.tall` 이 다리와 걸음 폭까지 키운다. 판정에는 영향이 없다.
+13. **후라이팬 방어는 자원이지 방패가 아니다.** 막는 동안 기력이 차면 안 된다(`BLOCK_LOCK_TICKS`). 이걸 없애면 서서 막기만 해도 무적이 된다 — v1.0 에서 실제로 그랬다.
+14. **봇 표만 믿지 않는다.** 봇은 의도적인 막기·엄폐를 못 하므로 사람이 쓸 때만 강한 것을 못 잡는다. 후라이팬은 `tools/melee.ts` 로 따로 본다.
+15. **캐릭터 키는 다리 길이로 표현한다.** 쿼터뷰에서 몸통만 늘리면 안 보인다. `look.tall` 이 다리와 걸음 폭까지 키운다. 판정에는 영향이 없다.
 
 ## 코드 지도
 
@@ -105,8 +108,9 @@ src/render/minimap.ts    맵 타일 캔버스 (미니맵·로비 미리보기 �
 src/render/character.ts  2D 캐리커처 (이목구비·로비 초상)
 src/audio/sfx.ts         효과음·배경음 절차 생성
 src/ui/lobby.ts          로비·대기실
-tools/balance.ts         밸런스 계측
-tests/                   determinism · camera · perf · balance · records · autoaim · sandbag (47개)
+tools/balance.ts         밸런스 계측 (봇 1:1 528판)
+tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
+tests/                   determinism · camera · perf · balance · records · autoaim · sandbag · block (53개)
 docs/img/                공지용 스크린샷 4장 (전투·조준경·캐릭터·결과)
 ```
 

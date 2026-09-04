@@ -15,6 +15,10 @@ export const STAMINA_MAX = 100
 /** 틱당 회복 (약 4.5초에 가득) */
 export const STAMINA_REGEN = 22 / 60
 export const DASH_COST = 34
+/** 후라이팬 방어: 피해 1 을 막는 데 드는 기력 (기력 한 통 = 피해 181) */
+export const BLOCK_COST = 0.55
+/** 막은 뒤 기력이 다시 차기까지 (계속 맞으면 방어가 뚫리도록) */
+export const BLOCK_LOCK_TICKS = 30
 /** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
 export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
@@ -63,6 +67,8 @@ export interface PlayerState {
   streak: number
   /** 기력 0..STAMINA_MAX */
   stamina: number
+  /** 총알을 막은 직후 기력이 다시 차지 않는 틱 수. 계속 맞으면 방어가 결국 뚫린다 */
+  blockLock: number
 }
 
 export interface Bullet {

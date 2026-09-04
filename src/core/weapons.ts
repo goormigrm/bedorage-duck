@@ -100,7 +100,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   // 승빠덕 전용 근접 무기. 꾹 누르면 계속 휘두르고, 기력으로 총알을 막는다
   pan: {
-    id: 'pan', name: '후라이팬', damage: 80, pellets: 1, fireInterval: 26, auto: true,
+    id: 'pan', name: '후라이팬', damage: 80, pellets: 1, fireInterval: 23, auto: true,
     magSize: 0, reloadTicks: 0, spreadHip: 0, spreadAds: 0, recoil: 0,
     recoilRecover: 0, speed: 0, life: 0, moveMul: 1.02, length: 20, color: 0x33383c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,

@@ -115,7 +115,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   chim: {
     id: 'chim', name: '침착덕', basedOn: '침착맨', tagline: '크루의 중심. 유튜브 배너의 그 아저씨, 무슨 일이 있어도 침착하게.',
     prominence: 2,
-    maxHp: 200, speed: 3.2, weapon: 'rifle', dashCooldown: 90,
+    maxHp: 190, speed: 3.2, weapon: 'rifle', dashCooldown: 90,
     passiveName: '침착', passiveDesc: '반동 회복 속도 2배. 연사해도 탄이 덜 퍼집니다.',
     bodyColor: 0xf5c542, accentColor: 0x7a1a2e,
     look: {
@@ -140,7 +140,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   magic: {
     id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '치과의사. 산탄총을 들고 스스로를 치료합니다.',
     prominence: 4,
-    maxHp: 260, speed: 2.9, weapon: 'shotgun', dashCooldown: 80,
+    maxHp: 235, speed: 2.9, weapon: 'shotgun', dashCooldown: 80,
     passiveName: '진료', passiveDesc: '최대 체력 260 (최고). 피격 후 3초가 지나면 초당 6씩 체력 회복.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
@@ -237,7 +237,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   juwoojae: {
     id: 'juwoojae', name: '주우재덕', basedOn: '주우재', tagline: '가죽 재킷에 청바지. 마르고 길어서 구르면 멀리 간다.',
     prominence: 11,
-    maxHp: 200, speed: 3.3, weapon: 'rifle', dashCooldown: 85,
+    maxHp: 185, speed: 3.3, weapon: 'rifle', dashCooldown: 85,
     passiveName: '런웨이', passiveDesc: '대시 거리 +50%.',
     bodyColor: 0xe8e2d4, accentColor: 0x1c1c1f,
     look: {
@@ -251,7 +251,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   seungwoo: {
     id: 'seungwoo', name: '승빠덕', basedOn: '승우아빠', tagline: '검은 모자에 파란 앞치마. 후라이팬으로 총알을 막고 후려친다.',
     prominence: 12,
-    maxHp: 245, speed: 3.7, weapon: 'pan', dashCooldown: 34,
+    maxHp: 260, speed: 3.7, weapon: 'pan', dashCooldown: 34,
     passiveName: '방패', passiveDesc: '앞에서 오는 총알을 기력으로 막는다(피해 1당 기력 0.55). 기력 회복 1.8배, 짧은 쿨다운으로 굴러서 붙는다.',
     bodyColor: 0x5aa9ff, accentColor: 0x16161a,
     look: {

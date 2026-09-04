@@ -5,6 +5,8 @@ import { GameMap, SANDBAG_HP, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } fro
 import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
 import { makeRng, randInt } from './rng'
 import {
+  BLOCK_COST,
+  BLOCK_LOCK_TICKS,
   Bullet,
   COUNTDOWN_TICKS,
   DASH_SPEED,
@@ -13,9 +15,9 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   MatchConfig,
+  DASH_COST,
   PLAYER_RADIUS,
   PlayerState,
-  DASH_COST,
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
   STAMINA_MAX,
@@ -101,6 +103,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     choosing: false,
     streak: 0,
     stamina: STAMINA_MAX,
+    blockLock: 0,
   }
 }
 
@@ -205,9 +208,11 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   }
   if (p.fireCooldown > 0) p.fireCooldown--
   if (p.dashCooldown > 0) p.dashCooldown--
-  // 근접 무기는 기력이 방어에도 쓰이므로 두 배로 찬다
-  if (p.dashTimer === 0 && p.stamina < STAMINA_MAX) {
-    p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * (w.melee ? 1.8 : 1))
+  // 근접 무기는 기력이 방어에도 쓰이므로 빨리 찬다. 단 막는 중에는 차지 않는다 —
+  // 그래야 계속 쏘면 방어가 결국 뚫린다 (막고 버티기만 하면 무적이 되던 문제)
+  if (p.blockLock > 0) p.blockLock--
+  if (p.dashTimer === 0 && p.blockLock === 0 && p.stamina < STAMINA_MAX) {
+    p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * (w.melee ? 2.4 : 1))
   }
   if (p.invuln > 0) p.invuln--
   if (p.legInjury > 0) p.legInjury--
@@ -263,7 +268,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     p.dashDx = mx * inv
     p.dashDy = my * inv
-    p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.5) : DASH_TICKS // 주우재덕: 대시 거리 +50%
+    p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.3) : DASH_TICKS // 주우재덕: 대시 거리 +30%
     p.dashCooldown = c.dashCooldown
     p.ads = false
     if (c.id === 'uwon') p.invuln = Math.max(p.invuln, p.dashTimer + 12) // 우원덕: 대시가 끝난 뒤에도 0.2초 무적
@@ -471,14 +476,17 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   dmg = Math.round(dmg)
   b.hitSomeone = true
   shooter.streak = Math.min(99, shooter.streak + 1)
-  // 근접 무기(후라이팬)를 든 사람은 앞에서 오는 총알을 기력으로 막는다
+  // 근접 무기(후라이팬)를 든 사람은 앞에서 오는 탄을 기력으로 막는다.
+  // 기력 한 통(=피해 181)까지만 막을 수 있고, **막는 동안에는 기력이 차지 않는다**.
+  // 예전에는 맞으면서도 기력이 차서, 서서 막기만 해도 총알을 무한히 튕겨 냈다.
   if (WEAPONS[victim.weapon].melee && victim.stamina > 0) {
     const from = atan2A(b.oy - victim.y, b.ox - victim.x)
     if (Math.abs(angleDiff(from, victim.aim)) < 213) {
-      const perDmg = 0.55
-      const absorbed = Math.min(dmg, Math.floor(victim.stamina / perDmg))
-      victim.stamina = Math.max(0, victim.stamina - absorbed * perDmg)
+      const absorbed = Math.min(dmg, Math.floor(victim.stamina / BLOCK_COST))
+      victim.stamina = Math.max(0, victim.stamina - absorbed * BLOCK_COST)
       dmg -= absorbed
+      victim.blockLock = BLOCK_LOCK_TICKS
+
       state.events.push({ type: 'block', p: victim.id, x: b.x, y: b.y })
     }
   }
@@ -514,6 +522,7 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   p.lastHitTick = -10000
   p.streak = 0
   p.stamina = STAMINA_MAX
+  p.blockLock = 0
   state.events.push({ type: 'respawn', p: p.id, x: p.x, y: p.y })
 }
 
