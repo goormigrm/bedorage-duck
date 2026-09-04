@@ -980,8 +980,9 @@ export function drawCharacter(ctx: CanvasRenderingContext2D, def: CharacterDef, 
   drawHead(ctx, def, o)
 }
 
-/** 로비 초상화 (정면, 크게) */
+/** 로비 초상화: 3D 와 같은 달걀형 일체 몸통(정면). 머리 원이 달걀 윗부분이 되고 아래로 옷·바지·작은 다리가 이어진다 */
 export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facing = -Math.PI / 2 + 0.6): void {
+  void facing
   const ctx = canvas.getContext('2d')!
   const dpr = Math.min(2, window.devicePixelRatio || 1)
   const size = canvas.clientWidth || 64
@@ -989,11 +990,134 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
   canvas.height = size * dpr
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, size, size)
-  const s = size / 64
+  const L = def.look
+  const R = 12.5 * L.headScale
+  const hy = -8 - R
+  const jowl = L.faceShape === 'jowl'
+  const chin = jowl ? R * 1.26 : R
+  // 달걀: 머리 원 아래로 이어지는 몸통. 바닥은 hy + chin + R*0.95
+  const bottom = hy + chin + R * 0.95
+  const bw = R * (0.9 + 0.12 * L.bodyScale)
+  const eggH = bottom - (hy - R) + 6
+  const s = (size * 0.9) / eggH
   ctx.save()
-  ctx.translate(size / 2, size * 0.82)
-  ctx.scale(1.5 * s, 1.5 * s)
-  drawCharacter(ctx, def, { facing, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
+  ctx.translate(size / 2, size / 2 - ((hy - R) + bottom) / 2 * s)
+  ctx.scale(s, s)
+  ctx.lineJoin = 'round'
+  const egg = () => {
+    ctx.beginPath()
+    ctx.moveTo(-R, hy)
+    ctx.quadraticCurveTo(-bw * 1.02, hy + chin * 0.7, -bw * 0.9, hy + chin + R * 0.45)
+    ctx.quadraticCurveTo(-bw * 0.7, bottom, 0, bottom)
+    ctx.quadraticCurveTo(bw * 0.7, bottom, bw * 0.9, hy + chin + R * 0.45)
+    ctx.quadraticCurveTo(bw * 1.02, hy + chin * 0.7, R, hy)
+    ctx.closePath()
+  }
+  // 다리·신발
+  ctx.fillStyle = '#34405a'
+  ctx.strokeStyle = OUTLINE
+  ctx.lineWidth = 1.4
+  for (const d of [-1, 1]) {
+    rrect(ctx, d * bw * 0.36 - 2.2, bottom - 3, 4.4, 6, 2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = '#2a2622'
+    ellipse(ctx, d * bw * 0.36, bottom + 3.2, 4, 2.2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = '#34405a'
+  }
+  // 몸통(피부) → 옷
+  egg()
+  ctx.fillStyle = hex(L.skin)
+  ctx.fill()
+  ctx.save()
+  egg()
+  ctx.clip()
+  const collar = hy + chin
+  const cloth = L.coat !== undefined ? L.coat : L.shirt
+  ctx.fillStyle = hex(cloth)
+  ctx.beginPath()
+  if (L.neck === 'v') {
+    ctx.moveTo(-bw * 1.2, collar - R * 0.05)
+    ctx.lineTo(-R * 0.32, collar - R * 0.05)
+    ctx.lineTo(0, collar + R * 0.35)
+    ctx.lineTo(R * 0.32, collar - R * 0.05)
+    ctx.lineTo(bw * 1.2, collar - R * 0.05)
+  } else {
+    ctx.moveTo(-bw * 1.2, collar)
+    ctx.quadraticCurveTo(0, collar + R * 0.18, bw * 1.2, collar)
+  }
+  ctx.lineTo(bw * 1.2, bottom + 5)
+  ctx.lineTo(-bw * 1.2, bottom + 5)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+  if (L.neck === 'v' && L.undershirt !== undefined) {
+    ctx.fillStyle = hex(L.undershirt)
+    ctx.beginPath()
+    ctx.moveTo(-R * 0.3, collar - R * 0.04)
+    ctx.lineTo(R * 0.3, collar - R * 0.04)
+    ctx.lineTo(0, collar + R * 0.32)
+    ctx.closePath()
+    ctx.fill()
+  }
+  if (L.coat !== undefined) {
+    ctx.fillStyle = hex(L.shirt)
+    rrect(ctx, -R * 0.22, collar - R * 0.02, R * 0.44, bottom - collar + 5, 1)
+    ctx.fill()
+    ctx.stroke()
+    if (L.coatDots !== undefined) {
+      ctx.fillStyle = hex(L.coatDots)
+      for (let yy = collar + 3; yy < bottom; yy += 3.4) {
+        for (let xx = -bw; xx <= bw; xx += 3.4) {
+          if (Math.abs(xx) < R * 0.3) continue
+          circle(ctx, xx, yy, 0.8)
+          ctx.fill()
+        }
+      }
+    }
+  }
+  if (L.badge !== undefined) {
+    ctx.fillStyle = hex(L.badge)
+    rrect(ctx, R * 0.35, collar + R * 0.42, R * 0.5, R * 0.2, 0.5)
+    ctx.fill()
+    ctx.stroke()
+  }
+  if (L.tie !== undefined) {
+    ctx.fillStyle = hex(L.tie)
+    ctx.beginPath()
+    ctx.moveTo(-1.6, collar + 0.5)
+    ctx.lineTo(1.6, collar + 0.5)
+    ctx.lineTo(1.2, collar + 7)
+    ctx.lineTo(0, collar + 8.5)
+    ctx.lineTo(-1.2, collar + 7)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  }
+  if (L.bowTie !== undefined) {
+    ctx.fillStyle = hex(L.bowTie)
+    for (const d of [-1, 1]) {
+      ctx.beginPath()
+      ctx.moveTo(d * 4.5, collar - 1.5)
+      ctx.lineTo(0, collar + 1)
+      ctx.lineTo(d * 4.5, collar + 3.5)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
+  }
+  // 바지 띠
+  ctx.fillStyle = '#34405a'
+  ctx.fillRect(-bw * 1.2, bottom - R * 0.28, bw * 2.4, R * 0.4)
+  ctx.restore()
+  // 달걀 외곽선
+  egg()
+  ctx.lineWidth = 2
+  ctx.stroke()
+  // 얼굴·머리카락·모자 (머리 원이 달걀 위쪽과 일치)
+  drawHead(ctx, def, { facing: 0, frontal: true, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
   ctx.restore()
 }
 

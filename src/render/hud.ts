@@ -151,7 +151,7 @@ export class Hud {
       ctx.fillText(`${sec}`, 0, 0)
       ctx.restore()
       ctx.font = '500 18px "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#f5f2e6'
+      ctx.fillStyle = '#e6edf3'
       ctx.textAlign = 'center'
       ctx.fillText('준비', VIEW_W / 2, VIEW_H / 2 + 70)
     } else if (s.phase === 'playing' && s.tick < 240) {
@@ -177,11 +177,11 @@ export class Hud {
       ctx.font = '500 16px "IBM Plex Sans KR", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillStyle = 'rgba(20,22,16,0.8)'
+      ctx.fillStyle = 'rgba(13,17,23,0.82)'
       const tw = ctx.measureText(opts.message).width + 32
       roundRect(ctx, VIEW_W / 2 - tw / 2, VIEW_H / 2 + 100, tw, 34, 6)
       ctx.fill()
-      ctx.fillStyle = '#f5f2e6'
+      ctx.fillStyle = '#e6edf3'
       ctx.fillText(opts.message, VIEW_W / 2, VIEW_H / 2 + 117)
     }
   }
@@ -199,10 +199,10 @@ export class Hud {
       const c1 = CHARACTERS[s.players[1].char]
       ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillStyle = '#f5f2e6'
+      ctx.fillStyle = '#e6edf3'
       ctx.fillText(`${s.players[0].kills}`, VIEW_W / 2 - 60, 44)
       ctx.fillText(`${s.players[1].kills}`, VIEW_W / 2 + 60, 44)
-      ctx.fillStyle = '#7d8471'
+      ctx.fillStyle = '#6b7683'
       ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
       ctx.fillText(':', VIEW_W / 2, 43)
       ctx.font = '600 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
@@ -213,7 +213,7 @@ export class Hud {
       ctx.fillStyle = hex(c1.bodyColor)
       ctx.fillText(opts.names[1], VIEW_W / 2 + 100, 38)
       ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#8f957f'
+      ctx.fillStyle = '#7d8896'
       ctx.textAlign = 'right'
       ctx.fillText(opts.subLabels[0], VIEW_W / 2 - 100, 58)
       ctx.textAlign = 'left'
@@ -229,7 +229,7 @@ export class Hud {
         ctx.fillStyle = p.left ? '#666' : hex(c.bodyColor)
         ctx.fillText(opts.names[i] + (i === opts.localPlayer ? ' (나)' : ''), cx, 30)
         ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-        ctx.fillStyle = p.left ? '#666' : '#f5f2e6'
+        ctx.fillStyle = p.left ? '#666' : '#e6edf3'
         ctx.fillText(p.left ? '나감' : `${p.kills}`, cx, 54)
         if (i > 0) {
           ctx.fillStyle = 'rgba(255,255,255,0.1)'
@@ -238,7 +238,7 @@ export class Hud {
       }
     }
     ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
-    ctx.fillStyle = '#b3b8a5'
+    ctx.fillStyle = '#a9b4c0'
     ctx.textAlign = 'center'
     ctx.fillText(`목표 ${s.targetKills} 킬`, VIEW_W / 2, 66)
   }
@@ -252,10 +252,10 @@ export class Hud {
     ctx.textBaseline = 'middle'
     ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillStyle = '#f5f2e6'
+    ctx.fillStyle = '#e6edf3'
     ctx.fillText(`${teamKills(s, 0)}`, VIEW_W / 2 - 60, 44)
     ctx.fillText(`${teamKills(s, 1)}`, VIEW_W / 2 + 60, 44)
-    ctx.fillStyle = '#7d8471'
+    ctx.fillStyle = '#6b7683'
     ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
     ctx.fillText(':', VIEW_W / 2, 43)
     for (const team of [0, 1]) {
@@ -267,21 +267,21 @@ export class Hud {
       ctx.fillText(TEAM_NAMES[team], x, 32)
       const members = s.players.map((p, i) => ({ p, i })).filter((m) => m.p.team === team)
       ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#b3b8a5'
+      ctx.fillStyle = '#a9b4c0'
       ctx.fillText(members.map((m) => `${opts.names[m.i]}${m.i === opts.localPlayer ? '(나)' : ''} ${m.p.kills}`).join(' · '), x, 52)
     }
     ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
-    ctx.fillStyle = '#b3b8a5'
+    ctx.fillStyle = '#a9b4c0'
     ctx.textAlign = 'center'
     ctx.fillText(`목표 ${s.targetKills} 킬`, VIEW_W / 2, 66)
   }
 
   private panel(x: number, y: number, w: number, h: number): void {
     const ctx = this.ctx
-    ctx.fillStyle = 'rgba(20,22,16,0.78)'
+    ctx.fillStyle = 'rgba(13,17,23,0.8)'
     roundRect(ctx, x, y, w, h, 8)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
     ctx.lineWidth = 1
     roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 8)
     ctx.stroke()
@@ -307,7 +307,7 @@ export class Hud {
       ctx.textBaseline = 'middle'
       ctx.textAlign = 'left'
       ctx.font = '600 13px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
-      ctx.fillStyle = m.p.left ? '#777' : '#f5f2e6'
+      ctx.fillStyle = m.p.left ? '#777' : '#e6edf3'
       ctx.fillText(opts.names[m.i], x + 22, ry + rowH / 2 - 1)
       if (teams) {
         ctx.font = '500 10px "IBM Plex Mono", monospace'
@@ -327,7 +327,7 @@ export class Hud {
       }
       ctx.font = '600 12px "IBM Plex Mono", monospace'
       ctx.textAlign = 'right'
-      ctx.fillStyle = '#b3b8a5'
+      ctx.fillStyle = '#a9b4c0'
       const status = m.p.left ? '나감' : m.p.choosing ? '캐릭터 선택 중' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`
       ctx.fillText(status, x + w - 12, ry + rowH / 2 - 1)
     })
@@ -340,11 +340,11 @@ export class Hud {
     const ch = 92
     const bx = side === 'left' ? x : x - cw
     const by = y - ch
-    ctx.fillStyle = 'rgba(20,22,16,0.78)'
+    ctx.fillStyle = 'rgba(13,17,23,0.8)'
     roundRect(ctx, bx, by, cw, ch, 8)
     ctx.fill()
     if (isLocal) {
-      ctx.strokeStyle = 'rgba(255,216,74,0.6)'
+      ctx.strokeStyle = 'rgba(227,179,65,0.7)'
       ctx.lineWidth = 1.5
       roundRect(ctx, bx + 0.5, by + 0.5, cw - 1, ch - 1, 8)
       ctx.stroke()
@@ -356,10 +356,10 @@ export class Hud {
     ctx.textBaseline = 'alphabetic'
     ctx.textAlign = 'left'
     ctx.font = '600 16px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
-    ctx.fillStyle = '#f5f2e6'
+    ctx.fillStyle = '#e6edf3'
     ctx.fillText(name, ix, by + 24)
     ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = '#8f957f'
+    ctx.fillStyle = '#7d8896'
     ctx.fillText(`${c.passiveName} · ${c.basedOn}`, ix + ctx.measureText(name).width + 60, by + 24)
     const hpK = Math.max(0, p.hp / c.maxHp)
     ctx.fillStyle = 'rgba(255,255,255,0.1)'
@@ -369,17 +369,17 @@ export class Hud {
     roundRect(ctx, ix, by + 34, 200 * hpK, 12, 4)
     ctx.fill()
     ctx.font = '600 12px "IBM Plex Mono", monospace'
-    ctx.fillStyle = '#f5f2e6'
+    ctx.fillStyle = '#e6edf3'
     ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : p.left ? '나감' : p.choosing ? '선택 중' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
     ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = '#b3b8a5'
+    ctx.fillStyle = '#a9b4c0'
     ctx.fillText(w.name, ix, by + 70)
     ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = p.reloadTimer > 0 ? '#f2c94c' : '#f5f2e6'
+    ctx.fillStyle = p.reloadTimer > 0 ? '#f2c94c' : '#e6edf3'
     ctx.fillText(p.reloadTimer > 0 ? '재장전' : `${p.ammo}`, ix + 60, by + 78)
     if (p.reloadTimer === 0) {
       ctx.font = '500 13px "IBM Plex Mono", monospace'
-      ctx.fillStyle = '#8f957f'
+      ctx.fillStyle = '#7d8896'
       ctx.fillText(`/ ${w.magSize}`, ix + 60 + ctx.measureText(`${p.ammo}`).width + 26, by + 76)
     } else {
       const k = 1 - p.reloadTimer / w.reloadTicks
@@ -398,7 +398,7 @@ export class Hud {
     roundRect(ctx, ix + 208, by + 58, 60 * dk, 6, 3)
     ctx.fill()
     ctx.font = '400 10px "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = '#8f957f'
+    ctx.fillStyle = '#7d8896'
     ctx.fillText('대시', ix + 208, by + 78)
     if (p.legInjury > 0) {
       ctx.fillStyle = '#f2c94c'
@@ -418,13 +418,13 @@ export class Hud {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       const tw = ctx.measureText(b.text).width + 60
-      ctx.fillStyle = 'rgba(20,22,16,0.8)'
+      ctx.fillStyle = 'rgba(13,17,23,0.82)'
       roundRect(ctx, VIEW_W / 2 - tw / 2, y - 26, tw, 52, 6)
       ctx.fill()
       ctx.fillStyle = b.color
       roundRect(ctx, VIEW_W / 2 - tw / 2, y - 26, 6, 52, 3)
       ctx.fill()
-      ctx.fillStyle = '#f5f2e6'
+      ctx.fillStyle = '#e6edf3'
       ctx.fillText(b.text, VIEW_W / 2 + 4, y)
       ctx.globalAlpha = 1
     }
@@ -452,7 +452,7 @@ export class Hud {
       ctx.restore()
       ctx.globalAlpha = k
       ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#f5f2e6'
+      ctx.fillStyle = '#e6edf3'
       ctx.textAlign = 'center'
       const score = teams
         ? `${teamKills(s, 0)}  :  ${teamKills(s, 1)}`
@@ -461,7 +461,7 @@ export class Hud {
           : s.players.map((p, i) => `${opts.names[i]} ${p.kills}`).join('  ·  ')
       ctx.fillText(score, VIEW_W / 2, VIEW_H / 2 + 44)
       ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
-      ctx.fillStyle = '#b3b8a5'
+      ctx.fillStyle = '#a9b4c0'
       ctx.fillText(`목표 ${s.targetKills}킬 달성`, VIEW_W / 2, VIEW_H / 2 + 84)
       ctx.globalAlpha = 1
     }
