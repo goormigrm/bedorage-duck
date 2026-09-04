@@ -52,10 +52,7 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      input: {
-        main: root + 'index.html',
-        preview: root + 'preview.html',
-      },
+      input: { main: root + 'index.html' },
     },
   },
   server: {

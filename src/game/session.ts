@@ -107,6 +107,7 @@ export class Session {
     this.stage.appendChild(ui)
     if (isTouchDevice()) {
       this.touch = new TouchControls(this.root)
+      this.root.classList.add('touching')
       void enterLandscape()
     }
     this.input.attach(this.stage, this.touch)
@@ -214,10 +215,12 @@ export class Session {
       row.appendChild(btn)
     }
     this.overlay.hidden = false
+    this.touch?.setVisible(false)
   }
 
   private hideOverlay(): void {
     this.overlay.hidden = true
+    this.touch?.setVisible(true)
     if (this.cfg.mode === 'solo' && this.state.phase !== 'over') this.paused = false
   }
 
@@ -377,7 +380,13 @@ export class Session {
     let steps = 0
     while (this.acc >= TICK_MS && steps < 8) {
       const t = this.state.tick
-      const localIn = this.input.sample(this.renderer, me.x, me.y)
+      const localIn = this.input.sample(
+        this.renderer,
+        me.x,
+        me.y,
+        // 터치 조작이면 조준을 대신 해 준다 (스틱 두 개는 폰에서 무리)
+        this.touch ? { state: this.state, map: this.map, me: this.cfg.localPlayer } : undefined,
+      )
       let inputs: Input[]
       if (this.lockstep) {
         this.lockstep.pushLocal(t, localIn)
@@ -435,6 +444,7 @@ export class Session {
       ping: this.cfg.link ? this.cfg.link.rtt : undefined,
       message,
       cursor: this.aimCursor(),
+      touch: this.touch !== null,
     })
     this.raf = requestAnimationFrame(this.frame)
   }

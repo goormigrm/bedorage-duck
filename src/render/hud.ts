@@ -25,6 +25,8 @@ export interface RenderOptions {
   timeScale?: number
   /** 시야 제한 (기본 true, 관전이면 무시) */
   fog?: boolean
+  /** 터치 조작 중. 오른쪽 아래는 버튼이 차지하므로 패널을 옮긴다 */
+  touch?: boolean
 }
 
 export interface ScreenText {
@@ -295,8 +297,9 @@ export class Hud {
     const rowH = 30
     const w = 280
     const h = others.length * rowH + 14
-    const x = VIEW_W - 24 - w
-    const y = VIEW_H - 46 - h
+    // 터치 조작이면 오른쪽 아래가 버튼 자리라 미니맵 밑으로 내린다
+    const x = opts.touch ? 24 : VIEW_W - 24 - w
+    const y = opts.touch ? 182 : VIEW_H - 46 - h
     this.panel(x, y, w, h)
     others.forEach((m, r) => {
       const c = CHARACTERS[m.p.char]

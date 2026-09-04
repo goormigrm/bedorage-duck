@@ -137,7 +137,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .room { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 10px; font-size: 13.5px; }
 .room small { color: var(--ink-3); }
 .room .btn { padding: 6px 12px; font-size: 13px; }
-.code-sm { font: 700 12px "IBM Plex Mono", monospace; letter-spacing: .12em; color: var(--gold); }
+.code-sm { font: 700 15px "IBM Plex Mono", monospace; letter-spacing: .14em; color: var(--gold); }
 .pill { font: 700 10px "IBM Plex Mono", monospace; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--ink-3); margin-right: 4px; background: var(--panel-3); }
 .pill.ok { color: #7ee787; border-color: #2ea04355; background: #2ea04322; }
 
@@ -191,8 +191,8 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .status > * { position: relative; }
 @keyframes pop { from { transform: translateY(10px) scale(.985); opacity: 0; } to { transform: none; opacity: 1; } }
 .status.show { display: block; }
-.status .link { font: 500 12px "IBM Plex Mono", monospace; color: var(--ink-3); word-break: break-all; margin: 4px 0 6px; }
-.status .st { color: var(--ink-2); margin-top: 12px; font-size: 13.5px; }
+.status .link { font: 500 13px "IBM Plex Mono", monospace; color: var(--ink-2); word-break: break-all; margin: 6px 0 2px; }
+.status .st { color: var(--ink); margin-top: 14px; font-size: 15px; font-weight: 600; line-height: 1.5; }
 .status .st.ok { color: #7ee787; }
 .status .st.bad { color: #ff9d95; }
 .room-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -200,7 +200,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .room-head .section-t::after { display: none; }
 .slots { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; align-items: stretch; margin-top: 12px; }
 @media (max-width: 760px) { .slots { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-.slot { position: relative; overflow: hidden; background: linear-gradient(180deg, #161d27, #11161d); border: 1px solid #2a3441; border-radius: 12px; padding: 12px 14px 12px; min-height: 96px;
+.slot { position: relative; overflow: hidden; background: linear-gradient(180deg, #161d27, #11161d); border: 1px solid #2a3441; border-radius: 12px; padding: 13px 15px 14px; min-height: 108px;
   box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; transition: border-color .14s, box-shadow .14s; }
 .slot::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2.5px; background: linear-gradient(90deg, #4a545f, transparent); }
 .slot.mine { border-color: #e3b34166; }
@@ -208,14 +208,22 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .slot.ready { border-color: #3fb95088; box-shadow: 0 0 0 1px #3fb95044 inset, 0 6px 18px rgba(63,185,80,.14); }
 .slot.ready::before { background: linear-gradient(90deg, var(--ok), transparent); }
 .slot.empty { opacity: .45; border-style: dashed; background: transparent; box-shadow: none; }
-.slot .who { font: 700 10.5px "IBM Plex Mono", monospace; color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
-.slot .cname { font-family: "Black Han Sans", sans-serif; font-size: 22px; line-height: 1.2; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f0f6fc; text-shadow: 0 2px 10px rgba(0,0,0,.4); }
-.slot .rd { font-size: 12px; color: var(--ink-3); }
+.slot .who { font: 700 11px "IBM Plex Mono", monospace; color: var(--ink-2); letter-spacing: .06em; display: flex; align-items: center; gap: 6px; }
+.slot .cname { font-family: "Black Han Sans", sans-serif; font-size: 25px; line-height: 1.25; margin: 6px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f0f6fc; text-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.slot .rd { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.slot.empty .cname { font-family: "IBM Plex Sans KR", sans-serif; font-size: 16px; font-weight: 600; color: var(--ink-2); }
 .slot.ready .rd { color: #7ee787; }
 .slot .team { font: 800 10px "IBM Plex Mono", monospace; border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; letter-spacing: .04em; }
 .slot .team-a { color: var(--team-a); background: #5aa9ff14; }
 .slot .team-b { color: var(--team-b); background: #ff6a5a14; }
-.room-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.room-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+.room-actions .btn { padding: 10px 22px; font-size: 15px; }
+/* 방 설정 한 줄: 항목마다 작은 라벨 + 값. 한 문장으로 붙여 쓰면 눈에 안 들어온다 */
+.setrow { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 10px 0 2px; }
+.setrow span { display: inline-flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--ink);
+  background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 11px; }
+.setrow b { font: 700 10.5px "IBM Plex Mono", monospace; color: var(--ink-3); letter-spacing: .08em; }
+.roomhint { margin: 12px 0 0; font-size: 13.5px; color: var(--ink-3); }
 .foot { margin-top: 32px; color: var(--ink-3); font-size: 12px; font-family: "IBM Plex Mono", monospace; line-height: 1.7; }
 .foot a { color: var(--ink-2); }
 
@@ -259,7 +267,8 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 @media (pointer: coarse) and (orientation: portrait) {
   #rotate { display: flex; }
 }
-/* 터치 기기에서는 키보드 안내를 감춘다 (버튼으로 대체) */
+/* 터치 조작 중에는 키보드 안내를 감춘다 (버튼으로 대체) */
+.game-root.touching .keys { display: none; }
 @media (pointer: coarse) {
   .keys { display: none; }
   .lobby { padding: 20px 14px 60px; }
@@ -267,23 +276,36 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 }
 
 /* ---- 모바일 터치 조작 ---- */
-.touch-ui { position: fixed; inset: 0; z-index: 4; touch-action: none; -webkit-user-select: none; user-select: none; }
+/* 루트는 이벤트를 받지 않는다. 조작 요소만 받는다 → 위에 뜬 창(로비로 등)이 정상적으로 눌린다 */
+.touch-ui { position: fixed; inset: 0; z-index: 4; pointer-events: none; touch-action: none; -webkit-user-select: none; user-select: none; }
 .touch-ui[hidden] { display: none; }
+.tzone { position: fixed; top: 64px; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+.tzone.move { left: 0; }
+.tzone.fire { right: 0; }
+.tzone.fire span { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); white-space: nowrap;
+  font: 600 11px "IBM Plex Sans KR", sans-serif; color: rgba(230,237,243,.3); pointer-events: none; }
+.tzone.fire.on { background: radial-gradient(circle at 70% 60%, rgba(255,216,74,.10), transparent 60%); }
 .tstick { position: fixed; width: 132px; height: 132px; margin: -66px 0 0 -66px; border-radius: 50%;
   border: 2px solid rgba(230,237,243,.22); background: rgba(13,17,23,.3); pointer-events: none; }
 .tstick i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
   background: rgba(230,237,243,.3); border: 2px solid rgba(255,255,255,.4); display: block; }
-.tstick.aim { border-color: rgba(255,216,74,.35); }
-.tstick.aim i { background: rgba(255,216,74,.28); border-color: rgba(255,216,74,.6); }
-.tbtns { position: fixed; right: 14px; top: 46%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+.tbtns { position: fixed; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto;
+  grid-template-areas: "reload ads" "swap dash" "fire fire"; gap: 9px; justify-items: end; }
 .tbtn { width: 62px; height: 62px; border-radius: 50%; border: 1px solid var(--line); background: rgba(22,27,34,.72);
-  color: var(--ink-2); font: 600 12px "IBM Plex Sans KR", sans-serif; cursor: pointer; padding: 0;
+  color: var(--ink-2); font: 600 12px "IBM Plex Sans KR", sans-serif; cursor: pointer; padding: 0; pointer-events: auto;
   -webkit-tap-highlight-color: transparent; touch-action: none; }
+.tbtn[data-a="reload"] { grid-area: reload; }
+.tbtn[data-a="swap"] { grid-area: swap; }
+.tbtn[data-a="ads"] { grid-area: ads; }
+.tbtn[data-a="dash"] { grid-area: dash; }
+.tbtn.big { grid-area: fire; width: 100%; height: 62px; border-radius: 34px; font-size: 15px; font-weight: 700;
+  color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }
 .tbtn.menu { position: fixed; left: 12px; top: 12px; width: 46px; height: 46px; font-size: 20px; }
 @media (max-height: 420px) {
   .tstick { width: 112px; height: 112px; margin: -56px 0 0 -56px; }
   .tstick i { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
   .tbtn { width: 54px; height: 54px; font-size: 11px; }
+  .tbtn.big { height: 50px; font-size: 14px; }
   .tbtns { gap: 7px; }
 }

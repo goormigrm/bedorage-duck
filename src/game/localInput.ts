@@ -1,14 +1,30 @@
 // 키보드·마우스 → Input. 화면 좌표는 1280x720 논리 프레임.
 
-import { radToAngle } from '../core/fixedmath'
+import { ANGLE_MASK, angleDiff, radToAngle } from '../core/fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from '../core/input'
+import { GameMap } from '../core/map'
+import { GameState, isTeamMatch } from '../core/state'
+import { WEAPONS } from '../core/weapons'
 import { VIEW_H, VIEW_W } from '../render/hud'
-import { moveDirFromScreen, screenDirToWorldAngle } from '../render3d/camera'
+import { moveDirFromScreen } from '../render3d/camera'
+import { VIEW_RADIUS_PX, canSee } from '../render3d/vision'
 import { TouchControls } from './touch'
 
 interface AimSource {
   screenToWorld(sx: number, sy: number): { x: number; y: number }
 }
+
+/** 자동 조준에 필요한 것 (터치 조작일 때만 넘어온다) */
+export interface AutoAimCtx {
+  state: GameState
+  map: GameMap
+  me: number
+}
+
+/** 자동 조준이 한 틱에 돌 수 있는 최대 각도 (1024 단계 기준 ≒ 초당 340°) */
+const TURN_STEP = 16
+/** 조준이 목표에 다가갈수록 부드럽게 — 남은 각도의 이 비율만큼 돈다 */
+const TURN_EASE = 0.25
 
 export class LocalInput {
   private keys = new Set<string>()
@@ -83,8 +99,48 @@ export class LocalInput {
     this.detach = null
   }
 
+  /**
+   * 터치 자동 조준. 보이는 적 중 하나를 골라 조준각을 **천천히** 돌린다.
+   * - 폰에서 스틱 두 개를 정확히 미는 것은 무리라 조준은 대신 해 준다.
+   * - 대신 즉시 겨누지 않는다(TURN_STEP). 뒤에 있는 적을 잡으려면 반 바퀴 도는 시간이 걸린다.
+   * - 눈에 보이는 적만 고른다. 벽 뒤나 시야 밖은 고르지 않는다.
+   * 조준각은 Input 에 실려 나가므로 다른 사람과의 동기화에는 영향이 없다.
+   */
+  private autoAim(ctx: AutoAimCtx, mx: number, my: number): void {
+    const me = ctx.state.players[ctx.me]
+    if (!me || !me.alive) return
+    const w = WEAPONS[me.weapon]
+    const range = VIEW_RADIUS_PX * (me.ads && w.scope ? 1.8 : 1)
+    const teams = isTeamMatch(ctx.state)
+    const eye = [{ x: me.x, y: me.y }]
+    let want: number | null = null
+    let best = Infinity
+    for (const p of ctx.state.players) {
+      if (p.id === ctx.me || !p.alive || p.choosing || p.left) continue
+      if (teams && p.team === me.team) continue
+      const dx = p.x - me.x
+      const dy = p.y - me.y
+      const d = Math.hypot(dx, dy)
+      if (d > range) continue
+      if (!canSee(ctx.map, eye, p.x, p.y, range)) continue
+      const a = radToAngle(Math.atan2(dy, dx))
+      // 가까울수록, 이미 겨눈 쪽에 가까울수록 우선 (표적이 계속 바뀌지 않도록)
+      const score = d + Math.abs(angleDiff(a, this.lastAim)) * 2.2
+      if (score < best) {
+        best = score
+        want = a
+      }
+    }
+    // 적이 없으면 가는 쪽을 본다
+    if (want === null && (mx !== 0 || my !== 0)) want = radToAngle(Math.atan2(my, mx))
+    if (want === null) return
+    const diff = angleDiff(want, this.lastAim)
+    const step = Math.max(-TURN_STEP, Math.min(TURN_STEP, diff * TURN_EASE))
+    this.lastAim = (this.lastAim + Math.round(step)) & ANGLE_MASK
+  }
+
   /** 내 캐릭터 월드 위치를 받아 조준각을 계산한다 */
-  sample(renderer: AimSource, meX: number, meY: number): Input {
+  sample(renderer: AimSource, meX: number, meY: number, auto?: AutoAimCtx): Input {
     const k = this.keys
     // 화면 기준 (W = 화면 위) → 카메라 요를 반영한 월드 8방향
     let sx = 0
@@ -100,8 +156,8 @@ export class LocalInput {
       mx = d.mx
       my = d.my
     }
-    if (t && t.aim) {
-      this.lastAim = screenDirToWorldAngle(t.aim.x, t.aim.y)
+    if (t && auto) {
+      this.autoAim(auto, mx, my)
     } else {
       const w = renderer.screenToWorld(this.mouse.x, this.mouse.y)
       const dx = w.x - meX

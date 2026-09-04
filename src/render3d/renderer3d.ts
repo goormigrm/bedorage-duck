@@ -736,10 +736,11 @@ export class Renderer3D {
     // 걷기: 다리 스윙 + 달걀 몸 뒤뚱(좌우 기울기) + 통통 튀기
     if (p.moving) v.walk += dt * 13
     else v.walk *= 0.8
-    const swing = p.moving ? Math.sin(v.walk) * 0.55 : Math.sin(v.walk) * 0.2
+    // 다리가 길수록 크게 젓는다 — 위에서 봐도 걸음이 눈에 띄도록
+    const swing = (p.moving ? Math.sin(v.walk) * 0.55 : Math.sin(v.walk) * 0.2) * rig.stride
     rig.legL.rotation.x = swing
     rig.legR.rotation.x = -swing
-    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 0.05 : 0
+    const bob = p.moving ? Math.abs(Math.sin(v.walk)) * 0.05 * rig.stride : 0
     rig.body.position.set(0, bob, 0)
     rig.body.rotation.z = p.moving ? Math.sin(v.walk) * 0.07 : 0
     rig.arms.rotation.x = p.moving ? Math.sin(v.walk * 2) * 0.05 : 0

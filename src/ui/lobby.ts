@@ -89,7 +89,7 @@ export class Lobby {
       <div class="lobby">
         <div class="season">BEDORAGE DUCK · P2P · 2~4 PLAYERS</div>
         <h1><span class="t1">배도라지</span> <span class="t2">덕</span></h1>
-        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html">프리뷰 보기</a></p>
+        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
         <div class="feats"><span>덕코프식 시야</span><span>개인전 · 2v2 팀전</span><span>인원에 따라 맵 4배</span><span>리스폰 중 Tab 캐릭터 교체</span><span>설치 없음 · 서버 없음</span></div>
 
         <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small><input class="nick" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false"></div>
@@ -703,7 +703,7 @@ export class Lobby {
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const m = this.members[i]
       if (!m) {
-        slots.push(`<div class="slot empty"><div class="who">${i + 1}</div><div class="cname">비어 있음</div><div class="rd"></div></div>`)
+  slots.push(`<div class="slot empty"><div class="who">${i + 1}번 자리</div><div class="cname">비어 있음</div><div class="rd">기다리는 중</div></div>`)
         continue
       }
       const mine = m.id === link.selfId
@@ -714,19 +714,26 @@ export class Lobby {
       slots.push(`<div class="slot ${m.ready ? 'ready' : ''} ${mine ? 'mine' : ''}">
         <div class="who">${who}${badge}</div>
         <div class="cname">${nick ? esc(nick) : c ? c.name : m.char}</div>
-        <div class="rd">${nick ? `${c ? c.name : m.char} · ` : ''}${m.ready ? '준비 완료' : '준비 안 됨'}</div>
+        <div class="rd">${nick ? `${c ? c.name : m.char}<br>` : ''}${m.ready ? '준비 완료' : '준비 안 됨'}</div>
       </div>`)
     }
     const html = `
       <div class="room-head"><div class="section-t" style="margin:0">${title}</div>
         <div class="row"><button class="btn secondary" id="btn-copy">링크 복사</button><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
       <div class="link">${url}</div>
+      <div class="setrow">
+        <span><b>맵</b>${MAPS[this.mapId].name}</span>
+        <span><b>모드</b>${ROOM_MODE_LABEL[this.roomMode]}</span>
+        <span><b>목표</b>${this.killsRoom}킬</span>
+        <span><b>인원</b>${this.members.length}/${MAX_PLAYERS}명</span>
+        ${connected && link.peers.size > 0 ? `<span><b>핑</b>${link.rtt} ms</span>` : ''}
+      </div>
       <div class="slots">${slots.join('')}</div>
       <div class="room-actions">
         <button class="btn main" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
         ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
-        <span class="hintline">${MAPS[this.mapId].name} · ${ROOM_MODE_LABEL[this.roomMode]} · 목표 ${this.killsRoom}킬 · ${this.members.length}/${MAX_PLAYERS}명${connected && link.peers.size > 0 ? ` · ${link.rtt} ms` : ''} · 둘 이상 모두 준비되면 자동 시작</span>
-      </div>`
+      </div>
+      <p class="roomhint">둘 이상 모이고 모두 준비를 누르면 자동으로 시작합니다.</p>`
     const readyCount = this.members.filter((m) => m.ready).length
     const st = !connected
       ? '연결 중… (최대 20초)'

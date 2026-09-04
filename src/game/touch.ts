@@ -1,10 +1,15 @@
 // 모바일(터치) 조작. **가로 화면 전용** — 세로면 index.html 의 안내가 덮는다.
-// 왼쪽 반: 이동 스틱, 오른쪽 반: 조준 스틱(세게 밀면 사격). 오른쪽 가장자리에 버튼.
-// 스틱은 손가락을 대는 자리에 생긴다(플로팅). 게임 로직은 모른다 — 화면 기준 방향과 버튼 상태만 만든다.
+//
+// 손가락 두 개로 스틱 두 개를 정확히 미는 것은 폰에서 무리라, 조준은 자동으로 한다(localInput 의 autoAim).
+// 그래서 이 파일이 만드는 것은 **이동 방향과 버튼 상태**뿐이다.
+//   왼쪽 절반: 이동 스틱 (손가락을 대는 자리에 생긴다)
+//   오른쪽 절반: 누르고 있으면 사격 (큰 사격 버튼도 같은 일을 한다)
+//   오른쪽 가장자리 버튼: 조준 / 구르기 / 재장전 / 교체 · 왼쪽 위: 메뉴
+// 조작 영역은 화면 위 64px 을 비워 둔다(style.css 의 .tzone) — 소리·로비로 버튼 자리다.
+//
+// 루트는 pointer-events: none 이고 조작 요소만 auto 다. 그래야 위에 뜬 창(로비로·다시 하기)이 눌린다.
 
 const DEAD = 0.16
-/** 조준 스틱을 이만큼 밀면 사격 */
-const FIRE_AT = 0.62
 
 /**
  * 터치 조작을 쓸 기기인가. 터치가 달린 노트북까지 잡히지 않도록 '거친 포인터'로 판단한다.
@@ -16,6 +21,15 @@ export function isTouchDevice(): boolean {
   return window.matchMedia?.('(pointer: coarse)').matches ?? navigator.maxTouchPoints > 0
 }
 
+/** 손가락이 영역 밖으로 나가도 계속 따라오게. 잡을 수 없는 포인터면 조용히 넘어간다 */
+function capture(el: HTMLElement, id: number): void {
+  try {
+    el.setPointerCapture(id)
+  } catch {
+    /* 이미 놓았거나 합성 이벤트 */
+  }
+}
+
 interface Stick {
   id: number
   baseX: number
@@ -23,57 +37,53 @@ interface Stick {
   dx: number
   dy: number
   power: number
-  el: HTMLElement
 }
 
 export class TouchControls {
   /** 화면 기준 이동 (-1..1) */
   move = { x: 0, y: 0 }
-  /** 화면 기준 조준 방향 (정규화). 한 번 잡으면 손을 떼도 마지막 방향을 유지한다 */
-  aim: { x: number; y: number } | null = null
-  /** 조준 스틱을 민 정도 (사격 판정) */
-  aimPower = 0
   ads = false
   reload = false
   /** 눌린 순간 한 번만 소비되는 신호 */
   private dashEdge = false
   private swapEdge = false
   private menuEdge = false
+  /** 사격 중인 손가락들 (영역·버튼 공용). 하나라도 있으면 발사 */
+  private fire = new Set<number>()
 
   private root: HTMLElement
+  private stickEl: HTMLElement
   private moveStick: Stick | null = null
-  private aimStick: Stick | null = null
   private detach: (() => void)[] = []
 
   constructor(host: HTMLElement) {
     const el = document.createElement('div')
     el.className = 'touch-ui'
     el.innerHTML = `
-      <div class="tstick move" hidden><i></i></div>
-      <div class="tstick aim" hidden><i></i></div>
+      <div class="tzone move"></div>
+      <div class="tzone fire"><span>누르고 있으면 사격</span></div>
+      <div class="tstick" hidden><i></i></div>
       <div class="tbtns">
-        <button class="tbtn" data-a="ads">조준</button>
-        <button class="tbtn" data-a="dash">구르기</button>
         <button class="tbtn" data-a="reload">재장전</button>
         <button class="tbtn" data-a="swap">교체</button>
+        <button class="tbtn" data-a="ads">조준</button>
+        <button class="tbtn" data-a="dash">구르기</button>
+        <button class="tbtn big" data-a="fire">사격</button>
       </div>
       <button class="tbtn menu" data-a="menu">≡</button>`
     host.appendChild(el)
     this.root = el
+    this.stickEl = el.querySelector('.tstick') as HTMLElement
 
-    const moveEl = el.querySelector('.tstick.move') as HTMLElement
-    const aimEl = el.querySelector('.tstick.aim') as HTMLElement
-
-    const mk = (id: number, x: number, y: number, target: HTMLElement): Stick => {
-      target.hidden = false
-      target.style.left = `${x}px`
-      target.style.top = `${y}px`
-      const knob = target.querySelector('i') as HTMLElement
+    const knob = this.stickEl.querySelector('i') as HTMLElement
+    const R = 54
+    const place = (x: number, y: number) => {
+      this.stickEl.hidden = false
+      this.stickEl.style.left = `${x}px`
+      this.stickEl.style.top = `${y}px`
       knob.style.transform = 'translate(-50%, -50%)'
-      return { id, baseX: x, baseY: y, dx: 0, dy: 0, power: 0, el: target }
     }
-    const moveKnob = (s: Stick, x: number, y: number) => {
-      const R = 54
+    const drag = (s: Stick, x: number, y: number) => {
       let dx = x - s.baseX
       let dy = y - s.baseY
       const d = Math.hypot(dx, dy)
@@ -85,96 +95,96 @@ export class TouchControls {
       s.dx = dx
       s.dy = dy
       s.power = p
-      const knob = s.el.querySelector('i') as HTMLElement
       knob.style.transform = `translate(calc(-50% + ${dx * p * R}px), calc(-50% + ${dy * p * R}px))`
+      this.move = p < DEAD ? { x: 0, y: 0 } : { x: dx * p, y: dy * p }
     }
 
-    const down = (e: PointerEvent) => {
-      if ((e.target as HTMLElement).closest('.tbtn')) return
+    // ---- 이동 영역 ----
+    const moveZone = el.querySelector('.tzone.move') as HTMLElement
+    const moveDown = (e: PointerEvent) => {
+      if (this.moveStick) return
       e.preventDefault()
-      const right = e.clientX > window.innerWidth / 2
-      if (right && !this.aimStick) {
-        this.aimStick = mk(e.pointerId, e.clientX, e.clientY, aimEl)
-      } else if (!right && !this.moveStick) {
-        this.moveStick = mk(e.pointerId, e.clientX, e.clientY, moveEl)
-      }
+      this.moveStick = { id: e.pointerId, baseX: e.clientX, baseY: e.clientY, dx: 0, dy: 0, power: 0 }
+      place(e.clientX, e.clientY)
+      capture(moveZone, e.pointerId)
     }
-    const move = (e: PointerEvent) => {
-      if (this.moveStick && e.pointerId === this.moveStick.id) {
-        moveKnob(this.moveStick, e.clientX, e.clientY)
-        const s = this.moveStick
-        this.move = s.power < DEAD ? { x: 0, y: 0 } : { x: s.dx * s.power, y: s.dy * s.power }
-      }
-      if (this.aimStick && e.pointerId === this.aimStick.id) {
-        moveKnob(this.aimStick, e.clientX, e.clientY)
-        const s = this.aimStick
-        if (s.power >= DEAD) {
-          this.aim = { x: s.dx, y: s.dy }
-          this.aimPower = s.power
-        } else {
-          this.aimPower = 0
-        }
-      }
+    const moveMove = (e: PointerEvent) => {
+      if (this.moveStick?.id === e.pointerId) drag(this.moveStick, e.clientX, e.clientY)
     }
-    const up = (e: PointerEvent) => {
-      if (this.moveStick && e.pointerId === this.moveStick.id) {
-        this.moveStick.el.hidden = true
-        this.moveStick = null
-        this.move = { x: 0, y: 0 }
-      }
-      if (this.aimStick && e.pointerId === this.aimStick.id) {
-        this.aimStick.el.hidden = true
-        this.aimStick = null
-        this.aimPower = 0 // 방향은 유지, 사격만 멈춘다
-      }
+    const moveUp = (e: PointerEvent) => {
+      if (this.moveStick?.id !== e.pointerId) return
+      this.moveStick = null
+      this.move = { x: 0, y: 0 }
+      this.stickEl.hidden = true
     }
-    el.addEventListener('pointerdown', down)
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
-    this.detach.push(() => {
-      el.removeEventListener('pointerdown', down)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-    })
+    this.on(moveZone, 'pointerdown', moveDown)
+    this.on(moveZone, 'pointermove', moveMove)
+    this.on(moveZone, 'pointerup', moveUp)
+    this.on(moveZone, 'pointercancel', moveUp)
 
-    // 버튼: 조준은 토글, 재장전은 누르는 동안, 나머지는 한 번
+    // ---- 사격 영역 ----
+    const fireZone = el.querySelector('.tzone.fire') as HTMLElement
+    const fireDown = (e: PointerEvent) => {
+      e.preventDefault()
+      this.fire.add(e.pointerId)
+      fireZone.classList.add('on')
+      capture(fireZone, e.pointerId)
+    }
+    const fireUp = (e: PointerEvent) => {
+      this.fire.delete(e.pointerId)
+      if (this.fire.size === 0) fireZone.classList.remove('on')
+    }
+    this.on(fireZone, 'pointerdown', fireDown)
+    this.on(fireZone, 'pointerup', fireUp)
+    this.on(fireZone, 'pointercancel', fireUp)
+
+    // ---- 버튼: 조준은 토글, 사격·재장전은 누르는 동안, 나머지는 한 번 ----
     for (const btn of Array.from(el.querySelectorAll<HTMLButtonElement>('.tbtn'))) {
       const act = btn.dataset.a
       const press = (e: PointerEvent) => {
         e.preventDefault()
         e.stopPropagation()
+        capture(btn, e.pointerId)
         if (act === 'ads') {
           this.ads = !this.ads
           btn.classList.toggle('on', this.ads)
         } else if (act === 'reload') {
           this.reload = true
           btn.classList.add('on')
+        } else if (act === 'fire') {
+          this.fire.add(e.pointerId)
+          btn.classList.add('on')
         } else if (act === 'dash') this.dashEdge = true
         else if (act === 'swap') this.swapEdge = true
         else if (act === 'menu') this.menuEdge = true
       }
-      const release = () => {
+      const release = (e: PointerEvent) => {
         if (act === 'reload') {
           this.reload = false
           btn.classList.remove('on')
+        } else if (act === 'fire') {
+          this.fire.delete(e.pointerId)
+          btn.classList.remove('on')
         }
       }
-      btn.addEventListener('pointerdown', press)
-      btn.addEventListener('pointerup', release)
-      btn.addEventListener('pointercancel', release)
-      this.detach.push(() => {
-        btn.removeEventListener('pointerdown', press)
-        btn.removeEventListener('pointerup', release)
-        btn.removeEventListener('pointercancel', release)
-      })
+      this.on(btn, 'pointerdown', press)
+      this.on(btn, 'pointerup', release)
+      this.on(btn, 'pointercancel', release)
     }
   }
 
-  /** 사격 중인가 (조준 스틱을 세게 밀었을 때) */
+  private on<K extends keyof HTMLElementEventMap>(
+    el: HTMLElement,
+    type: K,
+    fn: (e: HTMLElementEventMap[K]) => void,
+  ): void {
+    el.addEventListener(type, fn as EventListener)
+    this.detach.push(() => el.removeEventListener(type, fn as EventListener))
+  }
+
+  /** 사격 중인가 */
   get firing(): boolean {
-    return this.aimPower >= FIRE_AT
+    return this.fire.size > 0
   }
 
   takeDash(): boolean {
@@ -195,12 +205,15 @@ export class TouchControls {
     return v
   }
 
-  /** 캐릭터 선택 창처럼 게임 조작을 멈춰야 할 때 */
+  /** 창(메뉴·결과·캐릭터 선택)이 떠 있는 동안은 조작을 치운다 — 창 버튼이 눌려야 하므로 */
   setVisible(v: boolean): void {
     this.root.hidden = !v
     if (!v) {
       this.move = { x: 0, y: 0 }
-      this.aimPower = 0
+      this.moveStick = null
+      this.stickEl.hidden = true
+      this.fire.clear()
+      this.reload = false
     }
   }
 
@@ -225,3 +238,4 @@ export async function enterLandscape(): Promise<void> {
     /* iOS 등 잠금 미지원 — 세로면 안내 화면이 뜬다 */
   }
 }
+

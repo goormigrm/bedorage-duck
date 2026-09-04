@@ -96,6 +96,8 @@ export interface CharacterRig {
   height: number
   /** 몸통(달걀) 중심 높이 — 구르기 회전축 */
   centerY: number
+  /** 걸음 폭 배율 (다리가 길수록 성큼성큼). 렌더러의 걷기 애니메이션이 쓴다 */
+  stride: number
   /** 피격 플래시용 재질 목록 */
   flashMats: THREE.MeshLambertMaterial[]
   setFlash(k: number): void
@@ -116,19 +118,23 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
   // 가로(마름)·세로(키) 배율. 몸통 그룹에 걸어 두면 구르기 회전에도 같이 따라 돈다
   const wide = L.slim ?? 1
   const tall = L.tall ?? 1
-  const centerY = LEG_H + R * EGG_Y
+  // 위에서 내려다보는 시점이라 세로로 늘리는 것만으로는 키 차이가 잘 안 보인다.
+  // 그래서 키가 큰 쪽은 **다리를 더 길게** 해 몸을 바닥에서 띄운다. 그림자와 벌어지는 거리가 키로 읽힌다.
+  const legStretch = Math.max(0.35, 1 + (tall - 1) * 2.2)
+  const legLen = (LEG_H + R * 0.25) * legStretch
+  const centerY = LEG_H * legStretch + R * EGG_Y
 
   // ---- 다리 (작은 캡슐) + 신발 ----
   const pantsM = track(mat(0x34405a))
   const legR0 = 0.06
-  const legL = capsuleDown(legR0, LEG_H + R * 0.25, pantsM)
-  const legR = capsuleDown(legR0, LEG_H + R * 0.25, pantsM)
-  legL.position.set(-R * 0.36, LEG_H + R * 0.25, 0)
-  legR.position.set(R * 0.36, LEG_H + R * 0.25, 0)
+  const legL = capsuleDown(legR0, legLen, pantsM)
+  const legR = capsuleDown(legR0, legLen, pantsM)
+  legL.position.set(-R * 0.36, legLen, 0)
+  legR.position.set(R * 0.36, legLen, 0)
   body.add(legL, legR)
   const shoeM = track(mat(0x2a2622))
   for (const leg of [legL, legR]) {
-    const shoe = sphere(legR0 * 1.7, shoeM, 0, -(LEG_H + R * 0.25) + legR0 * 0.9, legR0 * 0.9, 14, 10)
+    const shoe = sphere(legR0 * 1.7, shoeM, 0, -legLen + legR0 * 0.9, legR0 * 0.9, 14, 10)
     shoe.scale.set(1, 0.55, 1.5)
     leg.add(shoe)
   }
@@ -181,9 +187,11 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
   arms.add(gun.group)
 
   body.scale.set(wide, tall, wide)
-  const height = (LEG_H + R * EGG_Y * 2 + R * 0.35) * tall
+  const height = (centerY + R * EGG_Y + R * 0.35) * tall
   const rig: CharacterRig = {
-    root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, centerY, flashMats,
+    root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, centerY,
+    stride: Math.max(0.7, Math.min(1.55, legStretch)),
+    flashMats,
     setFlash(k: number) {
       const e = k > 0 ? new THREE.Color(k, k, k) : new THREE.Color(0, 0, 0)
       for (const m of flashMats) m.emissive.copy(e)
