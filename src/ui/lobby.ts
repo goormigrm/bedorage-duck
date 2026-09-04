@@ -9,7 +9,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import {
   CtlMessage, LobbyLink, Member, ROOM_MODE_LABEL, RoomInfo, RoomLink, RoomMode,
-  makeRoomCode, normalizeCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
+  makeRoomCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
 } from '../net/room'
 import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
@@ -60,6 +60,8 @@ export class Lobby {
   private starting = false
   private disposed = false
 
+  /** 초대 링크로 들어왔는데 닉네임이 없어 미뤄 둔 방 코드 */
+  private pendingInvite: string | null = null
   /** 난입 요청 타임아웃 */
   private rejoinTimer = 0
   private onlineTimer = 0
@@ -78,9 +80,9 @@ export class Lobby {
     const code = roomCodeFromUrl()
     if (code) {
       if (this.nick.trim().length === 0) {
-        this.status(`초대 링크로 들어왔습니다. 닉네임을 입력하고 아래 "참가"를 누르세요. (코드 ${code})`, '')
-        const el = this.host.querySelector('#join-code') as HTMLInputElement | null
-        if (el) el.value = code
+        // 닉네임부터 정하고 나면 자동으로 그 방에 들어간다
+        this.pendingInvite = code
+        this.status(`초대 링크로 들어왔습니다 (방 ${code}). 닉네임을 정하면 바로 들어갑니다.`, '')
         ;(this.host.querySelector('#nick') as HTMLInputElement | null)?.focus()
       } else {
         this.join(code)
@@ -111,7 +113,6 @@ export class Lobby {
             <div class="card rooms-card">
               <h2>방 목록 <span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
               <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
-              <div class="row"><input class="code" id="join-code" maxlength="6" placeholder="코드 직접 입력" autocomplete="off" spellcheck="false"><button class="btn secondary" id="btn-join">참가</button></div>
               <p class="hintline dim">게임 중인 방도 자리가 있으면 <b>난입</b>할 수 있습니다.</p>
             </div>
 
@@ -128,23 +129,6 @@ export class Lobby {
                 ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
               </select></div>
               <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
-            </div>
-          </aside>
-
-          <main class="mainpane">
-            <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
-            <div class="chars" id="chars"></div>
-
-            <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명 이상이면 4배</small></div>
-            <div class="maprow">
-              <div>
-                <div class="seg" id="seg-map">
-                  ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
-                </div>
-                <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
-                <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
-              </div>
-              <canvas id="map-preview" class="mappv"></canvas>
             </div>
 
             <div class="card solo-card">
@@ -163,6 +147,23 @@ export class Lobby {
               </select></div>
               <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
             </div>
+          </aside>
+
+          <main class="mainpane">
+            <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명 이상이면 4배</small></div>
+            <div class="maprow">
+              <div>
+                <div class="seg" id="seg-map">
+                  ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+                </div>
+                <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
+                <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
+              </div>
+              <canvas id="map-preview" class="mappv"></canvas>
+            </div>
+
+            <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
+            <div class="chars" id="chars"></div>
 
             <div class="section-t" id="rec-t" hidden>최근 전적 <small>이 브라우저에만 남습니다 · 서버에 올라가지 않습니다</small><button class="lnk" id="rec-clear">전체 지우기</button></div>
             <div class="recs" id="recs" hidden></div>
@@ -242,6 +243,12 @@ export class Lobby {
         /* 무시 */
       }
       this.pushSelf()
+      // 초대 링크로 들어왔다면 이제 들어간다
+      if (this.pendingInvite && this.nick.length > 0) {
+        const code = this.pendingInvite
+        this.pendingInvite = null
+        this.join(code)
+      }
     }
     // 치는 즉시 강조를 풀어 준다 (change 는 포커스를 잃어야 온다)
     nickEl.addEventListener('input', () => applyNick(false))
@@ -249,14 +256,6 @@ export class Lobby {
     ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
-    ;(h.querySelector('#btn-join') as HTMLButtonElement).onclick = () => {
-      const code = normalizeCode((h.querySelector('#join-code') as HTMLInputElement).value)
-      if (code.length < 4) return this.status('코드를 확인해 주세요.', 'bad')
-      this.join(code)
-    }
-    ;(h.querySelector('#join-code') as HTMLInputElement).addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') (h.querySelector('#btn-join') as HTMLButtonElement).click()
-    })
     ;(h.querySelector('#rec-clear') as HTMLButtonElement).onclick = () => {
       clearRecords()
       this.renderRecords()
