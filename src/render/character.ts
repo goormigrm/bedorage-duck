@@ -20,6 +20,8 @@ export interface CharDrawOpts {
   t: number
   /** true 면 정면 고정 (3D 얼굴 텍스처용). facing 무시 */
   frontal?: boolean
+  /** true 면 이목구비만 (피부·귀·머리카락·모자는 3D 메쉬가 맡는다). 둥근 3D 머리 텍스처용 */
+  featuresOnly?: boolean
 }
 
 export function hex(c: number): string {
@@ -170,6 +172,7 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   const fx = cs * R * 0.28
   const fy = hy + sn * R * 0.12 + R * 0.05
   const skin = hex(L.skin)
+  const fo = o.featuresOnly === true
 
   ctx.save()
   ctx.lineJoin = 'round'
@@ -200,15 +203,17 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
       ctx.stroke()
     }
   }
-  if (!jowl) drawEars()
+  if (!jowl && !fo) drawEars()
 
   // 머리(얼굴) 바탕
   ctx.fillStyle = skin
   ctx.lineWidth = 2
   if (L.faceShape === 'jowl') {
-    facePathJowl(ctx, R, hy)
-    ctx.fill()
-    ctx.stroke()
+    if (!fo) {
+      facePathJowl(ctx, R, hy)
+      ctx.fill()
+      ctx.stroke()
+    }
     // 턱살 주름 (양쪽)
     ctx.strokeStyle = shade(L.skin, 0.62)
     ctx.lineWidth = 1.3
@@ -231,8 +236,8 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
     ctx.quadraticCurveTo(fx, fy + R * 1.0, fx + R * 0.22, fy + R * 0.9)
     ctx.stroke()
     ctx.strokeStyle = OUTLINE
-    drawEars()
-  } else {
+    if (!fo) drawEars()
+  } else if (!fo) {
     circle(ctx, 0, hy, R)
     ctx.fill()
     ctx.stroke()
@@ -248,7 +253,7 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   drawBeard(ctx, L, R, fx, fy, hy)
 
   // 머리카락 (모자를 쓰면 옆머리만 보이도록 짧은 머리는 그대로 두고 모자가 덮는다)
-  drawHair(ctx, L, R, hy, cs)
+  if (!fo) drawHair(ctx, L, R, hy, cs)
 
   // 눈썹
   const eyeY = fy - R * 0.12
@@ -371,8 +376,10 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
     ctx.fill()
   }
 
-  // 모자/머리띠
-  if (L.extra === 'cap') {
+  // 모자/머리띠 (이목구비 전용이면 3D 메쉬가 그린다)
+  if (fo) {
+    // 없음
+  } else if (L.extra === 'cap') {
     const band = hex(L.capBand ?? 0xf4f4f0)
     ctx.strokeStyle = OUTLINE
     ctx.lineWidth = 1.5
@@ -435,7 +442,7 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   }
 
   // 피격 플래시
-  if (o.flash > 0) {
+  if (o.flash > 0 && !fo) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(1, o.flash * 8)})`
     circle(ctx, 0, hy, R + 1)
     ctx.fill()
