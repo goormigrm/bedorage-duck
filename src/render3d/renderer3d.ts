@@ -10,6 +10,7 @@ import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex } from '../render/hud'
 import { PITCH, YAW } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
+import { Viewer, Vision, canSee } from './vision'
 import { U, World3D, buildWorld } from './world3d'
 
 export { VIEW_W, VIEW_H }
@@ -73,6 +74,10 @@ export class Renderer3D {
   private scene = new THREE.Scene()
   private camera: THREE.PerspectiveCamera
   private world: World3D
+  private vision: Vision
+  /** 시야 밖(안 보이는) 플레이어 */
+  private hidden: boolean[] = []
+  private lastViewer: Viewer | null = null
   private rigs: CharacterRig[] = []
   private rigChars: string[] = []
   private vis: DuckVis[] = []
@@ -124,6 +129,8 @@ export class Renderer3D {
     this.scene.fog = new THREE.Fog(map.theme.fog, 34, 70)
     this.world = buildWorld(map)
     this.scene.add(this.world.group)
+    this.vision = new Vision(map)
+    this.scene.add(this.vision.group)
     this.resize()
   }
 
@@ -306,6 +313,7 @@ export class Renderer3D {
       if (!a || !b.alive || b.aliveTicks <= 1) pos.push({ x: b.x * U, z: b.y * U })
       else pos.push({ x: (a.x + (b.x - a.x) * alpha) * U, z: (a.y + (b.y - a.y) * alpha) * U })
     }
+    this.updateVision(curr, opts)
     for (let i = 0; i < n; i++) this.updateRig(i, curr.players[i], pos[i], sdt)
     this.updateBullets(prev, curr, alpha)
     this.updateCamera(curr, pos, dt, opts)
@@ -322,6 +330,32 @@ export class Renderer3D {
     this.drawNameTags(curr, pos, opts)
     this.hud.drawVignette()
     this.hud.drawMain(curr, opts)
+  }
+
+  /** 시야: 나(와 아군)가 보는 곳만 밝히고, 그 밖의 적은 숨긴다. 관전(-1)이나 fog:false 면 전부 보인다 */
+  private updateVision(curr: GameState, opts: RenderOptions): void {
+    const lp = opts.localPlayer
+    const fog = (opts.fog ?? true) && lp >= 0
+    this.vision.setVisible(fog)
+    const n = curr.players.length
+    if (this.hidden.length !== n) this.hidden = curr.players.map(() => false)
+    if (!fog) {
+      this.hidden.fill(false)
+      return
+    }
+    const me = curr.players[lp]
+    const viewers: Viewer[] = []
+    for (const p of curr.players) {
+      if (p.team !== me.team || !p.alive || p.left) continue
+      viewers.push({ x: p.x, y: p.y })
+    }
+    if (viewers.length > 0) this.lastViewer = { x: me.alive ? me.x : viewers[0].x, y: me.alive ? me.y : viewers[0].y }
+    else if (this.lastViewer) viewers.push(this.lastViewer) // 죽어 있는 동안은 마지막 자리에서 본다
+    this.vision.update(viewers)
+    for (let i = 0; i < n; i++) {
+      const p = curr.players[i]
+      this.hidden[i] = p.team !== me.team && !canSee(this.map, viewers, p.x, p.y)
+    }
   }
 
   private drawNameTags(curr: GameState, pos: { x: number; z: number }[], opts: RenderOptions): void {
@@ -375,7 +409,7 @@ export class Renderer3D {
     const root = rig.root
     root.position.set(pos.x, 0, pos.z)
 
-    if (p.left) {
+    if (p.left || this.hidden[i]) {
       root.visible = false
       return
     }
@@ -622,6 +656,7 @@ export class Renderer3D {
   }
 
   dispose(): void {
+    this.vision.dispose()
     this.world.dispose()
     this.gl.dispose()
     this.canvas.remove()

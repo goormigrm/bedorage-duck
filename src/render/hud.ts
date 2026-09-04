@@ -23,6 +23,8 @@ export interface RenderOptions {
   /** 화면 좌표 커서 (로컬 플레이어용 조준선) */
   cursor?: { x: number; y: number }
   timeScale?: number
+  /** 시야 제한 (기본 true, 관전이면 무시) */
+  fog?: boolean
 }
 
 export interface ScreenText {
