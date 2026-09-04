@@ -1,82 +1,92 @@
 # 배도라지 덕 (Bedorage Duck)
 
-배도라지 크루를 둥글둥글한 치비 캐릭터로 만든 **2~4인 쿼터뷰 슈터**(개인전 · 2v2 팀전). 서버 없이 WebRTC P2P 로 대전하고, 봇 1~3명과 혼자 할 수도 있다.
-덕코프식 시야 제한(벽 뒤·시야 밖의 적은 안 보임), 대각선 카메라, 인원에 따라 4배까지 넓어지는 맵, 리스폰 중 Tab 캐릭터 교체.
-Three.js 3D · TypeScript · Vite · GitHub Pages. 비공식 팬 프로젝트, 비상업.
+배도라지 크루 12명을 둥글둥글한 캐릭터로 만든 **2~4인 쿼터뷰 슈터**. 설치도 가입도 서버도 없이 브라우저에서 바로 합니다.
+비공식 팬 프로젝트이며 비상업입니다.
 
-- 플레이: https://goormigrm.github.io/bedorage-duck/
-- 프리뷰(트레일러 캡처용, 봇 대 봇): https://goormigrm.github.io/bedorage-duck/preview.html
+**▶ https://goormigrm.github.io/bedorage-duck/**
+
+- 프리뷰(봇 대 봇, 영상 캡처용): https://goormigrm.github.io/bedorage-duck/preview.html
 - 저장소: https://github.com/goormigrm/bedorage-duck
 
-## 다른 PC 에서 시작하기
+<!-- 스크린샷은 릴리스 때 docs/img/ 에 넣고 여기에 건다 -->
 
-필요한 것: **Node.js 20 이상**(24 권장), **git**, 푸시하려면 **GitHub 로그인**(gh CLI 또는 git 자격증명).
+## 이런 게임입니다
+
+- **덕코프식 시야 제한** — 벽 뒤나 멀리 있는 적은 화면에 아예 안 보입니다.
+- **모래주머니 엄폐** — 뒤에 붙으면 내 총알은 넘어가고 상대 총알은 막힙니다. 계속 맞으면 부서집니다.
+- **헤드샷은 조준 실력** — 조준선이 상대 한가운데를 지나야 머리(2배)입니다. 확률이 아닙니다.
+- **구르기 회피** — Space 로 구르는 동안은 무적입니다. 기력을 씁니다.
+- **캐릭터 12명** — 무기 7종(권총·SMG·소총·산탄총·저격총·기관총·**후라이팬**), 각자 다른 패시브.
+- **매 판 새로 생성되는 맵**, 인원이 늘면 최대 4배까지 넓어집니다.
+- 혼자 하기(봇 1~3, 난이도 3단계) · 방 대전(최대 4명, 개인전/2v2 팀전).
+
+## 문서
+
+| 문서 | 내용 |
+|---|---|
+| [docs/플레이-가이드.md](docs/플레이-가이드.md) | **처음 하는 사람에게 그대로 보여 줄 문서** (조작·요령·FAQ) |
+| [docs/DESIGN.md](docs/DESIGN.md) | 설계서 v1.0 — 규칙·수치·구조·네트워크·결정론 규칙 전부 |
+| [HANDOVER.md](HANDOVER.md) | 개발 인수인계 **정본** — 현재 상태, 다음 할 일, 작업 규칙 |
+| [CHANGELOG.md](CHANGELOG.md) | 변경 이력 |
+| [docs/공지글-모음.md](docs/공지글-모음.md) | 커뮤니티에 올릴 공지 문안 |
+| [docs/PREP.md](docs/PREP.md) | 사용자가 직접 해야 하는 준비물·결정 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 엔진 선택 기록 (2026-09-03, 보관용) |
+| [docs/노트북-설정.md](docs/노트북-설정.md) | 두 번째 PC 설정 메모 |
+
+## 조작
+
+`WASD` 이동(화면 기준) · `마우스` 조준 · `좌클릭` 사격(꾹 = 연사) · `우클릭` 정조준(저격총은 조준경) · `Space` 구르기 · `R` 재장전 · `Tab` 캐릭터 교체(리스폰 대기·직후 3초) · `N` 소리 · `Esc` 메뉴
+
+프리뷰: `H` HUD · `C` 카메라 · `M` 맵 · `1/2/3` 봇 난이도 · `R` 재시작 · `L` 레터박스 · `F` 전체화면 · `P` 일시정지
+URL 옵션: `?n=4` 인원 · `?teams=1` 2v2 · `?scale=4` 맵 배율 · `?map=yard` · `?sheet=1` 캐릭터 시트 · `?ff=600` 빨리감기
+
+## 개발
+
+필요한 것: **Node.js 20 이상**(24 권장), **git**. 푸시하려면 GitHub 로그인(`gh auth login`).
 
 ```bash
 git clone https://github.com/goormigrm/bedorage-duck.git
 cd bedorage-duck
 npm install
-npm run dev
+npm run dev     # http://localhost:5173/bedorage-duck/
 ```
 
-- 브라우저에서 http://localhost:5173/bedorage-duck/ (프리뷰는 `/bedorage-duck/preview.html`)
-- 커밋 작성자 설정은 저장소마다 다시 해야 한다:
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dev` | 개발 서버 (HMR) |
+| `npm test` | vitest — 결정론·카메라·성능·밸런스 |
+| `npm run build` | `tsc --noEmit` + vite build → `dist/` |
+| `npx vite-node tools/balance.ts` | 봇 1:1 전 조합 밸런스 계측 (`ffa` 붙이면 4인) |
 
-```bash
-git config user.name goormigrm
-git config user.email 1117tkdrms@gmail.com
-```
+`main` 에 push 하면 GitHub Actions 가 테스트·빌드 후 GitHub Pages 로 배포합니다.
+커밋 작성자는 저장소마다 설정해야 합니다: `git config user.name goormigrm` / `git config user.email 1117tkdrms@gmail.com`
 
-- gh CLI 를 쓰면 로그인 한 번으로 push 가 된다: `gh auth login` → 브라우저 인증.
+### Claude Code 로 이어서 개발하기
 
-## Claude Code 로 이어서 개발하기
+저장소 폴더를 열고 **"HANDOVER.md 읽고 이어서 진행해줘"** 한 줄이면 됩니다. Claude 의 로컬 메모리는 PC 마다 다르므로 HANDOVER.md 가 정본입니다.
 
-새 세션(어느 PC 든)에서 이 저장소 폴더를 열고 아래 한 줄이면 된다:
-
-> **HANDOVER.md 읽고 이어서 진행해줘**
-
-- [HANDOVER.md](HANDOVER.md) — 현재 상태, 확정된 설계 결정, 다음 할 일, 작업 규칙. **정본.**
-- [CHANGELOG.md](CHANGELOG.md) — 커밋 단위 변경 이력.
-- [docs/DESIGN.md](docs/DESIGN.md) — 설계서 (v0.3 요약이 본문보다 우선).
-- [docs/DECISIONS.md](docs/DECISIONS.md) — 엔진 방향 결정 기록 (답변 완료).
-- [docs/PREP.md](docs/PREP.md) — 사용자가 직접 준비할 것 (계정·툴·테스트 환경).
-- [docs/공지글-모음.md](docs/공지글-모음.md) — 출시 시 커뮤니티에 올릴 문안.
-
-Claude 의 로컬 메모리는 PC 마다 따로라서 다른 PC 에서는 비어 있다. HANDOVER.md 가 그 역할을 대신하므로 커밋마다 갱신한다.
-
-## 명령
-
-```bash
-npm run dev      # 개발 서버 (HMR)
-npm test         # vitest — 결정론 테스트
-npm run build    # tsc --noEmit + vite build → dist/
-npm run preview  # dist/ 미리보기
-```
-
-main 에 push 하면 GitHub Actions 가 테스트·빌드 후 GitHub Pages 에 배포한다 (`.github/workflows/deploy.yml`). 상태 확인: `gh run list --repo goormigrm/bedorage-duck --limit 3`.
-
-## 구조
+### 구조
 
 ```
-src/core/      결정론 시뮬레이션 (이동·사격·부위피해·리스폰), 봇 AI, 맵 레지스트리, 무기표  — 렌더/DOM 금지
-src/net/       Trystero 방 목록(로비 방 방송)·게임 방(정원 4, 풀 메시), N인 락스텝 입력 버퍼
-src/render/    2D 얼굴 캐리커처(3D 얼굴 텍스처·로비 초상화), HUD 오버레이
-src/render3d/  Three.js 렌더러, 카메라(55°/45°), 월드, 둥근 치비 캐릭터, 얼굴 텍스처, 시야 마스크
-src/game/      세션 루프(혼자 하기/락스텝 공용), 키보드·마우스 입력, Worker 틱 타이머
-src/ui/        로비 (캐릭터·맵 선택, 혼자 하기, 방 만들기, 방 목록/참가, 준비)
-src/main.ts    본편 진입점 · src/preview.ts 프리뷰 진입점
-tests/         vitest
-docs/          설계·결정·준비물·공지 문서
+src/core/     결정론 시뮬레이션 (sim·bot·map·weapons·characters) — 렌더/DOM 금지
+src/net/      Trystero 로비·방, N인 락스텝
+src/game/     세션 루프, 입력, Worker 틱 타이머
+src/render/   2D 캐리커처, HUD, 미니맵
+src/render3d/ Three.js 렌더러, 카메라, 캐릭터, 시야
+src/audio/    효과음·배경음 (Web Audio 절차 생성)
+src/ui/       로비
+tools/        밸런스 계측
+tests/        vitest
 ```
 
-핵심 규칙: `src/core/` 는 `Math.random`·삼각함수·시간 함수를 쓰지 않는다 (두 브라우저가 같은 입력으로 같은 결과를 내야 한다). 자세한 것은 HANDOVER.md.
+**핵심 규칙**: `src/core/` 에서는 `Math.random`·삼각함수·시간 함수를 쓰지 않습니다. 두 브라우저가 같은 입력으로 같은 결과를 내야 하기 때문입니다. 자세한 것은 [docs/DESIGN.md](docs/DESIGN.md) 10장.
 
-## 조작
+## 만든 것
 
-WASD 이동(화면 기준) · 마우스 조준 · 좌클릭 사격(꾹 누르면 연사) · 우클릭 정조준 · Space 대시 · R 재장전 · Tab 캐릭터 교체(리스폰 대기·직후 3초) · Esc 메뉴.
-프리뷰: H HUD · C 카메라 · M 맵 · 1/2/3 봇 난이도 · R 재시작 · L 레터박스 · F 전체화면 · P 일시정지 · `?n=4` `?teams=1` `?scale=4` `?sheet=1` 캐릭터 시트.
+Three.js · TypeScript · Vite · Trystero(WebRTC) · GitHub Pages. 그래픽·소리는 전부 코드로 생성했고 외부 에셋을 쓰지 않았습니다.
+
+**비용 원칙**: 카드 등록이 필요한 서비스는 무료 티어라도 쓰지 않습니다(TURN 배제). GitHub Pages·Google Fonts·공개 릴레이·무료 STUN·Cloudflare Workers 무료 플랜만 씁니다.
 
 ## 고지
 
-비공식 팬 프로젝트이며 배도라지 크루, Escape from Duckov(Team Soda)와 무관하다. 수익화하지 않는다. 문제가 되면 즉시 내린다.
-운영 비용 원칙: 카드 등록이 필요한 서비스는 무료 티어라도 쓰지 않는다(TURN 배제). GitHub Pages·공개 릴레이·무료 STUN·Cloudflare Workers 무료 플랜만 허용.
+비공식 팬 프로젝트이며 배도라지 크루, Escape from Duckov(Team Soda)와 무관합니다. 수익화하지 않습니다. 실명 대신 패러디 명칭을 씁니다. 문제가 되면 즉시 내립니다.

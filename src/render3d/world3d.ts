@@ -1,6 +1,7 @@
 // 맵 → 3D 월드 (바닥, 벽, 상자, 조명). 단위 1 = 타일 한 칸. sim 좌표 (px) → 월드: x/32, y/32 → (x, 0, z)
 
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { GameMap, TILE, TILE_CRATE, TILE_SANDBAG, TILE_WALL } from '../core/map'
 
 export const WALL_H = 1.8
@@ -14,6 +15,8 @@ export interface World3D {
   sun: THREE.DirectionalLight
   /** 부서진 모래주머니를 화면에서 지운다 */
   breakSandbag(tx: number, ty: number): void
+  /** 남은 내구도 비율(0~1)에 따라 색을 어둡게 — 곧 터진다는 신호 */
+  setSandbagHealth(tx: number, ty: number, k: number): void
   dispose(): void
 }
 
@@ -116,14 +119,10 @@ export function buildWorld(map: GameMap): World3D {
   group.add(walls, crates)
 
   // ---- 모래주머니 (허리 높이 엄폐물) ----
-  const bagM = new THREE.MeshLambertMaterial({ color: 0xbfa46a })
-  const bagTopM = new THREE.MeshLambertMaterial({ color: 0xd6bc84 })
-  const bagGeo = new THREE.BoxGeometry(0.98, SANDBAG_H, 0.98)
-  const bags = new THREE.InstancedMesh(
-    bagGeo,
-    [bagM, bagM, bagTopM, bagM, bagM, bagM],
-    Math.max(1, bagCount),
-  )
+  // 그냥 네모가 아니라 '자루를 쌓아 놓은 더미' 로 보이도록 눌린 구를 두 줄로 합쳐 쓴다
+  const bagM = new THREE.MeshLambertMaterial({ color: 0xdcd3b4 })
+  const bagGeo = sandbagStackGeometry()
+  const bags = new THREE.InstancedMesh(bagGeo, bagM, Math.max(1, bagCount))
   bags.castShadow = true
   bags.receiveShadow = true
   const bagIndex = new Map<number, number>()
@@ -139,6 +138,9 @@ export function buildWorld(map: GameMap): World3D {
   }
   bags.count = bagCount
   bags.instanceMatrix.needsUpdate = true
+  const white = new THREE.Color(1, 1, 1)
+  for (let i = 0; i < Math.max(1, bagCount); i++) bags.setColorAt(i, white)
+  if (bags.instanceColor) bags.instanceColor.needsUpdate = true
   group.add(bags)
 
   // 벽 윗면 테두리 느낌: 벽보다 살짝 큰 어두운 밑단 (바닥 그림자 대용)
@@ -176,6 +178,7 @@ export function buildWorld(map: GameMap): World3D {
   group.add(sun.target)
 
   const hidden = new THREE.Matrix4().makeScale(0, 0, 0)
+  const tint = new THREE.Color()
   return {
     group,
     sun,
@@ -186,6 +189,15 @@ export function buildWorld(map: GameMap): World3D {
       bags.instanceMatrix.needsUpdate = true
       bagIndex.delete(ty * map.w + tx)
     },
+    setSandbagHealth(tx: number, ty: number, k: number) {
+      const id = bagIndex.get(ty * map.w + tx)
+      if (id === undefined) return
+      // 성할 때는 원래 색, 닳을수록 어둡고 붉게
+      const t = Math.max(0, Math.min(1, k))
+      tint.setRGB(0.55 + 0.45 * t, 0.42 + 0.58 * t, 0.36 + 0.64 * t)
+      bags.setColorAt(id, tint)
+      if (bags.instanceColor) bags.instanceColor.needsUpdate = true
+    },
     dispose() {
       floorTex.dispose()
       wallGeo.dispose()
@@ -194,6 +206,28 @@ export function buildWorld(map: GameMap): World3D {
       skirtGeo.dispose()
     },
   }
+}
+
+/** 자루 6개(아래 4 + 위 2)를 쌓은 더미 하나. 타일 1칸 크기 */
+function sandbagStackGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = []
+  const bag = (x: number, y: number, z: number, sx: number, sy: number, sz: number, rot: number) => {
+    const g = new THREE.SphereGeometry(0.5, 9, 7)
+    g.scale(sx, sy, sz)
+    g.rotateY(rot)
+    g.translate(x, y, z)
+    parts.push(g)
+  }
+  const h = SANDBAG_H
+  // 아래 줄 — 네 자루
+  bag(-0.235, h * 0.29, -0.23, 0.54, h * 0.58, 0.48, 0.07)
+  bag(0.235, h * 0.29, -0.23, 0.54, h * 0.58, 0.48, -0.05)
+  bag(-0.235, h * 0.29, 0.24, 0.54, h * 0.58, 0.48, -0.06)
+  bag(0.235, h * 0.29, 0.24, 0.54, h * 0.58, 0.48, 0.05)
+  // 위 줄 — 반 칸 어긋나게 두 자루
+  bag(0, h * 0.78, -0.15, 0.6, h * 0.5, 0.52, 0.1)
+  bag(0, h * 0.78, 0.19, 0.6, h * 0.5, 0.52, -0.09)
+  return mergeGeometries(parts, false) ?? parts[0]
 }
 
 function hex(c: number): string {

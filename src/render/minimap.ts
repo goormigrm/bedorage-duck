@@ -19,7 +19,7 @@ export function renderMapTiles(map: GameMap): HTMLCanvasElement {
       const t = map.tiles[ty * map.w + tx]
       if (t === TILE_FLOOR) continue
       g.fillStyle =
-        t === TILE_WALL ? hex(map.theme.wall) : t === TILE_CRATE ? hex(map.theme.crate) : t === TILE_SANDBAG ? '#c7ad76' : '#888'
+        t === TILE_WALL ? hex(map.theme.wall) : t === TILE_CRATE ? hex(map.theme.crate) : t === TILE_SANDBAG ? '#efe4bd' : '#888'
       g.fillRect(tx, ty, 1, 1)
     }
   }

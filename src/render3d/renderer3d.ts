@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { CHARACTERS } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
-import { GameMap, TILE } from '../core/map'
+import { GameMap, SANDBAG_HP, TILE } from '../core/map'
 import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
@@ -95,6 +95,8 @@ export class Renderer3D {
   /** 스코프(저격 정조준) 중인가 */
   private scoped = false
   private miniCanvas: HTMLCanvasElement | null = null
+  /** 모래주머니 내구도 표시 캐시 (타일 인덱스 → 마지막으로 칠한 비율) */
+  private bagShown = new Map<number, number>()
   private lastViewer: Viewer | null = null
   private rigs: CharacterRig[] = []
   private rigChars: string[] = []
@@ -171,6 +173,7 @@ export class Renderer3D {
     this.scene.background = new THREE.Color(map.theme.outside)
     this.scene.fog = new THREE.Fog(map.theme.fog, 34, 70)
     this.miniCanvas = null
+    this.bagShown.clear()
     this.camInit = false
   }
 
@@ -394,6 +397,7 @@ export class Renderer3D {
       if (!a || !b.alive || b.aliveTicks <= 1) pos.push({ x: b.x * U, z: b.y * U })
       else pos.push({ x: (a.x + (b.x - a.x) * alpha) * U, z: (a.y + (b.y - a.y) * alpha) * U })
     }
+    this.updateSandbags(curr)
     this.updateVision(curr, opts)
     for (let i = 0; i < n; i++) this.updateRig(i, curr.players[i], pos[i], sdt)
     this.updateBullets(prev, curr, alpha)
@@ -414,6 +418,17 @@ export class Renderer3D {
     if (this.scoped && opts.cursor) this.drawScope(opts.cursor)
     this.hud.drawMain(curr, opts)
     if (opts.showHud) this.drawMinimap(curr, opts)
+  }
+
+  /** 모래주머니가 닳으면 색이 어두워진다 (곧 터진다는 신호) */
+  private updateSandbags(curr: GameState): void {
+    for (const key in curr.sandbags) {
+      const i = Number(key)
+      const k = Math.round((curr.sandbags[i] / SANDBAG_HP) * 5) / 5
+      if (this.bagShown.get(i) === k) continue
+      this.bagShown.set(i, k)
+      this.world.setSandbagHealth(i % this.map.w, Math.floor(i / this.map.w), k)
+    }
   }
 
   /** 시야: 나(와 아군)가 보는 곳만 밝히고, 그 밖의 적은 숨긴다. 관전(-1)이나 fog:false 면 전부 보인다 */
