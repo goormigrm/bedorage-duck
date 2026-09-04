@@ -1,14 +1,15 @@
 // 프리뷰(트레일러 캡처용) 페이지: 봇 vs 봇 자동 플레이 + 시네마틱 카메라 + 슬로모션. 3D.
-// URL: ?ff=900 (틱 빨리감기) · ?notitle=1 · ?diff=hard,normal · ?map=yard · ?sheet=1 (캐릭터 시트, &focus=<id>)
+// URL: ?ff=900 (틱 빨리감기) · ?notitle=1 · ?diff=hard,normal · ?map=yard · ?n=4 (인원 2~4) · ?teams=1 (2v2)
+//      ?sheet=1 (캐릭터 시트, &focus=<id>)
 
 import * as THREE from 'three'
 import { Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from './core/bot'
-import { CHARACTERS, CHARACTER_LIST, CharacterId } from './core/characters'
+import { CHARACTER_LIST, CharacterId, displayNames } from './core/characters'
 import { Input } from './core/input'
 import { buildMap } from './core/map'
 import { DEFAULT_MAP, MAP_LIST, isMapId } from './core/maps'
 import { createState, snapshot, step } from './core/sim'
-import { GameState, TICK_MS } from './core/state'
+import { GameState, MAX_PLAYERS, MIN_PLAYERS, TICK_MS } from './core/state'
 import { WEAPONS } from './core/weapons'
 import { VIEW_H, VIEW_W, roundRect } from './render/hud'
 import { buildCharacter } from './render3d/character3d'
@@ -22,7 +23,9 @@ let mapId = mapParam && isMapId(mapParam) ? mapParam : DEFAULT_MAP
 let map = buildMap(mapId)
 let renderer = new Renderer3D(stage, map)
 
-let diff: [Difficulty, Difficulty] = ['hard', 'normal']
+const playerCount = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(q.get('n') ?? 2) || 2))
+const teamMode = q.has('teams') && playerCount === 4
+let diffs: Difficulty[] = ['hard', 'normal', 'normal', 'hard']
 let showHud = true
 let cameraMode: 'follow' | 'both' = 'both'
 let letterbox = false
@@ -38,40 +41,50 @@ let matchCount = 0
 interface Match {
   state: GameState
   prev: GameState
-  bots: [ReturnType<typeof makeBot>, ReturnType<typeof makeBot>]
-  names: [string, string]
-  subs: [string, string]
+  bots: ReturnType<typeof makeBot>[]
+  names: string[]
+  subs: string[]
 }
 
-/** 첫 판은 철면덕 vs 침착덕, 이후는 무작위 두 명 */
-function pickChars(): [CharacterId, CharacterId] {
-  if (matchCount++ === 0) return ['cheolmyeon', 'chim']
-  const a = Math.floor(Math.random() * CHARACTER_LIST.length)
-  let b = Math.floor(Math.random() * (CHARACTER_LIST.length - 1))
-  if (b >= a) b++
-  return [CHARACTER_LIST[a].id, CHARACTER_LIST[b].id]
+/** 첫 판은 철면덕 vs 침착덕(+무작위), 이후는 무작위 */
+function pickChars(): CharacterId[] {
+  const pool = CHARACTER_LIST.map((c) => c.id)
+  const out: CharacterId[] = []
+  if (matchCount++ === 0) out.push('cheolmyeon', 'chim')
+  while (out.length < playerCount) {
+    const rest = pool.filter((id) => !out.includes(id))
+    const pick = rest.length > 0 ? rest : pool
+    out.push(pick[Math.floor(Math.random() * pick.length)])
+  }
+  return out.slice(0, playerCount)
 }
 
 function newMatch(): Match {
   const chars = pickChars()
   const seed = (seedCounter = (seedCounter * 1103515245 + 12345) >>> 0)
-  const state = createState({ seed, targetKills: 5, chars }, map)
+  const teams = teamMode ? chars.map((_, i) => i % 2) : undefined
+  const state = createState({ seed, targetKills: 5, chars, teams }, map)
   return {
     state,
     prev: snapshot(state),
-    bots: [makeBot(seed ^ 0xa5a5), makeBot(seed ^ 0x5a5a)],
-    names: [CHARACTERS[chars[0]].name, CHARACTERS[chars[1]].name],
-    subs: [`AI · ${DIFFICULTY_LABEL[diff[0]]}`, `AI · ${DIFFICULTY_LABEL[diff[1]]}`],
+    bots: chars.map((_, i) => makeBot(seed ^ (0xa5a5 + i * 4099))),
+    names: displayNames(chars),
+    subs: chars.map((_, i) => `AI · ${DIFFICULTY_LABEL[diffs[i]]}`),
   }
 }
 
 let match = newMatch()
 
+function botInputs(m: Match): Input[] {
+  return m.bots.map((b, i) => botInput(m.state, map, i, b, diffs[i]))
+}
+
 {
   const d = q.get('diff')
   if (d) {
-    const [a, b] = d.split(',') as Difficulty[]
-    if (a && b) diff = [a, b]
+    const list = d.split(',') as Difficulty[]
+    if (list.length >= 1) diffs = diffs.map((x, i) => list[i] ?? x)
+    match = newMatch()
   }
   if (q.get('notitle')) titleT = 100
   const ff = Number(q.get('ff') ?? 0)
@@ -79,11 +92,8 @@ let match = newMatch()
     titleT = 100
     for (let i = 0; i < ff; i++) {
       match.prev = snapshot(match.state)
-      step(match.state, map, [
-        botInput(match.state, map, 0, match.bots[0], diff[0]),
-        botInput(match.state, map, 1, match.bots[1], diff[1]),
-      ])
-      if (i >= ff - 3) renderer.onEvents(match.state.events, match.state, -1)
+      step(match.state, map, botInputs(match))
+      if (i >= ff - 3) renderer.onEvents(match.state.events, match.state, -1, match.names)
     }
   }
 }
@@ -127,12 +137,8 @@ function frame(now: number): void {
     let steps = 0
     while (acc >= TICK_MS && steps < 6) {
       match.prev = snapshot(match.state)
-      const inputs: [Input, Input] = [
-        botInput(match.state, map, 0, match.bots[0], diff[0]),
-        botInput(match.state, map, 1, match.bots[1], diff[1]),
-      ]
-      step(match.state, map, inputs)
-      renderer.onEvents(match.state.events, match.state, -1)
+      step(match.state, map, botInputs(match))
+      renderer.onEvents(match.state.events, match.state, -1, match.names)
       for (const e of match.state.events) {
         if (e.type === 'death') slowmoLeft = 0.9
         if (e.type === 'over') restartAt = titleT + 6
@@ -187,7 +193,7 @@ function drawOverlay(): void {
     ctx.fillText('덕', VIEW_W / 2 + 200, VIEW_H / 2 - 40 + rise)
     ctx.font = '500 20px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#b3b8a5'
-    ctx.fillText('1:1 쿼터뷰 슈터  ·  서버 없는 P2P 대전  ·  비공식 팬게임', VIEW_W / 2, VIEW_H / 2 + 52 + rise)
+    ctx.fillText('최대 4인 쿼터뷰 슈터  ·  서버 없는 P2P 대전  ·  비공식 팬게임', VIEW_W / 2, VIEW_H / 2 + 52 + rise)
     ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#ff5a36'
     ctx.fillText('철면덕 · 침착덕 · 단군덕 · 매직덕 · 주펄덕', VIEW_W / 2, VIEW_H / 2 + 84 + rise)
@@ -211,7 +217,7 @@ function drawOverlay(): void {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = 'rgba(245,242,230,0.55)'
-  ctx.fillText(`BEDORAGE DUCK · PREVIEW · ${map.name}`, 18, 30)
+  ctx.fillText(`BEDORAGE DUCK · PREVIEW · ${map.name} · ${playerCount}인${teamMode ? ' 2v2' : ''}`, 18, 30)
   if (timeScale < 1) {
     ctx.fillStyle = 'rgba(20,22,16,0.7)'
     roundRect(ctx, 18, 40, 92, 22, 4)
@@ -226,7 +232,6 @@ function runSheet(): void {
   const focus = q.get('focus')
   const list = focus ? CHARACTER_LIST.filter((c) => c.id === focus) : CHARACTER_LIST
   const scene = renderer.threeScene
-  // 맵 위 빈 공간에 캐릭터를 세우고 카메라를 정면 살짝 위에서
   // 맵 북쪽 바깥(벽 앞)에 세운다. 벽이 배경이 된다.
   const cz = -3.2
   const rigs = list.map((c, i) => {
@@ -310,19 +315,19 @@ window.addEventListener('keydown', (e) => {
       else void document.documentElement.requestFullscreen()
       break
     case '1':
-      diff = ['easy', 'easy']
+      diffs = diffs.map(() => 'easy')
       restart()
       break
     case '2':
-      diff = ['normal', 'normal']
+      diffs = diffs.map(() => 'normal')
       restart()
       break
     case '3':
-      diff = ['hard', 'hard']
+      diffs = diffs.map(() => 'hard')
       restart()
       break
     case '4':
-      diff = ['hard', 'normal']
+      diffs = ['hard', 'normal', 'normal', 'hard']
       restart()
       break
     default:

@@ -1,13 +1,13 @@
 // Three.js 렌더러. sim 상태(prev, curr)를 보간해 그린다. sim 을 절대 바꾸지 않는다.
-// 카메라: 고정 피치 55°, 회전 없음 (덕코프식). HUD 는 2D 캔버스 오버레이.
+// 카메라: 고정 피치 55°, 요(YAW) 고정. HUD 는 2D 캔버스 오버레이. 인원 2~4명.
 
 import * as THREE from 'three'
 import { CHARACTERS } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap } from '../core/map'
-import { GameState, PLAYER_RADIUS, PlayerState, SimEvent } from '../core/state'
+import { GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
-import { Hud, RenderOptions, ScreenText, VIEW_H, VIEW_W, hex } from '../render/hud'
+import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex } from '../render/hud'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
 import { U, World3D, buildWorld } from './world3d'
 
@@ -15,6 +15,8 @@ export { VIEW_W, VIEW_H }
 export type { RenderOptions }
 
 const PITCH = (55 / 180) * Math.PI
+/** 카메라 요(수평 회전). 0 = 맵 축 정렬 */
+export const YAW = 0
 const FOLLOW_DIST = 15.5
 const GUN_H = 0.95
 
@@ -72,9 +74,10 @@ export class Renderer3D {
   private scene = new THREE.Scene()
   private camera: THREE.PerspectiveCamera
   private world: World3D
-  private rigs: [CharacterRig, CharacterRig] | null = null
-  private rigChars: [string, string] = ['', '']
-  private vis: [DuckVis, DuckVis] = [newVis(), newVis()]
+  private rigs: CharacterRig[] = []
+  private rigChars: string[] = []
+  private vis: DuckVis[] = []
+  private aimSmooth: number[] = []
   private bulletPool: THREE.Mesh[] = []
   private particles: Particle[] = []
   private particlePool: THREE.Mesh[] = []
@@ -95,7 +98,6 @@ export class Renderer3D {
   private particleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1)
   private raycaster = new THREE.Raycaster()
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-  private aimSmooth: [number, number] = [0, 0]
 
   constructor(
     readonly container: HTMLElement,
@@ -149,24 +151,27 @@ export class Renderer3D {
   }
 
   private ensureRigs(state: GameState): void {
-    const c0 = state.players[0].char
-    const c1 = state.players[1].char
-    if (this.rigs && this.rigChars[0] === c0 && this.rigChars[1] === c1) return
-    if (this.rigs) for (const r of this.rigs) this.scene.remove(r.root)
-    this.rigs = [buildCharacter(CHARACTERS[c0]), buildCharacter(CHARACTERS[c1])]
-    this.rigChars = [c0, c1]
+    const chars = state.players.map((p) => p.char)
+    let same = chars.length === this.rigChars.length
+    if (same) for (let i = 0; i < chars.length; i++) if (chars[i] !== this.rigChars[i]) same = false
+    if (same) return
+    for (const r of this.rigs) this.scene.remove(r.root)
+    this.rigs = chars.map((c) => buildCharacter(CHARACTERS[c]))
+    this.rigChars = chars
     for (const r of this.rigs) this.scene.add(r.root)
-    this.vis = [newVis(), newVis()]
+    this.vis = chars.map(() => newVis())
+    this.aimSmooth = chars.map(() => 0)
   }
 
   // ---------- 이벤트 → 이펙트 ----------
-  onEvents(events: SimEvent[], state: GameState, localPlayer: number): void {
+  onEvents(events: SimEvent[], state: GameState, localPlayer: number, names?: string[]): void {
     this.ensureRigs(state)
+    const nm = names ?? state.players.map((p) => CHARACTERS[p.char].name)
     for (const e of events) {
       switch (e.type) {
         case 'fire': {
           const w = WEAPONS[e.weapon]
-          const rig = this.rigs![e.p]
+          const rig = this.rigs[e.p]
           const tip = new THREE.Vector3()
           rig.gunTip.getWorldPosition(tip)
           this.spawnFlash(tip, w.pellets > 1 ? 1.6 : 1)
@@ -211,7 +216,7 @@ export class Renderer3D {
             this.spawnParticle(e.x * U, 1.0, e.y * U, Math.cos(a) * sp, 0.12 + Math.random() * 0.1, Math.sin(a) * sp, 1.3, c.bodyColor, 1.2)
           }
           this.spawnRing(e.x * U, e.y * U, 0.3, 2.2, 0.5, 0xffffff)
-          this.hud.showKill(state, e.by, e.p)
+          this.hud.showKill(state, e.by, e.p, nm)
           this.shake = Math.max(this.shake, e.p === localPlayer ? 0.35 : 0.2)
           break
         }
@@ -274,13 +279,15 @@ export class Renderer3D {
     const sdt = dt * ts
     this.updateEffects(sdt)
 
-    const pos: { x: number; z: number }[] = [0, 1].map((i) => {
+    const n = curr.players.length
+    const pos: { x: number; z: number }[] = []
+    for (let i = 0; i < n; i++) {
       const a = prev.players[i]
       const b = curr.players[i]
-      if (!b.alive || b.aliveTicks <= 1) return { x: b.x * U, z: b.y * U }
-      return { x: (a.x + (b.x - a.x) * alpha) * U, z: (a.y + (b.y - a.y) * alpha) * U }
-    })
-    for (let i = 0; i < 2; i++) this.updateRig(i as 0 | 1, curr.players[i], pos[i], sdt)
+      if (!a || !b.alive || b.aliveTicks <= 1) pos.push({ x: b.x * U, z: b.y * U })
+      else pos.push({ x: (a.x + (b.x - a.x) * alpha) * U, z: (a.y + (b.y - a.y) * alpha) * U })
+    }
+    for (let i = 0; i < n; i++) this.updateRig(i, curr.players[i], pos[i], sdt)
     this.updateBullets(prev, curr, alpha)
     this.updateCamera(curr, pos, dt, opts)
 
@@ -300,19 +307,22 @@ export class Renderer3D {
 
   private drawNameTags(curr: GameState, pos: { x: number; z: number }[], opts: RenderOptions): void {
     const ctx = this.hud.ctx
-    for (let i = 0; i < 2; i++) {
+    const teams = isTeamMatch(curr)
+    const lp = opts.localPlayer
+    const myTeam = lp >= 0 ? curr.players[lp].team : -1
+    for (let i = 0; i < curr.players.length; i++) {
       const p = curr.players[i]
-      if (!p.alive) continue
+      if (!p.alive || !this.rigs[i]?.root.visible) continue
       const c = CHARACTERS[p.char]
       const s = this.worldToScreen(pos[i].x, 2.15 + (c.look.headScale - 1) * 0.4, pos[i].z)
-      const name = opts.names[i]
+      const name = opts.names[i] ?? c.name
       ctx.font = '600 12px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'alphabetic'
       ctx.lineWidth = 3
       ctx.strokeStyle = 'rgba(0,0,0,0.6)'
       ctx.strokeText(name, s.x, s.y)
-      ctx.fillStyle = i === opts.localPlayer ? '#ffe680' : '#ffffff'
+      ctx.fillStyle = i === lp ? '#ffe680' : teams ? (p.team === myTeam ? '#9fd6ff' : (TEAM_COLORS[p.team] ?? '#fff')) : '#ffffff'
       ctx.fillText(name, s.x, s.y)
       const hpK = Math.max(0, p.hp / c.maxHp)
       ctx.fillStyle = 'rgba(0,0,0,0.55)'
@@ -322,11 +332,16 @@ export class Renderer3D {
     }
   }
 
-  private updateRig(i: 0 | 1, p: PlayerState, pos: { x: number; z: number }, dt: number): void {
-    const rig = this.rigs![i]
+  private updateRig(i: number, p: PlayerState, pos: { x: number; z: number }, dt: number): void {
+    const rig = this.rigs[i]
     const v = this.vis[i]
     const root = rig.root
     root.position.set(pos.x, 0, pos.z)
+
+    if (p.left) {
+      root.visible = false
+      return
+    }
 
     // 조준 방향 부드럽게
     const target = angleToRad(p.aim)
@@ -482,27 +497,37 @@ export class Renderer3D {
     let tz: number
     let dist = FOLLOW_DIST
     if (opts.cameraMode === 'both' || lp === -1) {
-      const a0 = curr.players[0].alive
-      const a1 = curr.players[1].alive
-      if (a0 && a1) {
-        tx = (pos[0].x + pos[1].x) / 2
-        tz = (pos[0].z + pos[1].z) / 2
-        const d = Math.hypot(pos[0].x - pos[1].x, pos[0].z - pos[1].z)
-        dist = Math.max(11, Math.min(24, 8 + d * 0.95))
-        if (d > 20) {
-          const k = Math.min(1, (d - 20) / 12)
+      // 살아있는 모두가 보이도록
+      let minX = Infinity
+      let maxX = -Infinity
+      let minZ = Infinity
+      let maxZ = -Infinity
+      let count = 0
+      for (let i = 0; i < curr.players.length; i++) {
+        const p = curr.players[i]
+        if (!p.alive || p.left) continue
+        minX = Math.min(minX, pos[i].x)
+        maxX = Math.max(maxX, pos[i].x)
+        minZ = Math.min(minZ, pos[i].z)
+        maxZ = Math.max(maxZ, pos[i].z)
+        count++
+      }
+      if (count === 0) {
+        tx = this.camTarget.x
+        tz = this.camTarget.z
+      } else {
+        tx = (minX + maxX) / 2
+        tz = (minZ + maxZ) / 2
+        const ext = Math.max(maxX - minX, (maxZ - minZ) * 1.5)
+        dist = Math.max(11, Math.min(26, 8 + ext * 0.95))
+        if (count === 1) dist = 12
+        if (curr.players.length === 2 && count === 2 && ext > 20) {
+          // 둘이 아주 멀면 P1 추적
+          const k = Math.min(1, (ext - 20) / 12)
           tx = tx * (1 - k) + pos[0].x * k
           tz = tz * (1 - k) + pos[0].z * k
           dist = 14
         }
-      } else if (a0 || a1) {
-        const p = a0 ? pos[0] : pos[1]
-        tx = p.x
-        tz = p.z
-        dist = 12
-      } else {
-        tx = this.camTarget.x
-        tz = this.camTarget.z
       }
     } else {
       const me = curr.players[lp]
@@ -534,7 +559,8 @@ export class Renderer3D {
     const shz = (Math.random() - 0.5) * this.shake
     const cx = this.camTarget.x + shx
     const cz = this.camTarget.z + shz
-    this.camera.position.set(cx, Math.sin(PITCH) * this.camDist, cz + Math.cos(PITCH) * this.camDist)
+    const flat = Math.cos(PITCH) * this.camDist
+    this.camera.position.set(cx + Math.sin(YAW) * flat, Math.sin(PITCH) * this.camDist, cz + Math.cos(YAW) * flat)
     this.camera.lookAt(cx, 0.6, cz)
     // 그림자 카메라가 시점을 따라오도록
     this.world.sun.position.set(this.camTarget.x + 8, 18, this.camTarget.z + 10)

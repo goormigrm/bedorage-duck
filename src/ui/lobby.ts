@@ -22,6 +22,10 @@ export class Lobby {
   private killsSolo = 5
   private killsRoom = 5
   private difficulty: Difficulty = 'normal'
+  /** 혼자 하기 봇 수 (1~3) */
+  private bots = 1
+  /** 혼자 하기 모드: 개인전 / 2v2 팀전 (봇 3) */
+  private soloMode: 'ffa' | 'teams' = 'ffa'
   private lobbyLink: LobbyLink | null = null
   private link: RoomLink | null = null
   private role: 'host' | 'guest' | null = null
@@ -62,9 +66,14 @@ export class Lobby {
         <div class="modes">
           <div class="mode">
             <h2>혼자 하기 <span class="k">VS AI</span></h2>
-            <p>봇과 대결. 죽으면 3초 뒤 랜덤 리스폰, 목표 킬을 먼저 채우면 승리.</p>
+            <p>봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
             <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
               <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
+            </div></div>
+            <div class="row"><label>봇 수 · 모드</label><div class="seg" id="seg-bots">
+              <button data-v="1" class="on">봇 1</button><button data-v="2">봇 2</button><button data-v="3">봇 3</button>
+            </div><div class="seg" id="seg-solo-mode">
+              <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2</button>
             </div></div>
             <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-solo">
               ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
@@ -117,6 +126,14 @@ export class Lobby {
       this.announce()
     })
     this.seg('#seg-diff', (v) => (this.difficulty = v as Difficulty))
+    this.seg('#seg-bots', (v) => {
+      this.bots = Number(v)
+      if (this.bots !== 3 && this.soloMode === 'teams') this.setSeg('#seg-solo-mode', 'ffa')
+    })
+    this.seg('#seg-solo-mode', (v) => {
+      this.soloMode = v as 'ffa' | 'teams'
+      if (this.soloMode === 'teams') this.setSeg('#seg-bots', '3')
+    })
     this.seg('#seg-kills-solo', (v) => (this.killsSolo = Number(v)))
     this.seg('#seg-kills-room', (v) => {
       this.killsRoom = Number(v)
@@ -153,6 +170,13 @@ export class Lobby {
         cb(b.dataset.v!)
       }
     })
+  }
+
+  /** 세그먼트 값을 코드에서 바꾸고 콜백까지 실행 */
+  private setSeg(sel: string, v: string): void {
+    const el = this.host.querySelector(sel) as HTMLElement | null
+    const b = el?.querySelector(`button[data-v="${v}"]`) as HTMLButtonElement | null
+    b?.click()
   }
 
   private status(text: string, kind: '' | 'ok' | 'bad' = '', html = ''): void {
@@ -215,11 +239,19 @@ export class Lobby {
 
   // ---------- 혼자 하기 ----------
   private startSolo(): void {
-    const others = CHARACTER_LIST.filter((c) => c.id !== this.char)
-    const ai = others[Math.floor(Math.random() * others.length)]
+    // 봇은 나와 다른 캐릭터를 우선, 모자라면 중복 허용
+    const chars: CharacterId[] = [this.char]
+    const pool = CHARACTER_LIST.map((c) => c.id)
+    while (chars.length < 1 + this.bots) {
+      const rest = pool.filter((id) => !chars.includes(id))
+      const pick = rest.length > 0 ? rest : pool
+      chars.push(pick[Math.floor(Math.random() * pick.length)])
+    }
+    const teams = this.soloMode === 'teams' && chars.length === 4 ? [0, 1, 0, 1] : undefined
     this.handlers.onStart({
       mode: 'solo',
-      chars: [this.char, ai.id],
+      chars,
+      teams,
       targetKills: this.killsSolo,
       seed: (Math.random() * 0xffffffff) >>> 0,
       localPlayer: 0,

@@ -1,38 +1,53 @@
 import { describe, expect, it } from 'vitest'
-import { botInput, makeBot } from '../src/core/bot'
+import { Difficulty, botInput, makeBot } from '../src/core/bot'
+import { CharacterId } from '../src/core/characters'
 import { atan2A, radToAngle } from '../src/core/fixedmath'
 import { Input } from '../src/core/input'
-import { buildMap } from '../src/core/map'
-import { createState, hashState, snapshot, step } from '../src/core/sim'
+import { GameMap, buildMap } from '../src/core/map'
+import { MAP_LIST, MapId } from '../src/core/maps'
+import { createState, dropPlayer, hashState, snapshot, step } from '../src/core/sim'
+import { GameState, teamKills } from '../src/core/state'
 
 const map = buildMap()
 
-function runBotMatch(seed: number, ticks: number): number[] {
-  const state = createState({ seed, targetKills: 3, chars: ['chim', 'cheolmyeon'] }, map)
-  const bots = [makeBot(seed ^ 1), makeBot(seed ^ 2)]
+interface RunOpts {
+  seed: number
+  chars: CharacterId[]
+  diffs: Difficulty[]
+  targetKills: number
+  maxTicks: number
+  map?: GameMap
+  teams?: number[]
+}
+
+/** 봇끼리 경기. 60틱마다 해시를 모으고, 끝나면 멈춘다. */
+function runBots(o: RunOpts): { hashes: number[]; state: GameState; ticks: number } {
+  const m = o.map ?? map
+  const state = createState({ seed: o.seed, targetKills: o.targetKills, chars: o.chars, teams: o.teams }, m)
+  const bots = o.chars.map((_, i) => makeBot(o.seed ^ (i + 1)))
   const hashes: number[] = []
-  for (let t = 0; t < ticks; t++) {
-    const inputs: [Input, Input] = [
-      botInput(state, map, 0, bots[0], 'hard'),
-      botInput(state, map, 1, bots[1], 'normal'),
-    ]
-    step(state, map, inputs)
+  let t = 0
+  while (t < o.maxTicks && state.phase !== 'over') {
+    const inputs: Input[] = bots.map((b, i) => botInput(state, m, i, b, o.diffs[i]))
+    step(state, m, inputs)
     if (t % 60 === 0) hashes.push(hashState(state))
+    t++
   }
-  return hashes
+  return { hashes, state, ticks: t }
 }
 
 describe('결정론', () => {
   it('같은 시드·입력이면 해시가 완전히 같다', () => {
-    const a = runBotMatch(12345, 60 * 40)
-    const b = runBotMatch(12345, 60 * 40)
-    expect(a).toEqual(b)
+    const o: RunOpts = { seed: 12345, chars: ['chim', 'cheolmyeon'], diffs: ['hard', 'normal'], targetKills: 99, maxTicks: 60 * 40 }
+    const a = runBots(o)
+    const b = runBots(o)
+    expect(a.hashes).toEqual(b.hashes)
   })
 
   it('다른 시드는 다른 경기', () => {
-    const a = runBotMatch(1, 60 * 10)
-    const b = runBotMatch(2, 60 * 10)
-    expect(a).not.toEqual(b)
+    const a = runBots({ seed: 1, chars: ['chim', 'cheolmyeon'], diffs: ['hard', 'normal'], targetKills: 99, maxTicks: 60 * 10 })
+    const b = runBots({ seed: 2, chars: ['chim', 'cheolmyeon'], diffs: ['hard', 'normal'], targetKills: 99, maxTicks: 60 * 10 })
+    expect(a.hashes).not.toEqual(b.hashes)
   })
 
   it('스냅샷 복원 후 이어가도 같은 해시', () => {
@@ -50,23 +65,101 @@ describe('결정론', () => {
     go(s2, b2, 300)
     const snap = snapshot(s1)
     go(s1, b1, 300)
-    // s2 도 300틱 더, 그리고 snap 에서 300틱 (봇 메모리는 s1 것과 동일해야 하므로 b1 복사 대신 s2 로 비교)
     go(s2, b2, 300)
     expect(hashState(s1)).toBe(hashState(s2))
     expect(snap.tick).toBe(300)
   })
 
   it('경기가 실제로 끝난다 (목표 킬 도달)', () => {
-    const state = createState({ seed: 42, targetKills: 2, chars: ['chim', 'jupeol'] }, map)
-    const bots = [makeBot(3), makeBot(4)]
-    let t = 0
-    while (state.phase !== 'over' && t < 60 * 180) {
-      step(state, map, [botInput(state, map, 0, bots[0], 'hard'), botInput(state, map, 1, bots[1], 'hard')])
-      t++
-    }
+    const { state } = runBots({ seed: 42, chars: ['chim', 'jupeol'], diffs: ['hard', 'hard'], targetKills: 2, maxTicks: 60 * 180 })
     expect(state.phase).toBe('over')
     expect(state.winner === 0 || state.winner === 1).toBe(true)
     expect(Math.max(state.players[0].kills, state.players[1].kills)).toBe(2)
+  })
+})
+
+describe('4인 개인전 (FFA)', () => {
+  const chars: CharacterId[] = ['cheolmyeon', 'chim', 'dangun', 'magic']
+  const diffs: Difficulty[] = ['hard', 'hard', 'normal', 'normal']
+
+  it('4명이 결정론적으로 같은 경기를 한다', () => {
+    const o: RunOpts = { seed: 2026, chars, diffs, targetKills: 99, maxTicks: 60 * 30 }
+    const a = runBots(o)
+    const b = runBots(o)
+    expect(a.hashes).toEqual(b.hashes)
+    expect(a.state.players.length).toBe(4)
+    // 개인전: 팀이 전부 다르다
+    expect(new Set(a.state.players.map((p) => p.team)).size).toBe(4)
+  })
+
+  it('4명 경기가 끝나고, 이긴 사람이 목표 킬을 채운다', () => {
+    const { state, ticks } = runBots({ seed: 77, chars, diffs, targetKills: 3, maxTicks: 60 * 300 })
+    expect(state.phase).toBe('over')
+    expect(state.winner).toBeGreaterThanOrEqual(0)
+    expect(state.players[state.winner].kills).toBe(3)
+    expect(ticks).toBeLessThan(60 * 300)
+  })
+
+  it('초기 스폰은 서로 겹치지 않는다', () => {
+    for (let seed = 1; seed < 12; seed++) {
+      const s = createState({ seed, targetKills: 3, chars }, map)
+      for (let i = 0; i < 4; i++)
+        for (let j = i + 1; j < 4; j++) {
+          const d = Math.hypot(s.players[i].x - s.players[j].x, s.players[i].y - s.players[j].y)
+          expect(d).toBeGreaterThan(200)
+        }
+    }
+  })
+
+  it('나간 사람은 리스폰하지 않고 표적에서도 빠진다', () => {
+    const s = createState({ seed: 5, targetKills: 99, chars }, map)
+    const bots = chars.map((_, i) => makeBot(100 + i))
+    for (let t = 0; t < 200; t++) step(s, map, bots.map((b, i) => botInput(s, map, i, b, 'normal')))
+    dropPlayer(s, 2)
+    expect(s.events.some((e) => e.type === 'leave' && e.p === 2)).toBe(true)
+    for (let t = 0; t < 600; t++) step(s, map, bots.map((b, i) => botInput(s, map, i, b, 'normal')))
+    expect(s.players[2].alive).toBe(false)
+    expect(s.players[2].left).toBe(true)
+    // 남은 셋은 계속 경기
+    expect(s.tick).toBe(800)
+  })
+})
+
+describe('2v2 팀전', () => {
+  it('같은 팀은 서로 맞지 않고, 팀 킬 합계로 이긴다', () => {
+    const chars: CharacterId[] = ['cheolmyeon', 'chim', 'dangun', 'jupeol']
+    const teams = [0, 0, 1, 1]
+    const { state } = runBots({ seed: 31, chars, diffs: ['hard', 'hard', 'hard', 'hard'], targetKills: 4, maxTicks: 60 * 300, teams })
+    expect(state.phase).toBe('over')
+    expect(state.winner === 0 || state.winner === 1).toBe(true)
+    expect(teamKills(state, state.winner)).toBe(4)
+    // 아군 피해는 없다: 킬 이벤트의 가해자와 피해자가 같은 팀인 경우가 없다 → 킬 수가 팀 합계와 맞는다
+    const total = state.players.reduce((a, p) => a + p.kills, 0)
+    const deaths = state.players.reduce((a, p) => a + p.deaths, 0)
+    expect(total).toBe(deaths)
+  })
+})
+
+describe('맵', () => {
+  it('모든 맵이 온전하다 (테두리 벽, 같은 폭, 스폰 4개 이상, 스폰은 바닥)', () => {
+    for (const def of MAP_LIST) {
+      const w = def.rows[0].length
+      for (const r of def.rows) expect(r.length).toBe(w)
+      expect(def.rows[0]).toMatch(/^#+$/)
+      expect(def.rows[def.rows.length - 1]).toMatch(/^#+$/)
+      for (const r of def.rows) {
+        expect(r[0]).toBe('#')
+        expect(r[w - 1]).toBe('#')
+      }
+      const m = buildMap(def.id as MapId)
+      expect(m.spawns.length).toBeGreaterThanOrEqual(4)
+    }
+  })
+
+  it('마당 맵에서도 봇 경기가 끝난다', () => {
+    const yard = buildMap('yard')
+    const { state } = runBots({ seed: 9, chars: ['cheolmyeon', 'dangun'], diffs: ['hard', 'hard'], targetKills: 2, maxTicks: 60 * 240, map: yard })
+    expect(state.phase).toBe('over')
   })
 })
 

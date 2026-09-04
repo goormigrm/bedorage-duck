@@ -1,19 +1,23 @@
 // HUD 오버레이 (2D 캔버스). 3D 씬 위에 투명하게 겹친다. sim 을 바꾸지 않는다.
+// 2명이면 좌우 카드, 3~4명이면 내 카드 + 오른쪽 아래 상대 목록. 팀전은 위 점수판이 A팀 : B팀.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
-import { GameState, PlayerState } from '../core/state'
+import { GameState, PlayerState, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 
 export const VIEW_W = 1280
 export const VIEW_H = 720
 
+export const TEAM_NAMES = ['A팀', 'B팀']
+export const TEAM_COLORS = ['#5aa9ff', '#ff6a5a']
+
 export interface RenderOptions {
   showHud: boolean
   /** -1 이면 관전(시네마틱) */
-  localPlayer: 0 | 1 | -1
+  localPlayer: number
   cameraMode: 'follow' | 'both'
-  names: [string, string]
-  subLabels: [string, string]
+  names: string[]
+  subLabels: string[]
   ping?: number
   message?: string
   /** 화면 좌표 커서 (로컬 플레이어용 조준선) */
@@ -58,10 +62,9 @@ export class Hud {
     this.canvas.height = Math.round(VIEW_H * this.dpr)
   }
 
-  showKill(state: GameState, killer: 0 | 1, victim: 0 | 1): void {
+  showKill(state: GameState, killer: number, victim: number, names: string[]): void {
     const k = CHARACTERS[state.players[killer].char]
-    const v = CHARACTERS[state.players[victim].char]
-    this.banner = { text: `${k.name}  ▶  ${v.name}`, life: 1.6, max: 1.6, color: hex(k.bodyColor) }
+    this.banner = { text: `${names[killer] ?? k.name}  ▶  ${names[victim] ?? CHARACTERS[state.players[victim].char].name}`, life: 1.6, max: 1.6, color: hex(k.bodyColor) }
   }
 
   showOver(): void {
@@ -114,46 +117,21 @@ export class Hud {
 
   private drawPanels(s: GameState, opts: RenderOptions): void {
     const ctx = this.ctx
-    const c0 = CHARACTERS[s.players[0].char]
-    const c1 = CHARACTERS[s.players[1].char]
+    const n = s.players.length
+    const teams = isTeamMatch(s)
 
-    const pw = 420
-    const px = VIEW_W / 2 - pw / 2
-    ctx.fillStyle = 'rgba(20,22,16,0.78)'
-    roundRect(ctx, px, 14, pw, 62, 8)
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-    ctx.lineWidth = 1
-    roundRect(ctx, px + 0.5, 14.5, pw - 1, 61, 8)
-    ctx.stroke()
-    ctx.textBaseline = 'middle'
-    ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillStyle = '#f5f2e6'
-    ctx.fillText(`${s.players[0].kills}`, VIEW_W / 2 - 60, 44)
-    ctx.fillText(`${s.players[1].kills}`, VIEW_W / 2 + 60, 44)
-    ctx.fillStyle = '#7d8471'
-    ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-    ctx.fillText(':', VIEW_W / 2, 43)
-    ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
-    ctx.fillStyle = '#b3b8a5'
-    ctx.fillText(`목표 ${s.targetKills} 킬`, VIEW_W / 2, 66)
-    ctx.font = '600 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
-    ctx.textAlign = 'right'
-    ctx.fillStyle = hex(c0.bodyColor)
-    ctx.fillText(opts.names[0], VIEW_W / 2 - 100, 38)
-    ctx.textAlign = 'left'
-    ctx.fillStyle = hex(c1.bodyColor)
-    ctx.fillText(opts.names[1], VIEW_W / 2 + 100, 38)
-    ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = '#8f957f'
-    ctx.textAlign = 'right'
-    ctx.fillText(opts.subLabels[0], VIEW_W / 2 - 100, 58)
-    ctx.textAlign = 'left'
-    ctx.fillText(opts.subLabels[1], VIEW_W / 2 + 100, 58)
+    if (teams) this.drawTeamScore(s, opts)
+    else this.drawFfaScore(s, opts)
 
-    this.drawPlayerCard(s.players[0], c0, 24, VIEW_H - 24, 'left', opts.localPlayer === 0)
-    this.drawPlayerCard(s.players[1], c1, VIEW_W - 24, VIEW_H - 24, 'right', opts.localPlayer === 1)
+    // 아래 카드
+    const lp = opts.localPlayer
+    if (n === 2) {
+      this.drawPlayerCard(s.players[0], CHARACTERS[s.players[0].char], opts.names[0], 24, VIEW_H - 24, 'left', lp === 0)
+      this.drawPlayerCard(s.players[1], CHARACTERS[s.players[1].char], opts.names[1], VIEW_W - 24, VIEW_H - 24, 'right', lp === 1)
+    } else {
+      if (lp !== -1) this.drawPlayerCard(s.players[lp], CHARACTERS[s.players[lp].char], opts.names[lp], 24, VIEW_H - 24, 'left', true)
+      this.drawOthersList(s, opts)
+    }
 
     if (s.phase === 'countdown') {
       const sec = Math.ceil(s.phaseTimer / 60)
@@ -210,7 +188,150 @@ export class Hud {
     }
   }
 
-  private drawPlayerCard(p: PlayerState, c: CharacterDef, x: number, y: number, side: 'left' | 'right', isLocal: boolean): void {
+  /** 개인전 점수판: 2명은 "0 : 0", 3~4명은 이름·킬 한 줄 */
+  private drawFfaScore(s: GameState, opts: RenderOptions): void {
+    const ctx = this.ctx
+    const n = s.players.length
+    const pw = n === 2 ? 420 : 150 * n + 40
+    const px = VIEW_W / 2 - pw / 2
+    this.panel(px, 14, pw, 62)
+    ctx.textBaseline = 'middle'
+    if (n === 2) {
+      const c0 = CHARACTERS[s.players[0].char]
+      const c1 = CHARACTERS[s.players[1].char]
+      ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillStyle = '#f5f2e6'
+      ctx.fillText(`${s.players[0].kills}`, VIEW_W / 2 - 60, 44)
+      ctx.fillText(`${s.players[1].kills}`, VIEW_W / 2 + 60, 44)
+      ctx.fillStyle = '#7d8471'
+      ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+      ctx.fillText(':', VIEW_W / 2, 43)
+      ctx.font = '600 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillStyle = hex(c0.bodyColor)
+      ctx.fillText(opts.names[0], VIEW_W / 2 - 100, 38)
+      ctx.textAlign = 'left'
+      ctx.fillStyle = hex(c1.bodyColor)
+      ctx.fillText(opts.names[1], VIEW_W / 2 + 100, 38)
+      ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
+      ctx.fillStyle = '#8f957f'
+      ctx.textAlign = 'right'
+      ctx.fillText(opts.subLabels[0], VIEW_W / 2 - 100, 58)
+      ctx.textAlign = 'left'
+      ctx.fillText(opts.subLabels[1], VIEW_W / 2 + 100, 58)
+    } else {
+      const colW = 150
+      for (let i = 0; i < n; i++) {
+        const p = s.players[i]
+        const c = CHARACTERS[p.char]
+        const cx = px + 20 + colW * i + colW / 2
+        ctx.textAlign = 'center'
+        ctx.font = '600 13px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+        ctx.fillStyle = p.left ? '#666' : hex(c.bodyColor)
+        ctx.fillText(opts.names[i] + (i === opts.localPlayer ? ' (나)' : ''), cx, 30)
+        ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+        ctx.fillStyle = p.left ? '#666' : '#f5f2e6'
+        ctx.fillText(p.left ? '나감' : `${p.kills}`, cx, 54)
+        if (i > 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.1)'
+          ctx.fillRect(px + 20 + colW * i, 24, 1, 42)
+        }
+      }
+    }
+    ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
+    ctx.fillStyle = '#b3b8a5'
+    ctx.textAlign = 'center'
+    ctx.fillText(`목표 ${s.targetKills} 킬`, VIEW_W / 2, 66)
+  }
+
+  /** 팀전 점수판: A팀 킬 : B팀 킬 + 팀원 이름 */
+  private drawTeamScore(s: GameState, opts: RenderOptions): void {
+    const ctx = this.ctx
+    const pw = 520
+    const px = VIEW_W / 2 - pw / 2
+    this.panel(px, 14, pw, 62)
+    ctx.textBaseline = 'middle'
+    ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#f5f2e6'
+    ctx.fillText(`${teamKills(s, 0)}`, VIEW_W / 2 - 60, 44)
+    ctx.fillText(`${teamKills(s, 1)}`, VIEW_W / 2 + 60, 44)
+    ctx.fillStyle = '#7d8471'
+    ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+    ctx.fillText(':', VIEW_W / 2, 43)
+    for (const team of [0, 1]) {
+      const side = team === 0 ? -1 : 1
+      const x = VIEW_W / 2 + side * 100
+      ctx.textAlign = team === 0 ? 'right' : 'left'
+      ctx.font = '600 15px "IBM Plex Sans KR", sans-serif'
+      ctx.fillStyle = TEAM_COLORS[team]
+      ctx.fillText(TEAM_NAMES[team], x, 32)
+      const members = s.players.map((p, i) => ({ p, i })).filter((m) => m.p.team === team)
+      ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
+      ctx.fillStyle = '#b3b8a5'
+      ctx.fillText(members.map((m) => `${opts.names[m.i]}${m.i === opts.localPlayer ? '(나)' : ''} ${m.p.kills}`).join(' · '), x, 52)
+    }
+    ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
+    ctx.fillStyle = '#b3b8a5'
+    ctx.textAlign = 'center'
+    ctx.fillText(`목표 ${s.targetKills} 킬`, VIEW_W / 2, 66)
+  }
+
+  private panel(x: number, y: number, w: number, h: number): void {
+    const ctx = this.ctx
+    ctx.fillStyle = 'rgba(20,22,16,0.78)'
+    roundRect(ctx, x, y, w, h, 8)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+    ctx.lineWidth = 1
+    roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 8)
+    ctx.stroke()
+  }
+
+  /** 3~4명: 오른쪽 아래에 나 이외 사람들의 간단 상태 */
+  private drawOthersList(s: GameState, opts: RenderOptions): void {
+    const ctx = this.ctx
+    const teams = isTeamMatch(s)
+    const others = s.players.map((p, i) => ({ p, i })).filter((m) => m.i !== opts.localPlayer)
+    const rowH = 30
+    const w = 280
+    const h = others.length * rowH + 14
+    const x = VIEW_W - 24 - w
+    const y = VIEW_H - 24 - h
+    this.panel(x, y, w, h)
+    others.forEach((m, r) => {
+      const c = CHARACTERS[m.p.char]
+      const ry = y + 8 + r * rowH
+      ctx.fillStyle = m.p.left ? '#555' : hex(c.bodyColor)
+      roundRect(ctx, x + 10, ry + 4, 4, rowH - 10, 2)
+      ctx.fill()
+      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'left'
+      ctx.font = '600 13px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+      ctx.fillStyle = m.p.left ? '#777' : '#f5f2e6'
+      ctx.fillText(opts.names[m.i], x + 22, ry + rowH / 2 - 1)
+      if (teams) {
+        ctx.font = '500 10px "IBM Plex Mono", monospace'
+        ctx.fillStyle = TEAM_COLORS[m.p.team] ?? '#999'
+        ctx.fillText(TEAM_NAMES[m.p.team] ?? '', x + 22 + ctx.measureText(opts.names[m.i]).width + 30, ry + rowH / 2 - 1)
+      }
+      // 체력
+      const hpK = m.p.left ? 0 : Math.max(0, m.p.hp / c.maxHp)
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'
+      roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70, 8, 3)
+      ctx.fill()
+      ctx.fillStyle = !m.p.alive ? '#555' : hpK > 0.5 ? '#6fd66a' : hpK > 0.25 ? '#f2c94c' : '#f25c4c'
+      roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70 * hpK, 8, 3)
+      ctx.fill()
+      ctx.font = '600 12px "IBM Plex Mono", monospace'
+      ctx.textAlign = 'right'
+      ctx.fillStyle = '#b3b8a5'
+      ctx.fillText(m.p.left ? '나감' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`, x + w - 12, ry + rowH / 2 - 1)
+    })
+  }
+
+  private drawPlayerCard(p: PlayerState, c: CharacterDef, name: string, x: number, y: number, side: 'left' | 'right', isLocal: boolean): void {
     const ctx = this.ctx
     const w = WEAPONS[p.weapon]
     const cw = 300
@@ -234,10 +355,10 @@ export class Hud {
     ctx.textAlign = 'left'
     ctx.font = '600 16px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
     ctx.fillStyle = '#f5f2e6'
-    ctx.fillText(c.name, ix, by + 24)
+    ctx.fillText(name, ix, by + 24)
     ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#8f957f'
-    ctx.fillText(`${c.passiveName} · ${c.basedOn}`, ix + ctx.measureText(c.name).width + 60, by + 24)
+    ctx.fillText(`${c.passiveName} · ${c.basedOn}`, ix + ctx.measureText(name).width + 60, by + 24)
     const hpK = Math.max(0, p.hp / c.maxHp)
     ctx.fillStyle = 'rgba(255,255,255,0.1)'
     roundRect(ctx, ix, by + 34, 200, 12, 4)
@@ -247,7 +368,7 @@ export class Hud {
     ctx.fill()
     ctx.font = '600 12px "IBM Plex Mono", monospace'
     ctx.fillStyle = '#f5f2e6'
-    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
+    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : p.left ? '나감' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
     ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#b3b8a5'
     ctx.fillText(w.name, ix, by + 70)
@@ -307,7 +428,9 @@ export class Hud {
     }
     const wi = s.winner
     if (s.phase === 'over' && wi !== -1) {
-      const c = CHARACTERS[s.players[wi].char]
+      const teams = isTeamMatch(s)
+      const title = teams ? `${TEAM_NAMES[wi] ?? '?'} 승리` : `${opts.names[wi] ?? CHARACTERS[s.players[wi].char].name} 승리`
+      const color = teams ? TEAM_COLORS[wi] ?? '#fff' : hex(CHARACTERS[s.players[wi].char].bodyColor)
       const k = Math.min(1, this.overT * 1.5)
       ctx.fillStyle = `rgba(10,12,8,${0.55 * k})`
       ctx.fillRect(0, 0, VIEW_W, VIEW_H)
@@ -321,18 +444,23 @@ export class Hud {
       ctx.textBaseline = 'middle'
       ctx.lineWidth = 10
       ctx.strokeStyle = 'rgba(0,0,0,0.6)'
-      ctx.strokeText(`${c.name} 승리`, 0, 0)
-      ctx.fillStyle = hex(c.bodyColor)
-      ctx.fillText(`${c.name} 승리`, 0, 0)
+      ctx.strokeText(title, 0, 0)
+      ctx.fillStyle = color
+      ctx.fillText(title, 0, 0)
       ctx.restore()
       ctx.globalAlpha = k
       ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
       ctx.fillStyle = '#f5f2e6'
       ctx.textAlign = 'center'
-      ctx.fillText(`${s.players[0].kills}  :  ${s.players[1].kills}`, VIEW_W / 2, VIEW_H / 2 + 44)
+      const score = teams
+        ? `${teamKills(s, 0)}  :  ${teamKills(s, 1)}`
+        : s.players.length === 2
+          ? `${s.players[0].kills}  :  ${s.players[1].kills}`
+          : s.players.map((p, i) => `${opts.names[i]} ${p.kills}`).join('  ·  ')
+      ctx.fillText(score, VIEW_W / 2, VIEW_H / 2 + 44)
       ctx.font = '500 14px "IBM Plex Sans KR", sans-serif'
       ctx.fillStyle = '#b3b8a5'
-      ctx.fillText(`${opts.names[wi]} · 목표 ${s.targetKills}킬 달성`, VIEW_W / 2, VIEW_H / 2 + 84)
+      ctx.fillText(`목표 ${s.targetKills}킬 달성`, VIEW_W / 2, VIEW_H / 2 + 84)
       ctx.globalAlpha = 1
     }
   }

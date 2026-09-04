@@ -1,5 +1,5 @@
 import { CHARACTERS } from './characters'
-import { cosA, sinA, len } from './fixedmath'
+import { atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from './input'
 import { GameMap, isWallAt, rayBlocked } from './map'
 import { circlesOverlap, moveCircle, segmentHitsCircle } from './physics'
@@ -10,11 +10,15 @@ import {
   DASH_SPEED,
   DASH_TICKS,
   GameState,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
   MatchConfig,
   PLAYER_RADIUS,
   PlayerState,
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
+  isEnemy,
+  teamKills,
 } from './state'
 import { PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, partThresholds } from './weapons'
 
@@ -22,35 +26,46 @@ const MAX_RECOIL_MUL = 3
 
 export function createState(cfg: MatchConfig, map: GameMap): GameState {
   const rng = makeRng(cfg.seed)
+  const n = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, cfg.chars.length))
+  const players: PlayerState[] = []
+  for (let i = 0; i < n; i++) players.push(makePlayer(i, cfg.chars[i], cfg.teams?.[i] ?? i))
   const state: GameState = {
     tick: 0,
     rng,
     phase: 'countdown',
     phaseTimer: COUNTDOWN_TICKS,
     targetKills: cfg.targetKills,
-    players: [makePlayer(0, cfg.chars[0]), makePlayer(1, cfg.chars[1])],
+    players,
     bullets: [],
     nextBulletId: 1,
     winner: -1,
     events: [],
   }
-  // 초기 스폰: 서로 가장 먼 두 지점
-  const a = randInt(rng, 0, map.spawns.length)
-  placeAt(state.players[0], map.spawns[a])
-  const b = farthestSpawn(map, state.players[0].x, state.players[0].y, rng)
-  placeAt(state.players[1], b)
+  // 초기 스폰: 첫 사람은 무작위, 다음 사람은 이미 놓인 모두에게서 가장 먼 곳
+  const used: { x: number; y: number }[] = []
+  const first = map.spawns[randInt(rng, 0, map.spawns.length)]
+  placeAt(players[0], first)
+  used.push(first)
+  for (let i = 1; i < n; i++) {
+    const s = farthestSpawn(map, used, rng, 1)
+    placeAt(players[i], s)
+    used.push(s)
+  }
+  // 처음엔 맵 중앙을 바라본다
+  for (const p of players) p.aim = atan2A(map.ph / 2 - p.y, map.pw / 2 - p.x)
   return state
 }
 
-function makePlayer(id: 0 | 1, char: PlayerState['char']): PlayerState {
+function makePlayer(id: number, char: PlayerState['char'], team: number): PlayerState {
   const c = CHARACTERS[char]
   const w = WEAPONS[c.weapon]
   return {
     id,
+    team,
     char,
     x: 0,
     y: 0,
-    aim: id === 0 ? 0 : 512,
+    aim: 0,
     hp: c.maxHp,
     alive: true,
     respawnTimer: 0,
@@ -72,6 +87,7 @@ function makePlayer(id: 0 | 1, char: PlayerState['char']): PlayerState {
     invuln: SPAWN_PROTECT_TICKS,
     moving: false,
     aliveTicks: 0,
+    left: false,
   }
 }
 
@@ -80,20 +96,28 @@ function placeAt(p: PlayerState, s: { x: number; y: number }): void {
   p.y = s.y
 }
 
-/** 기준점에서 먼 스폰 상위 3개 중 무작위 */
+/**
+ * 기준점들(적·이미 배치된 사람)로부터의 최소 거리가 가장 먼 스폰 상위 topN 개 중 무작위.
+ * 기준점이 없으면 아무 스폰이나.
+ */
 function farthestSpawn(
   map: GameMap,
-  fx: number,
-  fy: number,
+  from: { x: number; y: number }[],
   rng: GameState['rng'],
+  topN: number,
 ): { x: number; y: number } {
-  const scored = map.spawns.map((s, i) => ({ s, i, d: len(s.x - fx, s.y - fy) }))
+  if (from.length === 0) return map.spawns[randInt(rng, 0, map.spawns.length)]
+  const scored = map.spawns.map((s, i) => {
+    let d = Infinity
+    for (const f of from) d = Math.min(d, len(s.x - f.x, s.y - f.y))
+    return { s, i, d }
+  })
   scored.sort((a, b) => b.d - a.d || a.i - b.i)
-  const top = scored.slice(0, Math.min(3, scored.length))
+  const top = scored.slice(0, Math.min(topN, scored.length))
   return top[randInt(rng, 0, top.length)].s
 }
 
-export function step(state: GameState, map: GameMap, inputs: [Input, Input]): void {
+export function step(state: GameState, map: GameMap, inputs: Input[]): void {
   const ev = state.events
   ev.length = 0
 
@@ -105,8 +129,8 @@ export function step(state: GameState, map: GameMap, inputs: [Input, Input]): vo
     }
   }
 
-  for (let i = 0; i < 2; i++) {
-    stepPlayer(state, map, state.players[i], state.players[1 - i], inputs[i])
+  for (let i = 0; i < state.players.length; i++) {
+    stepPlayer(state, map, state.players[i], inputs[i])
   }
 
   stepBullets(state, map)
@@ -114,21 +138,28 @@ export function step(state: GameState, map: GameMap, inputs: [Input, Input]): vo
   state.tick++
 }
 
-function stepPlayer(
-  state: GameState,
-  map: GameMap,
-  p: PlayerState,
-  enemy: PlayerState,
-  input: Input,
-): void {
+/** 경기 도중 나간 사람 처리 (호스트가 정한 틱에 모두가 같이 호출해야 결정론이 유지된다) */
+export function dropPlayer(state: GameState, idx: number): void {
+  const p = state.players[idx]
+  if (!p || p.left) return
+  p.left = true
+  p.alive = false
+  p.hp = 0
+  p.respawnTimer = 0
+  state.events.push({ type: 'leave', p: idx })
+}
+
+function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input | undefined): void {
   const c = CHARACTERS[p.char]
   const w = WEAPONS[p.weapon]
   p.moving = false
+  if (p.left) return
+  if (!input) input = { mx: 0, my: 0, aim: p.aim, buttons: 0 }
 
   if (!p.alive) {
     if (state.phase !== 'over') {
       p.respawnTimer--
-      if (p.respawnTimer <= 0) respawn(state, map, p, enemy)
+      if (p.respawnTimer <= 0) respawn(state, map, p)
     }
     return
   }
@@ -268,20 +299,21 @@ function stepBullets(state: GameState, map: GameMap): void {
     let dead = false
 
     if (rayBlocked(map, b.px, b.py, b.x, b.y)) {
-      const aim = b.owner === 0 ? state.players[0].aim : state.players[1].aim
+      const aim = state.players[b.owner].aim
       state.events.push({ type: 'wall', x: b.x, y: b.y, aim })
       dead = true
     }
 
     if (!dead) {
-      const victim = state.players[1 - b.owner]
-      if (
-        victim.alive &&
-        victim.invuln === 0 &&
-        segmentHitsCircle(b.px, b.py, b.x, b.y, victim.x, victim.y, PLAYER_RADIUS)
-      ) {
-        applyHit(state, b, victim)
-        dead = true
+      const shooter = state.players[b.owner]
+      // 적 중 이 선분에 처음(인덱스 순) 걸리는 사람. 탄 길이가 짧아 둘이 동시에 걸리는 일은 드물다.
+      for (const victim of state.players) {
+        if (!isEnemy(shooter, victim) || !victim.alive || victim.left || victim.invuln > 0) continue
+        if (segmentHitsCircle(b.px, b.py, b.x, b.y, victim.x, victim.y, PLAYER_RADIUS)) {
+          applyHit(state, b, victim)
+          dead = true
+          break
+        }
       }
     }
 
@@ -311,27 +343,29 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState): void {
     victim.deaths++
     shooter.kills++
     state.events.push({ type: 'death', p: victim.id, by: b.owner, x: victim.x, y: victim.y })
-    if (shooter.kills >= state.targetKills && state.phase === 'playing') {
+    if (teamKills(state, shooter.team) >= state.targetKills && state.phase === 'playing') {
       state.phase = 'over'
-      state.winner = b.owner
-      state.events.push({ type: 'over', winner: b.owner })
+      state.winner = shooter.team
+      state.events.push({ type: 'over', winner: shooter.team })
     }
   }
 }
 
-function respawn(state: GameState, map: GameMap, p: PlayerState, enemy: PlayerState): void {
+function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   const c = CHARACTERS[p.char]
   const w = WEAPONS[p.weapon]
-  const spot = enemy.alive
-    ? farthestSpawn(map, enemy.x, enemy.y, state.rng)
-    : map.spawns[randInt(state.rng, 0, map.spawns.length)]
-  // 상대와 겹치면 다른 곳
-  if (enemy.alive && circlesOverlap(spot.x, spot.y, PLAYER_RADIUS, enemy.x, enemy.y, PLAYER_RADIUS)) {
-    const alt = farthestSpawn(map, spot.x, spot.y, state.rng)
-    placeAt(p, alt)
-  } else {
-    placeAt(p, spot)
+  // 살아있는 적 모두에게서 먼 곳 (상위 3곳 중 무작위)
+  const enemies: { x: number; y: number }[] = []
+  for (const e of state.players) if (isEnemy(p, e) && e.alive && !e.left) enemies.push(e)
+  let spot = farthestSpawn(map, enemies, state.rng, 3)
+  // 누군가와 겹치면 다른 곳
+  for (const e of state.players) {
+    if (e.id !== p.id && e.alive && circlesOverlap(spot.x, spot.y, PLAYER_RADIUS, e.x, e.y, PLAYER_RADIUS)) {
+      spot = farthestSpawn(map, [spot, ...enemies], state.rng, 1)
+      break
+    }
   }
+  placeAt(p, spot)
   p.hp = c.maxHp
   p.alive = true
   p.ammo = w.magSize

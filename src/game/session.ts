@@ -1,25 +1,28 @@
-// 게임 세션: 혼자 하기(봇) 와 1:1 대전(락스텝) 을 같은 루프로 돌린다. 렌더는 Three.js.
+// 게임 세션: 혼자 하기(봇) 와 대전(락스텝) 을 같은 루프로 돌린다. 렌더는 Three.js. 인원 2~4명.
 
-import { Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../core/bot'
-import { CHARACTERS, CharacterId } from '../core/characters'
+import { BotMemory, Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../core/bot'
+import { CHARACTERS, CharacterId, displayNames } from '../core/characters'
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId } from '../core/maps'
 import { createState, hashState, snapshot, step } from '../core/sim'
-import { GameState, TICK_MS } from '../core/state'
+import { GameState, TICK_MS, isTeamMatch } from '../core/state'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
-import { VIEW_H, VIEW_W } from '../render/hud'
+import { TEAM_NAMES, VIEW_H, VIEW_W } from '../render/hud'
 import { Renderer3D } from '../render3d/renderer3d'
 import { LocalInput } from './localInput'
 import { Ticker } from './ticker'
 
 export interface SessionConfig {
   mode: 'solo' | 'p2p'
-  chars: [CharacterId, CharacterId]
+  /** 인원 = 길이. 인덱스가 플레이어 번호 */
+  chars: CharacterId[]
+  /** 팀 배정 (없으면 개인전) */
+  teams?: number[]
   targetKills: number
   seed: number
-  localPlayer: 0 | 1
+  localPlayer: number
   mapId?: MapId
   difficulty?: Difficulty
   link?: RoomLink
@@ -33,7 +36,7 @@ export class Session {
   private prev: GameState
   private renderer: Renderer3D
   private input = new LocalInput()
-  private bot = makeBot(1)
+  private bots: BotMemory[] = []
   private lockstep: Lockstep | null = null
   private acc = 0
   private last = performance.now()
@@ -46,7 +49,7 @@ export class Session {
   private message = ''
   private disposed = false
   private hashes = new Map<number, number>()
-  private names: [string, string]
+  private names: string[]
   private ticker: Ticker
   private lastTick = performance.now()
 
@@ -55,9 +58,9 @@ export class Session {
     private cfg: SessionConfig,
   ) {
     this.map = buildMap(cfg.mapId ?? DEFAULT_MAP)
-    this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars }, this.map)
+    this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars, teams: cfg.teams }, this.map)
     this.prev = snapshot(this.state)
-    this.bot = makeBot(cfg.seed ^ 0x9e37)
+    this.makeBots(cfg.seed)
 
     host.innerHTML = `
       <div class="game-root">
@@ -79,9 +82,7 @@ export class Session {
     this.input.attach(this.stage)
     ;(host.querySelector('#btn-lobby') as HTMLButtonElement).onclick = () => this.exit()
 
-    const c0 = CHARACTERS[cfg.chars[0]]
-    const c1 = CHARACTERS[cfg.chars[1]]
-    this.names = [c0.name, c1.name]
+    this.names = displayNames(cfg.chars)
 
     if (cfg.mode === 'p2p' && cfg.link) {
       this.lockstep = new Lockstep(cfg.link, cfg.delay ?? 3)
@@ -99,7 +100,11 @@ export class Session {
     this.ticker = new Ticker(() => this.tick())
     this.ticker.start()
     this.raf = requestAnimationFrame(this.frame)
-    ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase }
+    ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase, state: () => this.state }
+  }
+
+  private makeBots(seed: number): void {
+    this.bots = this.cfg.chars.map((_, i) => makeBot((seed ^ 0x9e37) + i * 7919))
   }
 
   private fit = (): void => {
@@ -168,7 +173,7 @@ export class Session {
         this.state.events = []
         while (this.state.tick < target && this.lockstep.hasBoth(this.state.tick)) {
           const [l, r] = this.lockstep.get(this.state.tick)
-          step(this.state, this.map, [r, l])
+          step(this.state, this.map, this.cfg.localPlayer === 0 ? [l, r] : [r, l])
         }
         this.prev = snapshot(this.state)
         this.message = '동기화됨'
@@ -188,9 +193,9 @@ export class Session {
   }
 
   private restart(seed: number): void {
-    this.state = createState({ seed, targetKills: this.cfg.targetKills, chars: this.cfg.chars }, this.map)
+    this.state = createState({ seed, targetKills: this.cfg.targetKills, chars: this.cfg.chars, teams: this.cfg.teams }, this.map)
     this.prev = snapshot(this.state)
-    this.bot = makeBot(seed ^ 0x9e37)
+    this.makeBots(seed)
     this.hashes.clear()
     this.acc = 0
     this.paused = false
@@ -207,12 +212,13 @@ export class Session {
     if (this.paused || this.state.phase === 'over') return
     const lp = this.cfg.localPlayer
     const me = this.state.players[lp]
+    const n = this.state.players.length
     this.acc += dt * 1000
     let steps = 0
     while (this.acc >= TICK_MS && steps < 8) {
       const t = this.state.tick
       const localIn = this.input.sample(this.renderer, me.x, me.y)
-      let inputs: [Input, Input]
+      const inputs: Input[] = new Array(n)
       if (this.lockstep) {
         this.lockstep.pushLocal(t, localIn)
         if (!this.lockstep.hasBoth(t)) {
@@ -221,14 +227,16 @@ export class Session {
         }
         this.stallSince = -1
         const [l, r] = this.lockstep.get(t)
-        inputs = lp === 0 ? [l, r] : [r, l]
+        inputs[lp] = l
+        inputs[1 - lp] = r
       } else {
-        const botIn = botInput(this.state, this.map, lp === 0 ? 1 : 0, this.bot, this.cfg.difficulty ?? 'normal')
-        inputs = lp === 0 ? [localIn, botIn] : [botIn, localIn]
+        for (let i = 0; i < n; i++) {
+          inputs[i] = i === lp ? localIn : botInput(this.state, this.map, i, this.bots[i], this.cfg.difficulty ?? 'normal')
+        }
       }
       this.prev = snapshot(this.state)
       step(this.state, this.map, inputs)
-      this.renderer.onEvents(this.state.events, this.state, lp)
+      this.renderer.onEvents(this.state.events, this.state, lp, this.names)
       if (this.lockstep && this.state.tick % 60 === 0) {
         const h = hashState(this.state)
         this.hashes.set(this.state.tick, h)
@@ -251,7 +259,7 @@ export class Session {
     let message = this.message
     if (this.lockstep && this.stallSince >= 0 && now - this.stallSince > 400) message = '상대 입력 대기 중…'
     const alpha = Math.min(1, this.acc / TICK_MS)
-    const sub: [string, string] = [this.subLabel(0), this.subLabel(1)]
+    const sub = this.cfg.chars.map((_, i) => this.subLabel(i))
     this.renderer.draw(this.prev, this.state, alpha, dt, {
       showHud: true,
       localPlayer: lp,
@@ -265,7 +273,7 @@ export class Session {
     this.raf = requestAnimationFrame(this.frame)
   }
 
-  private subLabel(i: 0 | 1): string {
+  private subLabel(i: number): string {
     const c = CHARACTERS[this.cfg.chars[i]]
     if (i === this.cfg.localPlayer) return `나 · ${c.basedOn}`
     if (this.cfg.mode === 'solo') return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
@@ -274,9 +282,15 @@ export class Session {
 
   private onOver(): void {
     const w = this.state.winner
-    const iWon = w === this.cfg.localPlayer
+    const lp = this.cfg.localPlayer
+    const iWon = this.state.players[lp].team === w
     const title = iWon ? '승리!' : '패배'
-    const desc = `${this.names[0]} ${this.state.players[0].kills} : ${this.state.players[1].kills} ${this.names[1]}`
+    const teams = isTeamMatch(this.state)
+    const desc = teams
+      ? `${TEAM_NAMES[w] ?? '?'} 승리 · ` + this.state.players.map((p, i) => `${this.names[i]} ${p.kills}`).join(' · ')
+      : this.state.players.length === 2
+        ? `${this.names[0]} ${this.state.players[0].kills} : ${this.state.players[1].kills} ${this.names[1]}`
+        : this.state.players.map((p, i) => `${this.names[i]} ${p.kills}`).join(' · ')
     setTimeout(() => {
       if (this.disposed) return
       if (this.cfg.mode === 'solo') {

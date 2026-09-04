@@ -10,11 +10,17 @@ export const SPAWN_PROTECT_TICKS = 90
 export const COUNTDOWN_TICKS = 180
 export const DASH_TICKS = 10
 export const DASH_SPEED = 9
+/** 한 경기 최대 인원 (방 정원) */
+export const MAX_PLAYERS = 4
+export const MIN_PLAYERS = 2
 
 export type Phase = 'countdown' | 'playing' | 'over'
 
 export interface PlayerState {
-  id: 0 | 1
+  /** 플레이어 인덱스 0..MAX_PLAYERS-1 */
+  id: number
+  /** 팀 번호. 개인전(FFA)에서는 자기 인덱스와 같다 → 모두가 서로 적. 팀전에서는 0/1 */
+  team: number
   char: CharacterId
   x: number
   y: number
@@ -42,11 +48,13 @@ export interface PlayerState {
   moving: boolean
   /** 스폰 이후 살아있는 틱 수 (렌더용) */
   aliveTicks: number
+  /** 경기 도중 나간 사람. 더 이상 리스폰하지 않고 표적에서도 제외 */
+  left: boolean
 }
 
 export interface Bullet {
   id: number
-  owner: 0 | 1
+  owner: number
   x: number
   y: number
   px: number
@@ -62,20 +70,24 @@ export interface Bullet {
 }
 
 export type SimEvent =
-  | { type: 'fire'; p: 0 | 1; x: number; y: number; aim: number; weapon: WeaponId }
-  | { type: 'hit'; p: 0 | 1; by: 0 | 1; x: number; y: number; part: number; dmg: number }
-  | { type: 'death'; p: 0 | 1; by: 0 | 1; x: number; y: number }
-  | { type: 'respawn'; p: 0 | 1; x: number; y: number }
-  | { type: 'dash'; p: 0 | 1 }
-  | { type: 'reload'; p: 0 | 1 }
+  | { type: 'fire'; p: number; x: number; y: number; aim: number; weapon: WeaponId }
+  | { type: 'hit'; p: number; by: number; x: number; y: number; part: number; dmg: number }
+  | { type: 'death'; p: number; by: number; x: number; y: number }
+  | { type: 'respawn'; p: number; x: number; y: number }
+  | { type: 'dash'; p: number }
+  | { type: 'reload'; p: number }
   | { type: 'wall'; x: number; y: number; aim: number }
+  | { type: 'leave'; p: number }
   | { type: 'start' }
-  | { type: 'over'; winner: 0 | 1 }
+  | { type: 'over'; winner: number }
 
 export interface MatchConfig {
   seed: number
   targetKills: number
-  chars: [CharacterId, CharacterId]
+  /** 인원 수 = 길이 (2..MAX_PLAYERS) */
+  chars: CharacterId[]
+  /** 팀 배정. 생략하면 개인전(각자 자기 인덱스가 팀) */
+  teams?: number[]
 }
 /** 맵은 GameState 밖(정적)이라 MatchConfig 에 넣지 않고 세션 설정으로 따로 전달한다 */
 
@@ -85,10 +97,33 @@ export interface GameState {
   phase: Phase
   phaseTimer: number
   targetKills: number
-  players: [PlayerState, PlayerState]
+  players: PlayerState[]
   bullets: Bullet[]
   nextBulletId: number
-  winner: -1 | 0 | 1
+  /** 이긴 팀 (개인전이면 플레이어 인덱스). -1 = 아직 */
+  winner: number
   /** 이번 step 에서 발생한 이벤트. 해시/스냅샷 대상 아님. */
   events: SimEvent[]
+}
+
+/** 팀 킬 합계 */
+export function teamKills(state: GameState, team: number): number {
+  let k = 0
+  for (const p of state.players) if (p.team === team) k += p.kills
+  return k
+}
+
+/** 팀전인가 (같은 팀이 둘 이상) */
+export function isTeamMatch(state: GameState): boolean {
+  const seen = new Set<number>()
+  for (const p of state.players) {
+    if (seen.has(p.team)) return true
+    seen.add(p.team)
+  }
+  return false
+}
+
+/** 서로 적인가 */
+export function isEnemy(a: PlayerState, b: PlayerState): boolean {
+  return a.id !== b.id && a.team !== b.team
 }

@@ -139,3 +139,15 @@ export const CHARACTER_LIST: CharacterDef[] = Object.values(CHARACTERS).sort(
 )
 
 export const PROTAGONIST: CharacterDef = CHARACTERS.cheolmyeon
+
+/** 같은 캐릭터가 여럿이면 "철면덕 2" 처럼 번호를 붙인 표시 이름 */
+export function displayNames(chars: CharacterId[]): string[] {
+  const count = new Map<CharacterId, number>()
+  for (const c of chars) count.set(c, (count.get(c) ?? 0) + 1)
+  const seen = new Map<CharacterId, number>()
+  return chars.map((c) => {
+    const n = (seen.get(c) ?? 0) + 1
+    seen.set(c, n)
+    return (count.get(c) ?? 1) > 1 ? `${CHARACTERS[c].name} ${n}` : CHARACTERS[c].name
+  })
+}

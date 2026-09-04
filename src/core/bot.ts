@@ -1,11 +1,12 @@
 // 봇 AI. 매 틱 Input 을 생성한다. sim 과 같은 결정론 규칙을 따른다.
 // (Math.random 금지 → 전용 Rng, 삼각함수 → fixedmath)
+// 여러 명이 있으면 보이는 적 중 가장 가까운 사람을 표적으로 삼고, 안 보이면 마지막으로 본 곳을 뒤진다.
 
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from './input'
 import { GameMap, TILE, isWall, rayBlocked } from './map'
 import { Rng, makeRng, rand, randInt, randSigned } from './rng'
-import { GameState, PlayerState } from './state'
+import { GameState, PlayerState, isEnemy } from './state'
 import { WEAPONS, WeaponId } from './weapons'
 
 export type Difficulty = 'easy' | 'normal' | 'hard'
@@ -50,6 +51,8 @@ export interface BotMemory {
   wobbleBias: number
   wobbleTimer: number
   reaction: number
+  /** 현재 표적 플레이어 인덱스 (-1 없음) */
+  target: number
   lastSeenTick: number
   lastSeenX: number
   lastSeenY: number
@@ -67,7 +70,6 @@ export interface BotMemory {
   stuckX: number
   stuckY: number
   stuckTicks: number
-  lastEnemyHp: number
   lastMyHp: number
 }
 
@@ -78,6 +80,7 @@ export function makeBot(seed: number): BotMemory {
     wobbleBias: 0,
     wobbleTimer: 0,
     reaction: 999,
+    target: -1,
     lastSeenTick: -10000,
     lastSeenX: 0,
     lastSeenY: 0,
@@ -95,21 +98,48 @@ export function makeBot(seed: number): BotMemory {
     stuckX: 0,
     stuckY: 0,
     stuckTicks: 0,
-    lastEnemyHp: 0,
     lastMyHp: 0,
   }
+}
+
+/**
+ * 표적 고르기. 보이는 적이 있으면 그중 가장 가까운 사람, 없으면 가장 가까운 산 적.
+ * 지금 표적은 조금 우대해서 표적이 너무 자주 바뀌지 않게 한다.
+ */
+function pickTarget(state: GameState, map: GameMap, me: PlayerState, mem: BotMemory): PlayerState | null {
+  let best: PlayerState | null = null
+  let bestScore = Infinity
+  for (const e of state.players) {
+    if (!isEnemy(me, e) || !e.alive || e.left) continue
+    const d = len(e.x - me.x, e.y - me.y)
+    const vis = !rayBlocked(map, me.x, me.y, e.x, e.y)
+    let score = vis ? d : d + 600
+    if (e.id === mem.target) score -= 150
+    if (score < bestScore) {
+      bestScore = score
+      best = e
+    }
+  }
+  if (best && best.id !== mem.target) {
+    mem.target = best.id
+    mem.prevEnemyX = best.x
+    mem.prevEnemyY = best.y
+    mem.lastSeenTick = -10000
+    mem.path = []
+  }
+  if (!best) mem.target = -1
+  return best
 }
 
 export function botInput(
   state: GameState,
   map: GameMap,
-  meIdx: 0 | 1,
+  meIdx: number,
   mem: BotMemory,
   diff: Difficulty,
 ): Input {
   const d = DIFFS[diff]
   const me = state.players[meIdx]
-  const enemy = state.players[1 - meIdx]
   const w = WEAPONS[me.weapon]
   const out: Input = { mx: 0, my: 0, aim: mem.aim, buttons: 0 }
   if (!me.alive) {
@@ -117,17 +147,26 @@ export function botInput(
     return out
   }
 
-  const enemyVx = enemy.x - mem.prevEnemyX
-  const enemyVy = enemy.y - mem.prevEnemyY
-  mem.prevEnemyX = enemy.x
-  mem.prevEnemyY = enemy.y
+  const enemy = state.phase === 'playing' ? pickTarget(state, map, me, mem) : null
 
-  const dx = enemy.x - me.x
-  const dy = enemy.y - me.y
-  const dist = len(dx, dy)
-  const los = enemy.alive && state.phase === 'playing' && !rayBlocked(map, me.x, me.y, enemy.x, enemy.y)
+  let dist = 0
+  let dx = 0
+  let dy = 0
+  let enemyVx = 0
+  let enemyVy = 0
+  let los = false
+  if (enemy) {
+    enemyVx = enemy.x - mem.prevEnemyX
+    enemyVy = enemy.y - mem.prevEnemyY
+    mem.prevEnemyX = enemy.x
+    mem.prevEnemyY = enemy.y
+    dx = enemy.x - me.x
+    dy = enemy.y - me.y
+    dist = len(dx, dy)
+    los = !rayBlocked(map, me.x, me.y, enemy.x, enemy.y)
+  }
 
-  if (los) {
+  if (los && enemy) {
     mem.lastSeenTick = state.tick
     mem.lastSeenX = enemy.x
     mem.lastSeenY = enemy.y
@@ -144,13 +183,13 @@ export function botInput(
   mem.wobbleTimer--
 
   let desired = mem.aim
-  if (los) {
+  if (los && enemy) {
     // 리드샷: 탄속 기준 예상 도달 시간 만큼 앞을 겨냥
     const t = (dist / w.speed) * d.lead
     const tx = enemy.x + enemyVx * t - me.x
     const ty = enemy.y + enemyVy * t - me.y
     desired = atan2A(ty, tx)
-  } else if (state.tick - mem.lastSeenTick < 240 && enemy.alive) {
+  } else if (enemy && state.tick - mem.lastSeenTick < 240) {
     desired = atan2A(mem.lastSeenY - me.y, mem.lastSeenX - me.x)
   } else if (me.moving || mem.path.length > 0) {
     // 이동 방향을 바라봄
@@ -169,7 +208,7 @@ export function botInput(
   const canSee = los && mem.reaction === 0
   const onTarget = Math.abs(angleDiff(mem.aim, desired)) < deg(6) + Math.max(0, deg(10) - dist / 40)
   const inRange = dist < range * 1.9
-  if (canSee && onTarget && inRange && enemy.invuln === 0) {
+  if (enemy && canSee && onTarget && inRange && enemy.invuln === 0) {
     if (rand(mem.rng) < d.fireChance) {
       // 반자동 무기는 눌렀다 떼야 하므로 격틱 발사
       if (w.auto || state.tick % 2 === 0) out.buttons |= BTN_FIRE
@@ -182,20 +221,20 @@ export function botInput(
   let goalX = -1
   let goalY = -1
   let mode: 'fight' | 'hunt' | 'wander' = 'wander'
-  if (los && enemy.alive) {
+  if (enemy && los) {
     mode = 'fight'
-  } else if (enemy.alive && state.tick - mem.lastSeenTick < 360) {
+  } else if (enemy && state.tick - mem.lastSeenTick < 360) {
     mode = 'hunt'
     goalX = mem.lastSeenX
     goalY = mem.lastSeenY
-  } else if (enemy.alive && diff === 'hard') {
+  } else if (enemy && diff === 'hard') {
     // 어려움: 상대 위치를 어렴풋이 안다 (레이더)
     mode = 'hunt'
     goalX = enemy.x
     goalY = enemy.y
   }
 
-  if (mode === 'fight') {
+  if (mode === 'fight' && enemy) {
     if (mem.strafeTimer <= 0) {
       mem.strafeDir = rand(mem.rng) < 0.5 ? -1 : 1
       mem.strafeTimer = randInt(mem.rng, 30, 80)
@@ -269,7 +308,6 @@ export function botInput(
   mem.stuckX = me.x
   mem.stuckY = me.y
   mem.lastMyHp = me.hp
-  mem.lastEnemyHp = enemy.hp
   return out
 }
 
