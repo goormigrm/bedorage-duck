@@ -1,6 +1,6 @@
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, BTN_SWAP, Input } from './input'
 import { COVER_DIST, GameMap, SANDBAG_HP, TILE, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
 import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
 import { makeRng, rand, randInt } from './rng'
@@ -25,6 +25,9 @@ import {
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
   STAMINA_MAX,
+  SPRINT_COST,
+  SPRINT_MIN,
+  SPRINT_MUL,
   STAMINA_REGEN,
   SWAP_GRACE_TICKS,
   isEnemy,
@@ -114,6 +117,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     legInjury: 0,
     invuln: SPAWN_PROTECT_TICKS,
     moving: false,
+    sprinting: false,
     aliveTicks: 0,
     left: false,
     choosing: false,
@@ -294,7 +298,19 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   // 근접 무기는 기력이 방어에도 쓰이므로 빨리 찬다. 단 막는 중에는 차지 않는다 —
   // 그래야 계속 쏘면 방어가 결국 뚫린다 (막고 버티기만 하면 무적이 되던 문제)
   if (p.blockLock > 0) p.blockLock--
-  if (p.dashTimer === 0 && p.blockLock === 0 && p.stamina < STAMINA_MAX) {
+  // 달리기(Shift): 움직이는 동안에만, 기력이 남아 있을 때만. 정조준·구르기 중에는 달리지 않는다.
+  // 회복보다 **먼저** 계산해야 달리는 동안 기력이 차지 않는다.
+  // 달리던 중이면 0 까지 쓰고, 새로 시작하려면 SPRINT_MIN 만큼은 차 있어야 한다
+  p.sprinting =
+    playing &&
+    (input.mx !== 0 || input.my !== 0) &&
+    p.dashTimer === 0 &&
+    p.stamina >= (p.sprinting ? Number.MIN_VALUE : SPRINT_MIN) &&
+    p.stamina > 0 &&
+    (input.buttons & BTN_SPRINT) !== 0 &&
+    (input.buttons & BTN_ADS) === 0
+  if (p.sprinting) p.stamina = Math.max(0, p.stamina - SPRINT_COST)
+  if (p.dashTimer === 0 && p.blockLock === 0 && !p.sprinting && p.stamina < STAMINA_MAX) {
     p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * (w.melee ? 2.4 : 1))
   }
   if (p.invuln > 0) p.invuln--
@@ -330,6 +346,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   } else if (mx !== 0 || my !== 0) {
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     let speed = c.speed * w.moveMul
+    if (p.sprinting) speed *= SPRINT_MUL
     if (p.ads && c.id !== 'oknyang') speed *= 0.6 // 옥냥덕 패시브: 정조준해도 느려지지 않음
     if (p.legInjury > 0) speed *= 0.7
     const r = moveCircle(map, p.x, p.y, PLAYER_RADIUS, mx * inv * speed, my * inv * speed)
@@ -637,6 +654,7 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   p.streak = 0
   p.stamina = STAMINA_MAX
   p.blockLock = 0
+  p.sprinting = false
   state.events.push({ type: 'respawn', p: p.id, x: p.x, y: p.y })
 }
 

@@ -4,10 +4,10 @@
 
 import { CHARACTERS } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from './input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, Input } from './input'
 import { GameMap, TILE, isWall, rayBlocked } from './map'
 import { Rng, makeRng, rand, randInt, randSigned } from './rng'
-import { GameState, PlayerState, isEnemy } from './state'
+import { GameState, PlayerState, STAMINA_MAX, isEnemy } from './state'
 import { WEAPONS, WeaponId } from './weapons'
 
 export type Difficulty = 'easy' | 'normal' | 'hard'
@@ -327,6 +327,17 @@ export function botInput(
       mem.wanderY = goalY
     }
     followPath(state, map, me, mem, d, goalX, goalY, out)
+  }
+
+  // 달리기: 멀리 갈 때만. 기력이 절반 넘게 남았을 때만 써서 **구르기 몫을 남긴다** —
+  // 다 써 버리면 회피를 못 해 봇이 눈에 띄게 약해진다.
+  if (
+    (out.mx !== 0 || out.my !== 0) &&
+    me.stamina > STAMINA_MAX * 0.75 &&
+    (out.buttons & (BTN_ADS | BTN_DASH)) === 0 &&
+    mode !== 'fight'
+  ) {
+    out.buttons |= BTN_SPRINT
   }
 
   // 끼임 감지

@@ -15,6 +15,19 @@ export const STAMINA_MAX = 100
 /** 틱당 회복 (약 4.5초에 가득) */
 export const STAMINA_REGEN = 22 / 60
 export const DASH_COST = 34
+/**
+ * 달리기(Shift): 누르고 있는 동안 이동 속도 배율과 틱당 기력 소모.
+ * 한 통(100)으로 약 3.3초 달린다. 구르기 세 번보다 조금 못한 값이라,
+ * "달릴까 굴러 둘까" 를 계속 고르게 된다. 달리는 동안에는 기력이 차지 않는다.
+ */
+export const SPRINT_MUL = 1.4
+export const SPRINT_COST = 30 / 60
+/**
+ * 다시 달리기 시작하려면 기력이 이만큼은 차 있어야 한다(약 0.9초).
+ * 이게 없으면 기력 0 에서 **한 틱 회복 → 한 틱 달리기**가 반복돼 사실상 무한히 달린다
+ * (회복 22/60 이 소모 30/60 과 비슷해서 그렇다). 달리던 중에는 0 까지 쓴다.
+ */
+export const SPRINT_MIN = 20
 /** 후라이팬 방어: 피해 1 을 막는 데 드는 기력 (기력 한 통 = 피해 181) */
 export const BLOCK_COST = 0.55
 /** 막은 뒤 기력이 다시 차기까지 (계속 맞으면 방어가 뚫리도록) */
@@ -70,6 +83,8 @@ export interface PlayerState {
   invuln: number
   /** 이번 틱 이동 여부 (렌더 걷기 애니메이션용) */
   moving: boolean
+  /** 이번 틱 달리는 중 (Shift). 기력을 쓰고, 그동안 기력이 차지 않는다 */
+  sprinting: boolean
   /** 스폰 이후 살아있는 틱 수 (렌더용) */
   aliveTicks: number
   /** 경기 도중 나간 사람. 더 이상 리스폰하지 않고 표적에서도 제외 */

@@ -1,7 +1,7 @@
 // 키보드·마우스 → Input. 화면 좌표는 1280x720 논리 프레임.
 
 import { ANGLE_MASK, angleDiff, radToAngle } from '../core/fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from '../core/input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, BTN_SWAP, Input } from '../core/input'
 import { GameMap } from '../core/map'
 import { GameState, isTeamMatch } from '../core/state'
 import { WEAPONS } from '../core/weapons'
@@ -167,7 +167,11 @@ export class LocalInput {
     let buttons = 0
     if (this.mouseDown.has(0) || t?.firing) buttons |= BTN_FIRE
     if (this.mouseDown.has(2) || t?.ads) buttons |= BTN_ADS
-    if (k.has(' ') || k.has('shift') || t?.takeDash()) buttons |= BTN_DASH
+    // Shift 는 달리기다. 구르기는 Space (전에는 Shift 도 구르기였다)
+    if (k.has(' ') || t?.takeDash()) buttons |= BTN_DASH
+    // 폰에는 Shift 가 없으니 **스틱을 끝까지 밀면** 달린다
+    const stick = t ? Math.hypot(t.move.x, t.move.y) : 0
+    if (k.has('shift') || stick > 0.88) buttons |= BTN_SPRINT
     if (k.has('r') || t?.reload) buttons |= BTN_RELOAD
     if (this.swapPressed || t?.takeSwap()) {
       buttons |= BTN_SWAP

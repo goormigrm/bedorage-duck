@@ -2,7 +2,7 @@
 // sim 을 바꾸지 않는다: SimEvent 를 받아 소리만 낸다. 나중에 public/sfx/ 에 파일이 생기면 여기서 교체하면 된다.
 // 브라우저 자동재생 정책: 첫 클릭/키 입력 전에는 소리가 나지 않는다 (그 전 이벤트는 버린다).
 
-import { GameState, SimEvent } from '../core/state'
+import { GameState, SPRINT_MUL, SimEvent } from '../core/state'
 import { CHARACTERS } from '../core/characters'
 import { PART_HEAD, WEAPONS, WeaponId } from '../core/weapons'
 import { worldDirToScreen } from '../render3d/camera'
@@ -158,6 +158,7 @@ export class Sfx {
       const c = CHARACTERS[p.char]
       const w = WEAPONS[p.weapon]
       let speed = c.speed * w.moveMul
+      if (p.sprinting) speed *= SPRINT_MUL // 달리면 발소리도 빨라진다
       if (p.ads) speed *= 0.6
       if (p.legInjury > 0) speed *= 0.7
       this.stepPhase[i] += dt * (speed * 0.78)

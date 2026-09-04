@@ -6,6 +6,8 @@ export const BTN_RELOAD = 1 << 2
 export const BTN_DASH = 1 << 3
 /** 캐릭터 교체 요청 (죽어서 대기 중이거나 리스폰 3초 안일 때만 유효) */
 export const BTN_SWAP = 1 << 4
+/** 달리기 (Shift). 누르고 있는 동안 기력을 쓰며 빨라진다 */
+export const BTN_SPRINT = 1 << 5
 
 export interface Input {
   /** -1, 0, 1 */

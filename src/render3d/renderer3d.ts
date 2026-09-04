@@ -825,7 +825,7 @@ export class Renderer3D {
     rig.setFlash(v.flash > 0 ? Math.min(1, v.flash * 8) : 0)
 
     // 걷기: 다리 스윙 + 달걀 몸 뒤뚱(좌우 기울기) + 통통 튀기
-    if (p.moving) v.walk += dt * 13
+    if (p.moving) v.walk += dt * (p.sprinting ? 17 : 13) // 달리면 다리도 빨리 움직인다
     else v.walk *= 0.8
     // 다리가 길수록 크게 젓는다 — 위에서 봐도 걸음이 눈에 띄도록
     const swing = (p.moving ? Math.sin(v.walk) * 0.55 : Math.sin(v.walk) * 0.2) * rig.stride
