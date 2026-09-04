@@ -146,8 +146,30 @@ export type CtlMessage =
   | { t: 'drop'; p: number; tick: number }
   /** 팀 신호: 같은 편에게 "여기" 를 찍는다. sim 밖(렌더 전용)이라 결정론과 무관하다 */
   | { t: 'mark'; p: number; x: number; y: number }
+  /** 끊겼던 사람이 방에 다시 들어와 자기 자리를 찾는다 (게스트 → 호스트) */
+  | { t: 'rejoinAsk'; key: string }
+  /** 호스트 → 모두: 플레이어 p 가 tick 부터 다시 참여한다 */
+  | { t: 'rejoinAt'; p: number; tick: number }
+  /** 호스트 → 돌아온 사람에게만: 그 시점의 판 전체 (이걸로 이어서 시작한다) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | { t: 'resume'; p: number; tick: number; state: any; cfg: any }
+  /** 호스트 → 돌아온 사람: 자리가 없다 */
+  | { t: 'rejoinNo'; why: string }
   | { t: 'rematch'; seed: number }
   | { t: 'leave' }
+
+/** 재접속한 사람이 세션을 다시 만들 때 필요한 설정 (맵·인원·닉네임 등) */
+export interface ResumeCfg {
+  chars: string[]
+  teams?: number[]
+  names: string[]
+  targetKills: number
+  seed: number
+  map: string
+  scale: number
+  delay: number
+  peerIds: string[]
+}
 
 export interface RoomLink {
   code: string

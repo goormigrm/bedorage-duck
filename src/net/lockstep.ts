@@ -20,10 +20,13 @@ export class Lockstep {
     /** 피어 id → 플레이어 인덱스 */
     private peerIndex: Map<string, number>,
     count: number,
+    /** 시작 틱. 재접속으로 경기 도중에 합류하면 0 이 아니다 */
+    private startTick = 0,
   ) {
     for (let i = 0; i < count; i++) {
       const m = new Map<number, Input>()
-      for (let t = 0; t < delay; t++) m.set(t, cloneInput(EMPTY_INPUT))
+      // 처음 delay 틱은 아직 아무도 입력을 못 보냈으므로 빈 입력으로 채운다
+      for (let t = startTick; t < startTick + delay; t++) m.set(t, cloneInput(EMPTY_INPUT))
       this.inputs.push(m)
       this.dropped.push(false)
     }
@@ -40,7 +43,7 @@ export class Lockstep {
 
   private send(latest: number): void {
     const mine = this.inputs[this.me]
-    const count = Math.min(REDUNDANCY, latest + 1)
+    const count = Math.min(REDUNDANCY, latest - this.startTick + 1)
     const buf = new ArrayBuffer(5 + count * INPUT_BYTES)
     const v = new DataView(buf)
     v.setUint32(0, latest)
@@ -86,6 +89,17 @@ export class Lockstep {
   /** 이탈: 이후 그 사람 입력은 기다리지 않는다 */
   drop(idx: number): void {
     if (idx >= 0 && idx < this.dropped.length) this.dropped[idx] = true
+  }
+
+  /**
+   * 재접속: fromTick 부터 그 사람 입력을 다시 기다린다.
+   * fromTick 이전은 빈 입력으로 메워, 이미 지나간 틱에서 멈추지 않게 한다.
+   */
+  rejoin(idx: number, fromTick: number): void {
+    if (idx < 0 || idx >= this.dropped.length) return
+    this.dropped[idx] = false
+    const m = this.inputs[idx]
+    for (let t = Math.max(0, fromTick - 600); t < fromTick; t++) if (!m.has(t)) m.set(t, cloneInput(EMPTY_INPUT))
   }
 
   isDropped(idx: number): boolean {

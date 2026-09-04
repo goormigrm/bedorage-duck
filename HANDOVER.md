@@ -30,7 +30,7 @@ npm run dev        # http://localhost:5173/bedorage-duck/
 
 ```bash
 npm run dev                        # 개발 서버
-npm test                           # vitest 69개
+npm test                           # vitest 74개
 npx vite-node tools/melee.ts       # 후라이팬 정면 대치 (봇 표가 못 잡는 부분)
 npm run build                      # tsc --noEmit + vite build → dist/
 npx vite-node tools/balance.ts     # 밸런스 계측 (ffa 붙이면 4인)
@@ -39,7 +39,7 @@ npx vite-node tools/balance.ts     # 밸런스 계측 (ffa 붙이면 4인)
 PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크린샷을 뜨려면 `?shot=1`.
 
-## 현재 상태 (2026-09-06 · v1.2)
+## 현재 상태 (2026-09-06 · v1.3)
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
@@ -53,7 +53,7 @@ PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크�
 | 3D 렌더 | ✅ | 피치 55°·요 45°, 부드러운 시야, **저격 조준경(커서 + 내 주변 두 구멍)**, 미니맵, 구르기·걷기·사망 연출 |
 | HUD | ✅ | 상대 정보 숨김(피격 2.5초만), 머리 위 체력 + 오른쪽 세로 기력, **피격 방향 호**, 관전 안내 |
 | 소리 | ✅ | 절차 생성 효과음(발소리·재장전 포함) + 132BPM 추격 배경음. **패닝이 화면 기준**이라 헤드폰에서 보이는 방향과 일치, 멀면 고음 감쇠. `N`/버튼 음소거 |
-| 네트워크 | ✅ 탭 3개 검증 | 정원 4, 호스트 방송이 정본, N인 락스텝, 드롭 틱 합의, 리싱크(모래주머니 포함) |
+| 네트워크 | ✅ 탭 3개 검증 | 정원 4, 호스트 방송이 정본, N인 락스텝, 드롭 틱 합의, 리싱크(모래주머니 포함), **끊겨도 45초 안에 재접속** |
 | 로비 | ✅ | 닉네임 필수, 봇 1~3·개인전/2v2, 목표 킬 5~50, 맵 미리보기, 방 목록 n/4 |
 | 밸런스 | ✅ 계측 기반 | 봇 1:1 440판 승률 **41.3~58.8%** (11명. 승빠덕은 표에서 제외 — `skipBotBalance`). 후라이팬은 `tools/melee.ts` 로 따로 본다 |
 | 성능 | ✅ | 4인·4배맵·봇4 틱당 0.023~0.033ms (60Hz 예산 16.6ms) |
@@ -83,9 +83,10 @@ PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크�
     승빠덕은 아예 표에서 뺀다(`skipBotBalance`) — 넣으면 자기 승률도 상대 승률도 왜곡된다. 후라이팬은 `tools/melee.ts` 로 본다.
 15. **맵은 갇히는 곳도, 뺑 도는 곳도 없어야 한다.** `ensureConnected`(갇힘) → `openShortcuts`(국소 우회) → `straightenPaths`(먼 구간) 순서로 손본다. 우회도(걷는 거리 / 직선 거리)는 평균 1.1, 최악 1.5 아래를 기준으로 본다.
 16. **통계는 sim 안에서 센다.** 렌더 계층에서 이벤트를 세면 리싱크·재접속에 값이 어긋난다. 명중률은 탄 단위(`shots += pellets`).
-17. **관전·팀 신호는 sim 밖.** 관전은 `RenderOptions.viewer`(카메라·시야만), 팀 신호는 컨트롤 메시지다. 둘 다 `Input` 에 넣지 않는다 — 넣으면 패킷이 커지고 결정론 표면이 넓어진다.
-18. **힐팩은 죽은 자리에만.** 상자에서 나오지 않는다. 이긴 쪽이 그 자리를 차지하면 이어서 싸울 수 있게 하는 장치다(사용자 의도). 동시에 밟으면 번호가 앞선 사람이 줍는다 — 순서를 바꾸면 결정론이 깨진다.
-19. **캐릭터 키는 다리 길이로 표현한다.** 쿼터뷰에서 몸통만 늘리면 안 보인다. `look.tall` 이 다리와 걸음 폭까지 키운다. 판정에는 영향이 없다.
+17. **끊긴 자리는 45초 비워 둔다.** 바로 `dropPlayer` 하지 않는다 — 그러면 돌아올 자리가 없다. 그동안 락스텝이 빈 입력을 채워 경기는 계속된다. 돌아오면 호스트가 **앞선 틱 T** 를 정해 모두에게 알리고, T 에 도달했을 때 판 전체를 보낸다(그 전에 보내면 받은 쪽이 따라잡을 입력이 없다).
+18. **관전·팀 신호는 sim 밖.** 관전은 `RenderOptions.viewer`(카메라·시야만), 팀 신호는 컨트롤 메시지다. 둘 다 `Input` 에 넣지 않는다 — 넣으면 패킷이 커지고 결정론 표면이 넓어진다.
+19. **힐팩은 죽은 자리에만.** 상자에서 나오지 않는다. 이긴 쪽이 그 자리를 차지하면 이어서 싸울 수 있게 하는 장치다(사용자 의도). 동시에 밟으면 번호가 앞선 사람이 줍는다 — 순서를 바꾸면 결정론이 깨진다.
+20. **캐릭터 키는 다리 길이로 표현한다.** 쿼터뷰에서 몸통만 늘리면 안 보인다. `look.tall` 이 다리와 걸음 폭까지 키운다. 판정에는 영향이 없다.
 
 ## 코드 지도
 
@@ -99,7 +100,7 @@ src/core/weapons.ts      무기표 · headMult · partForOffset(HEAD_FRAC)
 src/core/characters.ts   캐릭터 12명 · Look · displayNames
 src/core/input.ts        Input 6바이트 (mx,my,aim,buttons,char)
 src/net/room.ts          로비 방송 · 게임 방(풀 메시) · CtlMessage · Member
-src/net/lockstep.ts      N인 입력 버퍼 · drop
+src/net/lockstep.ts      N인 입력 버퍼 · drop · rejoin(재접속)
 src/game/session.ts      세션 루프 · 캐릭터 선택 창 · 이탈 · 리싱크 · 소리 연결
 src/game/ticker.ts       Worker 타이머 (탭이 뒤에 있어도 시뮬이 계속 돈다)
 src/game/localInput.ts   키·마우스 → Input (화면 기준 WASD, Tab, 1~9) · 터치 상태 · 자동 조준
@@ -118,14 +119,18 @@ src/audio/sfx.ts         효과음·배경음 절차 생성
 src/ui/lobby.ts          로비·대기실
 tools/balance.ts         밸런스 계측 (봇 1:1 440판 · 승빠덕 제외)
 tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
-tests/                   determinism · camera · perf · balance · records · autoaim · sandbag · block · medkit · stats (69개)
+tests/                   determinism · camera · perf · balance · records · autoaim · sandbag · block · medkit · stats · rejoin (74개)
 docs/img/                공지용 스크린샷 4장 (전투·조준경·캐릭터·결과)
 ```
 
 ## 작업 규칙
 
 - 커밋은 기능 단위로 자주. 커밋 전 `npm test` + `npm run build` 통과 확인. 화면이 바뀌면 브라우저로 확인.
-- 커밋마다 `CHANGELOG.md` 한 줄 이상, 이 문서의 "현재 상태"·"다음 할 일" 갱신. 게임 규칙이 바뀌면 `docs/DESIGN.md` 도.
+- **작업 순서를 반드시 지킨다 (사용자 지시, 2026-09-06). 아무리 작은 변경이라도 예외 없다:**
+  1. 개발 → 2. `npm test` + `npm run build` → 3. 브라우저로 눈으로 확인 → 4. **확인 후 서버·탭 닫기**
+  5. **문서 갱신: `docs/공지글-모음.md` · `CHANGELOG.md` · `HANDOVER.md`** (게임 규칙이 바뀌면 `docs/DESIGN.md` · `docs/플레이-가이드.md` 도)
+  6. 커밋 → 7. 푸시 → 8. `gh run list` 로 배포 확인
+- 공지글은 플레이어에게 보이는 변화가 있을 때만 손대면 되지만, **바뀐 게 있는지 매번 확인**한다.
 - 커밋 메시지 끝에 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 - Bash heredoc 은 8191자 제한에 걸린다 → 큰 파일은 Write 도구, 여러 곳 수정은 scratchpad 에 python 스크립트를 쓰고 실행. heredoc 안에서는 역슬래시 이스케이프가 한 겹 벗겨지므로 \n 이나 경로의 \ 는 chr(10)·chr(92) 로 만든다.
 - 주석과 문서는 **한국어**로, '무엇을' 이 아니라 '왜' 를 적는다. 커밋 메시지도 한국어.
@@ -167,7 +172,7 @@ docs/img/                공지용 스크린샷 4장 (전투·조준경·캐릭�
 | 결과 화면 상세 통계 | 명중률·헤드샷 등 | 소 | **v1.2 완료** |
 | 팀전 신호(핑) | 2v2 에서 음성 없이 협력 | 소 | **v1.2 완료** |
 | 리플레이 (입력만 저장) | 락스텝이라 입력 로그만으로 재생된다 | 중 | **하지 않음** — "가볍게 즐기는 게임이라 다시 볼 이유가 없다"(사용자, 2026-09-06) |
-| 끊긴 사람 다시 들어오기 | 지금은 한 번 끊기면 그 판은 끝. 무선·모바일에서 실제로 생긴다 | 중 | 검토 대기 |
+| 끊긴 사람 다시 들어오기 | 무선·모바일에서 실제로 생긴다 | 중 | **v1.3 완료** |
 | 무기 픽업 | 맵에 떨어진 무기를 줍는다. 캐릭터 정체성이 흐려질 수 있어 신중히 | 대 | 검토 대기 |
 
 - [ ] 하지 않기로 한 것: 전체 순위표, 음량 슬라이더, 관전자 슬롯, TURN 서버 (이유는 DESIGN 15·17장)

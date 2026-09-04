@@ -21,6 +21,36 @@ export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
 }
 
+/** 끊긴 판이 있으면 그 정보 (방 코드 · 내 자리) */
+interface SavedSeat {
+  code: string
+  p: number
+  at: number
+}
+
+/** 45초 안에 돌아와야 자리가 남아 있다. 넉넉히 2분까지는 시도해 본다 */
+const REJOIN_WINDOW_MS = 2 * 60 * 1000
+
+function loadSeat(): SavedSeat | null {
+  try {
+    const raw = localStorage.getItem('bd.rejoin')
+    if (!raw) return null
+    const v = JSON.parse(raw) as SavedSeat
+    if (!v || typeof v.code !== 'string' || Date.now() - v.at > REJOIN_WINDOW_MS) return null
+    return v
+  } catch {
+    return null
+  }
+}
+
+function clearSeat(): void {
+  try {
+    localStorage.removeItem('bd.rejoin')
+  } catch {
+    /* 저장소 없음 */
+  }
+}
+
 /** 목표 킬: 5~50, 5 단위 */
 const KILL_OPTIONS = Array.from({ length: 10 }, (_, i) => (i + 1) * 5)
 /** 로비 미리보기용 고정 시드 (실제 판은 매번 다른 시드로 생성된다) */
@@ -58,6 +88,10 @@ export class Lobby {
   private starting = false
   private disposed = false
 
+  /** 재접속 시도 중인 자리 */
+  private rejoining: SavedSeat | null = null
+  private rejoinTimer = 0
+
   constructor(
     private host: HTMLElement,
     private handlers: LobbyHandlers,
@@ -69,6 +103,12 @@ export class Lobby {
     }
     this.render()
     this.openLobbyList()
+    // 하던 판이 끊겨 있으면 먼저 그 방으로 돌아가 본다
+    const seat = loadSeat()
+    if (seat) {
+      this.tryRejoin(seat)
+      return
+    }
     const code = roomCodeFromUrl()
     if (code) {
       if (this.nick.trim().length === 0) {
@@ -512,6 +552,36 @@ export class Lobby {
     })
   }
 
+  /**
+   * 끊겼던 판으로 돌아간다. 방에 다시 들어가 호스트에게 자리를 달라고 하고,
+   * 호스트가 판 전체(`resume`)를 보내 주면 그 지점부터 이어서 시작한다.
+   * 45초가 지나 자리가 사라졌으면 호스트가 거절하고, 그때는 평범한 로비로 돌아온다.
+   */
+  private tryRejoin(seat: SavedSeat): void {
+    this.status(`끊긴 판으로 돌아가는 중… (방 ${seat.code})`, '', `<div class="row"><button class="btn secondary" id="btn-cancel">그만두기</button></div>`)
+    this.bindCancel()
+    this.role = 'guest'
+    this.rejoining = seat
+    this.link = openRoom(seat.code, 'guest')
+    this.wireLink()
+    // 호스트를 만나면 자리를 달라고 한다
+    this.link.onPeerJoin(() => {
+      this.link?.sendCtl({ t: 'rejoinAsk', key: `${seat.code}:${seat.p}` })
+    })
+    this.rejoinTimer = window.setTimeout(() => {
+      if (this.rejoining) this.giveUpRejoin('그 판은 이미 끝났거나 자리가 사라졌습니다.')
+    }, 15000)
+  }
+
+  private giveUpRejoin(why: string): void {
+    clearTimeout(this.rejoinTimer)
+    this.rejoining = null
+    clearSeat()
+    this.closeLink()
+    this.status(why, 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
+    this.bindCancel()
+  }
+
   private peerGone(id: string): void {
     if (this.role === 'host') {
       const before = this.members.length
@@ -530,6 +600,47 @@ export class Lobby {
 
   private onCtl(m: CtlMessage, from: string): void {
     switch (m.t) {
+      case 'resume': {
+        // 끊겼던 판을 이어서 시작한다
+        if (!this.rejoining) return
+        clearTimeout(this.rejoinTimer)
+        const seat = this.rejoining
+        this.rejoining = null
+        const c = m.cfg as {
+          chars: CharacterId[]
+          teams?: number[]
+          names: string[]
+          targetKills: number
+          seed: number
+          map: string
+          scale: number
+          delay: number
+          peerIds: string[]
+        }
+        const link = this.link!
+        this.launch({
+          mode: 'p2p',
+          chars: c.chars,
+          teams: c.teams,
+          names: c.names,
+          targetKills: c.targetKills,
+          seed: c.seed,
+          localPlayer: m.p,
+          mapId: isMapId(c.map) ? c.map : DEFAULT_MAP,
+          mapScale: c.scale as SessionConfig['mapScale'],
+          link,
+          delay: c.delay,
+          peerIds: c.peerIds,
+          resumeState: m.state,
+          resumeTick: m.tick,
+        })
+        void seat
+        return
+      }
+      case 'rejoinNo': {
+        if (this.rejoining) this.giveUpRejoin(m.why)
+        return
+      }
       case 'hello':
         this.onHello(m, from)
         break

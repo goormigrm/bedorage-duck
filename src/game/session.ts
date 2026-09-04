@@ -41,6 +41,10 @@ export interface SessionConfig {
   peerIds?: string[]
   /** 닉네임 (인덱스 순, 빈 문자열이면 캐릭터 이름) */
   names?: string[]
+  /** 재접속: 호스트가 보내 준 그 시점의 판. 있으면 처음부터가 아니라 여기서 이어서 시작한다 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resumeState?: any
+  resumeTick?: number
   onExit: () => void
 }
 
@@ -77,6 +81,14 @@ export class Session {
   private pickerOpen = false
   /** 죽어서 기다리는 동안 보고 있는 사람. -1 = 내 시점 */
   private spectate = -1
+  /** 끊긴 사람의 자리를 비워 두는 시간(틱). 이 안에 돌아오면 이어서 한다 */
+  private static readonly HOLD_TICKS = 60 * 45
+  /** 자리를 비워 둔 사람: 인덱스 → 자리를 없앨 틱 */
+  private holding = new Map<number, number>()
+  /** 호스트만: 재접속 키 → 플레이어 인덱스 */
+  private rejoinKeys = new Map<string, number>()
+  /** 호스트만: 돌아오기로 한 사람 (틱이 되면 상태를 보낸다) */
+  private pendingRejoin: { peerId: string; p: number; tick: number } | null = null
   private syncMute: () => void = () => {}
   private ticker: Ticker
   private lastTick = performance.now()
@@ -87,6 +99,12 @@ export class Session {
   ) {
     this.map = buildMap(cfg.mapId ?? DEFAULT_MAP, cfg.mapScale ?? scaleForPlayers(cfg.chars.length), cfg.seed)
     this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars, teams: cfg.teams }, this.map)
+    // 재접속: 호스트가 보내 준 판으로 갈아 끼운다. 맵의 모래주머니 상태도 그때로 맞춘다
+    if (cfg.resumeState) {
+      this.state = cfg.resumeState as GameState
+      this.state.events = []
+      syncSandbags(this.state, this.map)
+    }
     this.prev = snapshot(this.state)
     this.makeBots(cfg.seed)
 
@@ -126,6 +144,7 @@ export class Session {
     this.sfx.startBgm()
 
     this.names = this.computeNames()
+    this.setupRejoinKeys()
 
     if (cfg.mode === 'p2p' && cfg.link) {
       const ids = cfg.peerIds ?? []
@@ -144,6 +163,23 @@ export class Session {
     ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase, state: () => this.state }
   }
 
+  /**
+   * 재접속 열쇠. 브라우저가 끊겼다 돌아왔을 때 "누구였는지" 를 알려면 표식이 필요하다.
+   * 방 코드 + 플레이어 번호로 만들고 각자 자기 것만 저장한다(같은 방·같은 자리에서만 통한다).
+   * 호스트는 전체를 기억해 두었다가 돌아온 사람과 맞춰 본다.
+   */
+  private setupRejoinKeys(): void {
+    if (this.cfg.mode !== 'p2p' || !this.cfg.link) return
+    const code = this.cfg.link.code
+    const n = this.cfg.chars.length
+    for (let i = 0; i < n; i++) this.rejoinKeys.set(`${code}:${i}`, i)
+    try {
+      localStorage.setItem('bd.rejoin', JSON.stringify({ code, p: this.cfg.localPlayer, at: Date.now() }))
+    } catch {
+      /* 저장소가 없으면 재접속을 포기한다 */
+    }
+  }
+
   /** 표시 이름: 닉네임이 있으면 닉네임, 없으면 캐릭터 이름(중복이면 번호) */
   private computeNames(): string[] {
     const base = displayNames(this.state.players.map((p) => p.char))
@@ -154,8 +190,18 @@ export class Session {
   }
 
   private newLockstep(): Lockstep {
-    const ls = new Lockstep(this.cfg.link!, this.cfg.delay ?? 3, this.cfg.localPlayer, this.peerIndex, this.cfg.chars.length)
+    const start = this.cfg.resumeTick ?? 0
+    const ls = new Lockstep(
+      this.cfg.link!,
+      this.cfg.delay ?? 3,
+      this.cfg.localPlayer,
+      this.peerIndex,
+      this.cfg.chars.length,
+      start,
+    )
     for (const d of this.dropped) ls.drop(d)
+    // 이어서 시작하는 경우, 지나간 틱은 모두 빈 입력으로 메워 둔다
+    if (start > 0) for (let i = 0; i < this.cfg.chars.length; i++) ls.rejoin(i, start)
     return ls
   }
 
@@ -320,10 +366,16 @@ export class Session {
       return
     }
     if (this.isHost) {
-      // 모두가 같은 틱에 제거하도록 앞선 틱을 정해 알린다
-      const tick = this.state.tick + (this.cfg.delay ?? 3) + 30
+      // 바로 없애지 않고 45초 자리를 비워 둔다. 그 안에 돌아오면 이어서 한다.
+      // (락스텝은 이미 그 사람 입력을 빈 입력으로 채우므로 경기는 멈추지 않는다)
+      const tick = this.state.tick + Session.HOLD_TICKS
+      this.holding.set(idx, tick)
       this.pendingDrops.push({ p: idx, tick })
       this.cfg.link?.sendCtl({ t: 'drop', p: idx, tick })
+      this.message = `${this.names[idx]} 연결 끊김 · 45초 안에 돌아오면 이어서 합니다`
+      setTimeout(() => {
+        if (this.message.startsWith(this.names[idx])) this.message = ''
+      }, 4000)
     }
   }
 
@@ -375,6 +427,23 @@ export class Session {
         this.dropped.add(m.p)
         this.lockstep?.drop(m.p)
         this.pendingDrops.push({ p: m.p, tick: m.tick })
+        break
+      }
+      case 'rejoinAsk': {
+        if (!this.isHost) break
+        this.onRejoinAsk(m.key, from)
+        break
+      }
+      case 'rejoinAt': {
+        // 모두: 그 사람 입력을 tick 부터 다시 기다리고, 자리 없애기를 취소한다
+        this.pendingDrops = this.pendingDrops.filter((d) => d.p !== m.p)
+        this.holding.delete(m.p)
+        this.dropped.delete(m.p)
+        this.lockstep?.rejoin(m.p, m.tick)
+        this.message = `${this.names[m.p]} 다시 들어왔습니다`
+        setTimeout(() => {
+          if (this.message.endsWith('다시 들어왔습니다')) this.message = ''
+        }, 3000)
         break
       }
       case 'mark': {
@@ -465,6 +534,7 @@ export class Session {
         if (!this.isHost) this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h }, this.cfg.peerIds?.[0])
         this.lockstep.prune(this.state.tick)
       }
+      if (this.isHost) this.servePendingRejoin()
       for (const e of this.state.events) {
         if (e.type === 'over') this.onOver()
         // 내가 죽으면 나를 죽인 사람을 본다 (자살·이탈이면 살아 있는 아무나)
@@ -584,6 +654,54 @@ export class Session {
     this.cfg.link?.sendCtl({ t: 'mark', p: lp, x: Math.round(w.x), y: Math.round(w.y) })
   }
 
+  /**
+   * 끊겼던 사람이 자기 자리를 달라고 한다(호스트만 처리).
+   * 자리를 비워 둔 슬롯 중 키가 맞는 것이 있으면, **앞선 틱 T** 를 정해 모두에게 알리고
+   * T 에 도달했을 때 그 시점의 판 전체를 보내 준다. 그래야 모두의 sim 이 같은 지점에서 이어진다.
+   */
+  private onRejoinAsk(key: string, peerId: string): void {
+    const idx = this.rejoinKeys.get(key)
+    if (idx === undefined || !this.holding.has(idx)) {
+      this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '자리가 이미 사라졌습니다' }, peerId)
+      return
+    }
+    if (this.pendingRejoin) {
+      this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '다른 사람이 먼저 들어오는 중입니다' }, peerId)
+      return
+    }
+    // 상태를 만들어 보내고 상대가 준비할 시간을 넉넉히 둔다
+    const tick = this.state.tick + 120
+    this.pendingRejoin = { peerId, p: idx, tick }
+    this.peerIndex.set(peerId, idx)
+    this.cfg.link?.sendCtl({ t: 'rejoinAt', p: idx, tick })
+    this.pendingDrops = this.pendingDrops.filter((d) => d.p !== idx)
+    this.holding.delete(idx)
+    this.dropped.delete(idx)
+    this.lockstep?.rejoin(idx, tick)
+  }
+
+  /** 호스트: 약속한 틱에 도달하면 판 전체를 보내 준다 */
+  private servePendingRejoin(): void {
+    const r = this.pendingRejoin
+    if (!r || this.state.tick < r.tick) return
+    this.pendingRejoin = null
+    const cfg = {
+      chars: this.cfg.chars,
+      teams: this.cfg.teams,
+      names: this.cfg.names ?? [],
+      targetKills: this.cfg.targetKills,
+      seed: this.cfg.seed,
+      map: this.cfg.mapId ?? DEFAULT_MAP,
+      scale: this.map.scale,
+      delay: this.cfg.delay ?? 3,
+      peerIds: this.cfg.peerIds ?? [],
+    }
+    this.cfg.link?.sendCtl(
+      { t: 'resume', p: r.p, tick: this.state.tick, state: snapshot(this.state), cfg },
+      r.peerId,
+    )
+  }
+
   /** 관전 대상 후보: 나를 뺀 살아 있는 사람 중 from 다음 사람 */
   private nextAlive(from: number): number {
     const n = this.state.players.length
@@ -670,6 +788,11 @@ export class Session {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    try {
+      localStorage.removeItem('bd.rejoin')
+    } catch {
+      /* 저장소 없음 */
+    }
     cancelAnimationFrame(this.raf)
     this.ticker.stop()
     this.input.dispose()
