@@ -203,7 +203,32 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
       ctx.stroke()
     }
   }
-  if (!jowl && !fo) drawEars()
+  const drawCatEars = () => {
+    const fur = hex(L.furColor ?? L.skin)
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 1.6
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = fur
+      ctx.beginPath()
+      ctx.moveTo(s * R * 0.22, hy - R * 0.84)
+      ctx.lineTo(s * R * 0.98, hy - R * 1.78)
+      ctx.lineTo(s * R * 1.02, hy - R * 0.42)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(255,214,196,0.9)'
+      ctx.beginPath()
+      ctx.moveTo(s * R * 0.4, hy - R * 0.8)
+      ctx.lineTo(s * R * 0.86, hy - R * 1.5)
+      ctx.lineTo(s * R * 0.88, hy - R * 0.56)
+      ctx.closePath()
+      ctx.fill()
+    }
+  }
+  const cat = L.animal === 'cat'
+  if (cat) {
+    if (!fo) drawCatEars()
+  } else if (!jowl && !fo) drawEars()
 
   // 머리(얼굴) 바탕
   ctx.fillStyle = skin
@@ -242,12 +267,27 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
     ctx.fill()
     ctx.stroke()
   }
-  // 볼 홍조
-  ctx.fillStyle = 'rgba(232,120,110,0.22)'
-  ellipse(ctx, fx - R * 0.5, fy + R * 0.28, R * 0.2, R * 0.12)
-  ctx.fill()
-  ellipse(ctx, fx + R * 0.5, fy + R * 0.28, R * 0.2, R * 0.12)
-  ctx.fill()
+  if (cat) {
+    // 고양이: 얼굴 앞을 덮는 흰 무늬 (눈 위까지 올라오고 가운데가 살짝 내려온다)
+    ctx.fillStyle = '#fdf7ef'
+    ctx.beginPath()
+    ctx.moveTo(fx - R * 0.8, fy + R * 0.02)
+    ctx.quadraticCurveTo(fx - R * 0.84, fy - R * 0.56, fx - R * 0.36, fy - R * 0.58)
+    ctx.quadraticCurveTo(fx - R * 0.14, fy - R * 0.58, fx, fy - R * 0.34)
+    ctx.quadraticCurveTo(fx + R * 0.14, fy - R * 0.58, fx + R * 0.36, fy - R * 0.58)
+    ctx.quadraticCurveTo(fx + R * 0.84, fy - R * 0.56, fx + R * 0.8, fy + R * 0.02)
+    ctx.quadraticCurveTo(fx + R * 0.72, fy + R * 0.86, fx, fy + R * 0.9)
+    ctx.quadraticCurveTo(fx - R * 0.72, fy + R * 0.86, fx - R * 0.8, fy + R * 0.02)
+    ctx.closePath()
+    ctx.fill()
+  } else {
+    // 볼 홍조
+    ctx.fillStyle = 'rgba(232,120,110,0.22)'
+    ellipse(ctx, fx - R * 0.5, fy + R * 0.28, R * 0.2, R * 0.12)
+    ctx.fill()
+    ellipse(ctx, fx + R * 0.5, fy + R * 0.28, R * 0.2, R * 0.12)
+    ctx.fill()
+  }
 
   // 수염 (얼굴 위, 머리카락 아래)
   drawBeard(ctx, L, R, fx, fy, hy)
@@ -289,7 +329,30 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
   drawEyes(ctx, L, R, fx, eyeY, eyeDx, cs, sn)
 
   // 코
-  if (L.nose === 'wide') {
+  if (cat) {
+    const ny = fy + R * 0.2
+    ctx.fillStyle = '#e8794f'
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 1.2
+    ctx.beginPath()
+    ctx.moveTo(fx - R * 0.13, ny - R * 0.05)
+    ctx.lineTo(fx + R * 0.13, ny - R * 0.05)
+    ctx.lineTo(fx, ny + R * 0.12)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    // 수염 (양쪽 3줄)
+    ctx.strokeStyle = 'rgba(70,50,40,0.5)'
+    ctx.lineWidth = 1.1
+    for (const sd of [-1, 1]) {
+      for (const [dy0, dy1] of [[-0.06, -0.22], [0.08, 0.06], [0.2, 0.34]]) {
+        ctx.beginPath()
+        ctx.moveTo(fx + sd * R * 0.34, ny + R * dy0)
+        ctx.quadraticCurveTo(fx + sd * R * 0.68, ny + R * ((dy0 + dy1) / 2), fx + sd * R * 0.98, ny + R * dy1)
+        ctx.stroke()
+      }
+    }
+  } else if (L.nose === 'wide') {
     // 넓적한 코: 콧등 + 양쪽 콧방울 + 콧구멍
     const nx = fx + cs * R * 0.08
     const ny = fy + R * 0.3
@@ -409,6 +472,14 @@ export function drawHead(ctx: CanvasRenderingContext2D, def: CharacterDef, o: Ch
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(L.capText, lx, hy - R * 0.79)
+    }
+    if (L.capPin !== undefined) {
+      ctx.fillStyle = hex(L.capPin)
+      ctx.strokeStyle = OUTLINE
+      ctx.lineWidth = 1
+      circle(ctx, -R * 0.52, hy - R * 0.92, R * 0.14)
+      ctx.fill()
+      ctx.stroke()
     }
   } else if (L.extra === 'headband') {
     ctx.fillStyle = hex(def.accentColor)
@@ -571,6 +642,28 @@ function drawHair(ctx: CanvasRenderingContext2D, L: Look, R: number, hy: number,
         ctx.fill()
         ctx.stroke()
       }
+      break
+    }
+    case 'bob': {
+      // 단발: 정수리에서 볼 아래까지 내려오는 머리 + 이마를 덮는 앞머리
+      ctx.fillStyle = hex(L.hairColor)
+      ctx.beginPath()
+      ctx.moveTo(-R * 1.14, hy + R * 0.8)
+      ctx.lineTo(-R * 1.14, hy - R * 0.2)
+      ctx.quadraticCurveTo(-R * 0.98, hy - R * 1.22, 0, hy - R * 1.2)
+      ctx.quadraticCurveTo(R * 0.98, hy - R * 1.22, R * 1.14, hy - R * 0.2)
+      ctx.lineTo(R * 1.14, hy + R * 0.8)
+      ctx.lineTo(R * 0.84, hy + R * 0.72)
+      ctx.lineTo(R * 0.88, hy - R * 0.16)
+      ctx.quadraticCurveTo(R * 0.62, hy - R * 0.56, R * 0.18, hy - R * 0.46)
+      ctx.quadraticCurveTo(-R * 0.34, hy - R * 0.36, -R * 0.88, hy - R * 0.16)
+      ctx.lineTo(-R * 0.84, hy + R * 0.72)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(255,255,255,0.13)'
+      ellipse(ctx, -R * 0.3, hy - R * 0.85, R * 0.34, R * 0.1, -0.4)
+      ctx.fill()
       break
     }
     case 'bowl': {
@@ -866,7 +959,8 @@ function drawMouth(ctx: CanvasRenderingContext2D, L: Look, R: number, fx: number
       break
     }
     case 'grin': {
-      ctx.fillStyle = '#7a2e2e'
+      const catMouth = L.animal === 'cat'
+      ctx.fillStyle = catMouth ? '#8f3a44' : '#7a2e2e'
       ctx.lineWidth = 1.4
       ctx.beginPath()
       ctx.moveTo(fx - R * 0.3, my - R * 0.06)
@@ -874,13 +968,47 @@ function drawMouth(ctx: CanvasRenderingContext2D, L: Look, R: number, fx: number
       ctx.closePath()
       ctx.fill()
       ctx.stroke()
+      if (catMouth) {
+        ctx.fillStyle = '#f2909f'
+        ctx.beginPath()
+        ctx.moveTo(fx - R * 0.15, my + R * 0.08)
+        ctx.quadraticCurveTo(fx, my + R * 0.46, fx + R * 0.15, my + R * 0.08)
+        ctx.closePath()
+        ctx.fill()
+      } else {
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.moveTo(fx - R * 0.26, my - R * 0.04)
+        ctx.lineTo(fx + R * 0.26, my - R * 0.04)
+        ctx.lineTo(fx + R * 0.2, my + R * 0.08)
+        ctx.lineTo(fx - R * 0.2, my + R * 0.08)
+        ctx.closePath()
+        ctx.fill()
+      }
+      break
+    }
+    case 'shout': {
+      // 크게 벌린 외침: 둥근 입 + 윗니 + 혀
+      ctx.fillStyle = '#5e1f1f'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(fx - R * 0.3, my - R * 0.16)
+      ctx.quadraticCurveTo(fx, my - R * 0.3, fx + R * 0.3, my - R * 0.16)
+      ctx.quadraticCurveTo(fx + R * 0.42, my + R * 0.46, fx, my + R * 0.52)
+      ctx.quadraticCurveTo(fx - R * 0.42, my + R * 0.46, fx - R * 0.3, my - R * 0.16)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
       ctx.fillStyle = '#fff'
       ctx.beginPath()
-      ctx.moveTo(fx - R * 0.26, my - R * 0.04)
-      ctx.lineTo(fx + R * 0.26, my - R * 0.04)
-      ctx.lineTo(fx + R * 0.2, my + R * 0.08)
-      ctx.lineTo(fx - R * 0.2, my + R * 0.08)
+      ctx.moveTo(fx - R * 0.26, my - R * 0.15)
+      ctx.lineTo(fx + R * 0.26, my - R * 0.15)
+      ctx.lineTo(fx + R * 0.21, my - R * 0.02)
+      ctx.lineTo(fx - R * 0.21, my - R * 0.02)
       ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = '#d9636b'
+      ellipse(ctx, fx, my + R * 0.34, R * 0.17, R * 0.11)
       ctx.fill()
       break
     }
@@ -997,7 +1125,8 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
   const chin = jowl ? R * 1.26 : R
   // 달걀: 머리 원 아래로 이어지는 몸통. 바닥은 hy + chin + R*0.95
   const bottom = hy + chin + R * 0.95
-  const bw = R * (0.9 + 0.12 * L.bodyScale)
+  const bw = R * (0.9 + 0.12 * L.bodyScale) * (L.slim ?? 1)
+  const pantsC = hex(L.pants ?? 0x34405a)
   const eggH = bottom - (hy - R) + 6
   const s = (size * 0.9) / eggH
   ctx.save()
@@ -1014,7 +1143,7 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
     ctx.closePath()
   }
   // 다리·신발
-  ctx.fillStyle = '#34405a'
+  ctx.fillStyle = pantsC
   ctx.strokeStyle = OUTLINE
   ctx.lineWidth = 1.4
   for (const d of [-1, 1]) {
@@ -1025,7 +1154,7 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
     ellipse(ctx, d * bw * 0.36, bottom + 3.2, 4, 2.2)
     ctx.fill()
     ctx.stroke()
-    ctx.fillStyle = '#34405a'
+    ctx.fillStyle = pantsC
   }
   // 몸통(피부) → 옷
   egg()
@@ -1053,6 +1182,35 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
   ctx.closePath()
   ctx.fill()
   ctx.stroke()
+  if (L.stripe !== undefined) {
+    ctx.fillStyle = hex(L.stripe)
+    let band = 0
+    for (let yy = collar + R * 0.1; yy < bottom + 5; yy += R * 0.34) {
+      if (band++ % 2 === 0) ctx.fillRect(-bw * 1.2, yy, bw * 2.4, R * 0.17)
+    }
+  }
+  if (L.apron !== undefined) {
+    ctx.fillStyle = hex(L.apron)
+    ctx.beginPath()
+    ctx.moveTo(-R * 0.34, collar + R * 0.1)
+    ctx.lineTo(R * 0.34, collar + R * 0.1)
+    ctx.lineTo(R * 0.62, collar + R * 0.55)
+    ctx.lineTo(R * 0.62, bottom + 5)
+    ctx.lineTo(-R * 0.62, bottom + 5)
+    ctx.lineTo(-R * 0.62, collar + R * 0.55)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    // 목끈
+    ctx.lineWidth = 1.2
+    for (const d of [-1, 1]) {
+      ctx.beginPath()
+      ctx.moveTo(d * R * 0.3, collar + R * 0.12)
+      ctx.lineTo(d * R * 0.5, collar - R * 0.12)
+      ctx.stroke()
+    }
+    ctx.lineWidth = 1.4
+  }
   if (L.neck === 'v' && L.undershirt !== undefined) {
     ctx.fillStyle = hex(L.undershirt)
     ctx.beginPath()
@@ -1109,7 +1267,7 @@ export function drawPortrait(canvas: HTMLCanvasElement, def: CharacterDef, facin
     }
   }
   // 바지 띠
-  ctx.fillStyle = '#34405a'
+  ctx.fillStyle = pantsC
   ctx.fillRect(-bw * 1.2, bottom - R * 0.28, bw * 2.4, R * 0.4)
   ctx.restore()
   // 달걀 외곽선

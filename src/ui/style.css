@@ -64,6 +64,7 @@ button { font-family: inherit; }
 .section-t small { font-weight: 500; color: var(--ink-3); font-size: 11.5px; }
 .section-t input.nick { margin-left: auto; font: 600 13px "IBM Plex Sans KR", sans-serif; background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; width: 150px; }
 .section-t input.nick:focus { outline: 2px solid var(--duck); border-color: transparent; }
+.section-t input.nick.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,81,73,.25); }
 
 /* 캐릭터 카드 */
 .chars { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; margin-bottom: 4px; }
@@ -100,6 +101,13 @@ button { font-family: inherit; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); font-weight: 700; }
 .seg button:focus-visible { outline: 2px solid var(--duck); outline-offset: -2px; }
+.maprow { display: grid; grid-template-columns: minmax(0,1fr) 260px; gap: 16px; align-items: start; margin-bottom: 22px; }
+@media (max-width: 760px) { .maprow { grid-template-columns: minmax(0,1fr); } }
+.maprow p { margin: 8px 0 0; }
+.hintline.dim { color: #5f6a76; }
+canvas.mappv { width: 260px; height: 150px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-2); display: block; }
+select.sel { background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 500 13px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
+select.sel:focus { outline: 2px solid var(--duck); border-color: transparent; }
 input.code { font: 600 18px "IBM Plex Mono", monospace; letter-spacing: .2em; text-transform: uppercase; background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; width: 100%; }
 input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 
@@ -187,7 +195,8 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .overlay p { color: var(--ink-2); margin: 0 0 16px; }
 .overlay p b { color: var(--gold); }
 .overlay .row { justify-content: center; }
-.keys { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 500 11px "IBM Plex Mono", monospace; color: var(--ink-3); background: rgba(13,17,23,.65); padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+.keys { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; display: flex; align-items: center; justify-content: center;
+  font: 500 11px "IBM Plex Mono", monospace; color: var(--ink-3); background: linear-gradient(180deg, rgba(13,17,23,0), rgba(13,17,23,.85) 55%); white-space: nowrap; }
 .keys b { color: var(--duck); font-weight: 600; }
 
 /* ---- 캐릭터 교체 창 (리스폰 대기 중) ---- */

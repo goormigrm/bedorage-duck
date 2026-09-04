@@ -1,15 +1,19 @@
 // 맵 → 3D 월드 (바닥, 벽, 상자, 조명). 단위 1 = 타일 한 칸. sim 좌표 (px) → 월드: x/32, y/32 → (x, 0, z)
 
 import * as THREE from 'three'
-import { GameMap, TILE, TILE_CRATE, TILE_WALL } from '../core/map'
+import { GameMap, TILE, TILE_CRATE, TILE_SANDBAG, TILE_WALL } from '../core/map'
 
 export const WALL_H = 1.8
 export const CRATE_H = 0.75
+/** 모래주머니 높이 (허리 높이 엄폐물) */
+export const SANDBAG_H = 0.52
 export const U = 1 / TILE
 
 export interface World3D {
   group: THREE.Group
   sun: THREE.DirectionalLight
+  /** 부서진 모래주머니를 화면에서 지운다 */
+  breakSandbag(tx: number, ty: number): void
   dispose(): void
 }
 
@@ -82,6 +86,8 @@ export function buildWorld(map: GameMap): World3D {
   const walls = new THREE.InstancedMesh(wallGeo, [wallSide, wallSide, wallTop, wallSide, wallSide, wallSide], Math.max(1, wallCount))
   walls.castShadow = true
   walls.receiveShadow = true
+  let bagCount = 0
+  for (let i = 0; i < map.tiles.length; i++) if (map.tiles[i] === TILE_SANDBAG) bagCount++
   const crateM = new THREE.MeshLambertMaterial({ color: t.crate })
   const crateTopM = new THREE.MeshLambertMaterial({ color: lighten(t.crate, 1.18) })
   const crateGeo = new THREE.BoxGeometry(0.92, CRATE_H, 0.92)
@@ -108,6 +114,32 @@ export function buildWorld(map: GameMap): World3D {
   walls.instanceMatrix.needsUpdate = true
   crates.instanceMatrix.needsUpdate = true
   group.add(walls, crates)
+
+  // ---- 모래주머니 (허리 높이 엄폐물) ----
+  const bagM = new THREE.MeshLambertMaterial({ color: 0xbfa46a })
+  const bagTopM = new THREE.MeshLambertMaterial({ color: 0xd6bc84 })
+  const bagGeo = new THREE.BoxGeometry(0.98, SANDBAG_H, 0.98)
+  const bags = new THREE.InstancedMesh(
+    bagGeo,
+    [bagM, bagM, bagTopM, bagM, bagM, bagM],
+    Math.max(1, bagCount),
+  )
+  bags.castShadow = true
+  bags.receiveShadow = true
+  const bagIndex = new Map<number, number>()
+  let bi = 0
+  for (let ty = 0; ty < map.h; ty++) {
+    for (let tx = 0; tx < map.w; tx++) {
+      if (map.tiles[ty * map.w + tx] !== TILE_SANDBAG) continue
+      m4.makeTranslation(tx + 0.5, SANDBAG_H / 2, ty + 0.5)
+      bags.setMatrixAt(bi, m4)
+      bagIndex.set(ty * map.w + tx, bi)
+      bi++
+    }
+  }
+  bags.count = bagCount
+  bags.instanceMatrix.needsUpdate = true
+  group.add(bags)
 
   // 벽 윗면 테두리 느낌: 벽보다 살짝 큰 어두운 밑단 (바닥 그림자 대용)
   const skirtGeo = new THREE.BoxGeometry(1.06, 0.06, 1.06)
@@ -143,13 +175,22 @@ export function buildWorld(map: GameMap): World3D {
   group.add(sun)
   group.add(sun.target)
 
+  const hidden = new THREE.Matrix4().makeScale(0, 0, 0)
   return {
     group,
     sun,
+    breakSandbag(tx: number, ty: number) {
+      const id = bagIndex.get(ty * map.w + tx)
+      if (id === undefined) return
+      bags.setMatrixAt(id, hidden)
+      bags.instanceMatrix.needsUpdate = true
+      bagIndex.delete(ty * map.w + tx)
+    },
     dispose() {
       floorTex.dispose()
       wallGeo.dispose()
       crateGeo.dispose()
+      bagGeo.dispose()
       skirtGeo.dispose()
     },
   }

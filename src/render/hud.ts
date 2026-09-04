@@ -2,7 +2,7 @@
 // 2명이면 좌우 카드, 3~4명이면 내 카드 + 오른쪽 아래 상대 목록. 팀전은 위 점수판이 A팀 : B팀.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
-import { GameState, PlayerState, isTeamMatch, teamKills } from '../core/state'
+import { GameState, PlayerState, STAMINA_MAX, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 
 export const VIEW_W = 1280
@@ -127,7 +127,7 @@ export class Hud {
 
     // 아래: 내 카드(체력·기력·탄약) + 다른 사람 목록 (상대 체력은 숨김, 관전·아군만 표시)
     const lp = opts.localPlayer
-    if (lp !== -1) this.drawPlayerCard(s.players[lp], CHARACTERS[s.players[lp].char], opts.names[lp], 24, VIEW_H - 24, 'left', true)
+    if (lp !== -1) this.drawPlayerCard(s.players[lp], CHARACTERS[s.players[lp].char], opts.names[lp], 24, VIEW_H - 46, 'left', true)
     this.drawOthersList(s, opts)
     void n
 
@@ -296,7 +296,7 @@ export class Hud {
     const w = 280
     const h = others.length * rowH + 14
     const x = VIEW_W - 24 - w
-    const y = VIEW_H - 24 - h
+    const y = VIEW_H - 46 - h
     this.panel(x, y, w, h)
     others.forEach((m, r) => {
       const c = CHARACTERS[m.p.char]
@@ -374,10 +374,15 @@ export class Hud {
     ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#a9b4c0'
     ctx.fillText(w.name, ix, by + 70)
+    const infinite = w.magSize === 0
     ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = p.reloadTimer > 0 ? '#f2c94c' : '#e6edf3'
-    ctx.fillText(p.reloadTimer > 0 ? '재장전' : `${p.ammo}`, ix + 60, by + 78)
-    if (p.reloadTimer === 0) {
+    ctx.fillText(infinite ? '∞' : p.reloadTimer > 0 ? '재장전' : `${p.ammo}`, ix + 60, by + 78)
+    if (infinite) {
+      ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
+      ctx.fillStyle = '#7d8896'
+      ctx.fillText('근접', ix + 88, by + 76)
+    } else if (p.reloadTimer === 0) {
       ctx.font = '500 13px "IBM Plex Mono", monospace'
       ctx.fillStyle = '#7d8896'
       ctx.fillText(`/ ${w.magSize}`, ix + 60 + ctx.measureText(`${p.ammo}`).width + 26, by + 76)
@@ -390,16 +395,16 @@ export class Hud {
       roundRect(ctx, ix + 140, by + 66, 100 * k, 6, 3)
       ctx.fill()
     }
-    const dk = p.dashCooldown > 0 ? 1 - p.dashCooldown / c.dashCooldown : 1
+    const sk = Math.max(0, Math.min(1, p.stamina / STAMINA_MAX))
     ctx.fillStyle = 'rgba(255,255,255,0.1)'
     roundRect(ctx, ix + 208, by + 58, 60, 6, 3)
     ctx.fill()
-    ctx.fillStyle = dk >= 1 ? '#9fe0ff' : '#5b7c8a'
-    roundRect(ctx, ix + 208, by + 58, 60 * dk, 6, 3)
+    ctx.fillStyle = sk > 0.34 ? '#9fe0ff' : '#e08a5a'
+    roundRect(ctx, ix + 208, by + 58, 60 * sk, 6, 3)
     ctx.fill()
     ctx.font = '400 10px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#7d8896'
-    ctx.fillText('대시', ix + 208, by + 78)
+    ctx.fillText('기력', ix + 208, by + 78)
     if (p.legInjury > 0) {
       ctx.fillStyle = '#f2c94c'
       ctx.fillText('다리 부상', ix + 236, by + 78)

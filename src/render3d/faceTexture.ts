@@ -126,6 +126,56 @@ export function bodyTexture(def: CharacterDef): THREE.CanvasTexture {
       ctx.stroke()
     }
   }
+  // 가로 줄무늬 (스웨터)
+  if (L.stripe !== undefined) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(0, collar(0))
+    for (let x = 1; x <= W; x += 4) ctx.lineTo(x, collar(x / W))
+    ctx.lineTo(W, H)
+    ctx.lineTo(0, H)
+    ctx.closePath()
+    ctx.clip()
+    ctx.fillStyle = hex(L.stripe)
+    let band = 0
+    for (let y = H * 0.55; y < H; y += 34) {
+      if (band++ % 2 === 0) ctx.fillRect(0, y, W, 17)
+    }
+    ctx.restore()
+  }
+  // 앞치마 (앞면에만)
+  if (L.apron !== undefined) {
+    const ax = W * FRONT_U
+    const ay = collarY(FRONT_U)
+    ctx.fillStyle = hex(L.apron)
+    ctx.beginPath()
+    ctx.moveTo(ax - 62, ay + 6)
+    ctx.lineTo(ax + 62, ay + 6)
+    ctx.lineTo(ax + 104, ay + 62)
+    ctx.lineTo(ax + 104, H)
+    ctx.lineTo(ax - 104, H)
+    ctx.lineTo(ax - 104, ay + 62)
+    ctx.closePath()
+    ctx.fill()
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 3
+    ctx.stroke()
+    // 목끈
+    ctx.lineWidth = 7
+    ctx.strokeStyle = hex(L.apron)
+    for (const d of [-1, 1]) {
+      ctx.beginPath()
+      ctx.moveTo(ax + d * 54, ay + 8)
+      ctx.lineTo(ax + d * 84, ay - 40)
+      ctx.stroke()
+    }
+    // 작은 뱃지들
+    const badges = ['#d8443c', '#e8b53a', '#3fb950', '#5aa9ff']
+    badges.forEach((col, i) => {
+      ctx.fillStyle = col
+      ctx.fillRect(ax - 86 + i * 26, ay + 118, 16, 16)
+    })
+  }
   // 옷깃 선
   ctx.strokeStyle = OUTLINE
   ctx.lineWidth = 3
@@ -146,7 +196,7 @@ export function bodyTexture(def: CharacterDef): THREE.CanvasTexture {
     ctx.fillRect(bx - 18, by - 2, 36, 3)
   }
   // 바지 띠
-  ctx.fillStyle = '#34405a'
+  ctx.fillStyle = hex(L.pants ?? 0x34405a)
   ctx.fillRect(0, H * PANTS_V, W, H * (1 - PANTS_V))
   ctx.beginPath()
   ctx.moveTo(0, H * PANTS_V)

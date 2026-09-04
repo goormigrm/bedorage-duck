@@ -7,7 +7,7 @@ import { PART_HEAD, WeaponId } from '../core/weapons'
 
 const STORAGE_KEY = 'bd.muted'
 const MASTER = 0.8
-const BGM_LEVEL = 0.16
+const BGM_LEVEL = 0.15
 
 interface Spatial {
   gain: number
@@ -27,6 +27,8 @@ export class Sfx {
   private bgmNextBeat = 0
   private bgmBeatIndex = 0
   private bgmOn = false
+  /** 교전 강도 0..1 (배경음 레이어) */
+  private intensity = 0
 
   constructor() {
     let m = false
@@ -145,12 +147,14 @@ export class Sfx {
       switch (e.type) {
         case 'fire':
           this.gun(e.weapon, sp(e.x, e.y), e.p === localPlayer)
+          this.intensity = Math.min(1, this.intensity + 0.06)
           break
         case 'hit':
           this.hit(sp(e.x, e.y), e.part === PART_HEAD)
           break
         case 'death':
           this.death(sp(e.x, e.y))
+          this.intensity = 1
           break
         case 'respawn':
           this.respawn(sp(e.x, e.y))
@@ -167,6 +171,18 @@ export class Sfx {
             this.lastWall = now
             this.wall(sp(e.x, e.y))
           }
+          break
+        }
+        case 'block': {
+          const b = this.bus(sp(e.x, e.y), 0.9)
+          for (const f of [900, 1350, 1800]) this.tone(b.node, b.t0, 0.35, 'sine', f, f * 0.94, 0.24, 0.002)
+          this.noiseBurst(b.node, b.t0, 0.05, 'highpass', 5000, 3000, 0.45)
+          break
+        }
+        case 'break': {
+          const b = this.bus(sp((e.tx + 0.5) * 32, (e.ty + 0.5) * 32), 0.9)
+          this.noiseBurst(b.node, b.t0, 0.4, 'lowpass', 900, 200, 0.8)
+          this.tone(b.node, b.t0, 0.3, 'triangle', 150, 50, 0.4)
           break
         }
         case 'choose':
@@ -257,6 +273,15 @@ export class Sfx {
         this.tone(node, t0, 0.18, 'sine', 140, 40, 1.0)
         this.noiseBurst(node, t0, 0.05, 'highpass', 3000, 2000, 0.5)
         break
+      case 'mg':
+        this.noiseBurst(node, t0, 0.07, 'bandpass', 1100, 500, 0.75, 0.7)
+        this.tone(node, t0, 0.06, 'square', 200, 70, 0.5)
+        break
+      case 'pan':
+        // 후라이팬: 금속 울림 (여러 배음 + 짧은 노이즈)
+        for (const f of [520, 780, 1170, 1560]) this.tone(node, t0, 0.5, 'sine', f, f * 0.96, 0.2, 0.002)
+        this.noiseBurst(node, t0, 0.05, 'highpass', 4000, 2500, 0.5)
+        break
       case 'sniper':
         this.noiseBurst(node, t0, 0.06, 'highpass', 2500, 1500, 0.9)
         this.tone(node, t0, 0.32, 'sine', 100, 30, 1.0)
@@ -324,8 +349,22 @@ export class Sfx {
     this.tone(node, t0, 0.8, 'sine', 98, 98, 0.35, 0.02)
   }
 
-  // ---------- 배경음 (절차 생성 루프) ----------
-  /** 게임 중 낮게 깔리는 루프: Am – F – C – G, 96 BPM. 베이스 + 아르페지오 + 하이햇 */
+  // ---------- 배경음 (절차 생성, 저작권 없음) ----------
+  // 132 BPM 단조 추격 루프: 16분 베이스 + 킥/스네어/하이햇 + 아르페지오 + 리드 모티프.
+  // 교전이 있으면 intensity 가 올라 레이어가 두꺼워진다.
+
+  /** 4마디 진행 (Am - F - G - Em): [근음, 3화음] */
+  private static readonly PROG = [
+    { root: 55.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 43.65, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 49.0, notes: [196.0, 246.9, 293.7] }, // G
+    { root: 41.2, notes: [164.8, 196.0, 246.9] }, // Em
+  ]
+  /** 리드 모티프 (16분 위치 → 음). 0 은 쉼표 */
+  private static readonly LEAD = [
+    880, 0, 0, 987.8, 0, 830.6, 0, 0, 659.3, 0, 739.99, 0, 880, 0, 0, 0,
+  ]
+
   startBgm(): void {
     this.bgmOn = true
     if (this.ctx) this.startBgmScheduler()
@@ -341,53 +380,105 @@ export class Sfx {
 
   private startBgmScheduler(): void {
     if (this.bgmTimer || !this.ctx) return
-    this.bgmNextBeat = this.ctx.currentTime + 0.1
+    this.bgmNextBeat = this.ctx.currentTime + 0.12
     this.bgmBeatIndex = 0
-    this.bgmTimer = window.setInterval(() => this.scheduleBgm(), 90)
+    this.bgmTimer = window.setInterval(() => this.scheduleBgm(), 80)
   }
 
   private scheduleBgm(): void {
     const ctx = this.ctx
     if (!ctx || !this.bgmGain || ctx.state !== 'running') return
-    const beat = 60 / 96 / 2 // 8분음표
-    // 4마디 진행, 마디당 8개의 8분음표
-    const chords = [
-      [220, 261.6, 329.6], // Am
-      [174.6, 220, 261.6], // F
-      [130.8 * 2, 164.8 * 2, 196 * 2], // C (한 옥타브 위)
-      [196, 246.9, 293.7], // G
-    ]
-    while (this.bgmNextBeat < ctx.currentTime + 0.25) {
+    const step16 = 60 / 132 / 4 // 16분음표 길이
+    this.intensity = Math.max(0, this.intensity - 0.0016)
+    while (this.bgmNextBeat < ctx.currentTime + 0.3) {
       const t = this.bgmNextBeat
       const i = this.bgmBeatIndex
-      const bar = Math.floor(i / 8) % 4
-      const step = i % 8
-      const chord = chords[bar]
-      // 베이스: 마디 첫 박과 5번째 박
-      if (step === 0 || step === 4) this.bgmNote(t, chord[0] / 2, 'triangle', beat * 3.6, 0.5)
-      // 아르페지오: 8분음표마다 코드 톤 순환
-      const note = chord[(step + (bar % 2)) % 3] * (step >= 4 ? 2 : 1)
-      this.bgmNote(t, note, 'sine', beat * 1.6, 0.28)
-      // 하이햇: 홀수 박에 짧은 노이즈
-      if (step % 2 === 1) this.bgmHat(t, 0.06)
-      this.bgmNextBeat += beat
+      const step = i % 64
+      const bar = (step / 16) | 0
+      const s16 = step % 16
+      const ch = Sfx.PROG[bar]
+      const hot = this.intensity > 0.35
+
+      // 킥 (심장 박동처럼)
+      if (s16 === 0 || s16 === 6 || s16 === 8 || (hot && s16 === 14)) this.bgmKick(t)
+      // 스네어
+      if (s16 === 4 || s16 === 12) this.bgmSnare(t, 0.22)
+      if (hot && s16 === 15) this.bgmSnare(t, 0.12)
+      // 하이햇
+      if (s16 % 2 === 0) this.bgmHat(t, s16 % 4 === 0 ? 0.05 : 0.03)
+      else if (hot) this.bgmHat(t, 0.022)
+      // 16분 베이스 (8번째마다 옥타브 위로 튄다)
+      const bassF = ch.root * (s16 % 8 === 7 ? 2 : 1)
+      this.bgmNote(t, bassF, 'sawtooth', step16 * 0.85, 0.4, 220)
+      // 아르페지오 (엇박)
+      if (s16 % 2 === 1) {
+        const n = ch.notes[((s16 / 2) | 0) % 3]
+        this.bgmNote(t, n, 'triangle', step16 * 1.6, 0.16, 2600)
+      }
+      // 리드 모티프: 2·4마디에, 교전 중이면 항상
+      if (bar % 2 === 1 || hot) {
+        const lf = Sfx.LEAD[s16]
+        if (lf) this.bgmNote(t, lf, 'square', step16 * 2.2, hot ? 0.13 : 0.09, 3200)
+      }
+      // 8마디마다 긴장 상승음
+      if (step === 48 && this.intensity > 0.15) this.bgmRiser(t, step16 * 16)
+
+      this.bgmNextBeat += step16
       this.bgmBeatIndex++
     }
   }
 
-  private bgmNote(t0: number, f: number, type: OscillatorType, dur: number, peak: number): void {
+  private bgmNote(t0: number, f: number, type: OscillatorType, dur: number, peak: number, cutoff: number): void {
     const ctx = this.ctx!
     const osc = ctx.createOscillator()
     osc.type = type
     osc.frequency.value = f
+    const flt = ctx.createBiquadFilter()
+    flt.type = 'lowpass'
+    flt.frequency.value = cutoff
+    flt.Q.value = 1.2
     const g = ctx.createGain()
     g.gain.setValueAtTime(0.0001, t0)
-    g.gain.linearRampToValueAtTime(peak, t0 + 0.02)
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.012)
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-    osc.connect(g)
+    osc.connect(flt)
+    flt.connect(g)
     g.connect(this.bgmGain!)
     osc.start(t0)
     osc.stop(t0 + dur + 0.05)
+  }
+
+  private bgmKick(t0: number): void {
+    const ctx = this.ctx!
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(150, t0)
+    osc.frequency.exponentialRampToValueAtTime(42, t0 + 0.12)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.9, t0)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22)
+    osc.connect(g)
+    g.connect(this.bgmGain!)
+    osc.start(t0)
+    osc.stop(t0 + 0.26)
+  }
+
+  private bgmSnare(t0: number, peak: number): void {
+    const ctx = this.ctx!
+    const src = ctx.createBufferSource()
+    src.buffer = this.noise
+    const flt = ctx.createBiquadFilter()
+    flt.type = 'bandpass'
+    flt.frequency.value = 1900
+    flt.Q.value = 0.8
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(peak, t0)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16)
+    src.connect(flt)
+    flt.connect(g)
+    g.connect(this.bgmGain!)
+    src.start(t0)
+    src.stop(t0 + 0.18)
   }
 
   private bgmHat(t0: number, peak: number): void {
@@ -396,15 +487,37 @@ export class Sfx {
     src.buffer = this.noise
     const flt = ctx.createBiquadFilter()
     flt.type = 'highpass'
-    flt.frequency.value = 6000
+    flt.frequency.value = 7000
     const g = ctx.createGain()
     g.gain.setValueAtTime(peak, t0)
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045)
     src.connect(flt)
     flt.connect(g)
     g.connect(this.bgmGain!)
     src.start(t0)
     src.stop(t0 + 0.06)
+  }
+
+  /** 서서히 차오르는 긴장음 */
+  private bgmRiser(t0: number, dur: number): void {
+    const ctx = this.ctx!
+    const src = ctx.createBufferSource()
+    src.buffer = this.noise
+    src.loop = true
+    const flt = ctx.createBiquadFilter()
+    flt.type = 'bandpass'
+    flt.Q.value = 6
+    flt.frequency.setValueAtTime(400, t0)
+    flt.frequency.exponentialRampToValueAtTime(5200, t0 + dur)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t0)
+    g.gain.linearRampToValueAtTime(0.16, t0 + dur * 0.85)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+    src.connect(flt)
+    flt.connect(g)
+    g.connect(this.bgmGain!)
+    src.start(t0)
+    src.stop(t0 + dur + 0.1)
   }
 
   dispose(): void {

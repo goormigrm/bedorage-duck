@@ -3,6 +3,7 @@
 
 import { Difficulty } from '../core/bot'
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../core/characters'
+import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MAPS, MAP_LIST, MapId, isMapId, isMapScale, scaleForPlayers } from '../core/maps'
 import { MAX_PLAYERS, MIN_PLAYERS } from '../core/state'
 import { WEAPONS } from '../core/weapons'
@@ -11,6 +12,7 @@ import {
   makeRoomCode, normalizeCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
 } from '../net/room'
 import { drawPortrait } from '../render/character'
+import { drawMapPreview } from '../render/minimap'
 import { TEAM_NAMES } from '../render/hud'
 import { SessionConfig } from '../game/session'
 
@@ -18,13 +20,17 @@ export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
 }
 
-const KILL_OPTIONS = [3, 5, 10]
+/** 목표 킬: 5~50, 5 단위 */
+const KILL_OPTIONS = Array.from({ length: 10 }, (_, i) => (i + 1) * 5)
+/** 로비 미리보기용 고정 시드 (실제 판은 매번 다른 시드로 생성된다) */
+const PREVIEW_SEED = 20260904
 
 export class Lobby {
   private char: CharacterId = 'cheolmyeon'
   private mapId: MapId = DEFAULT_MAP
   private killsSolo = 5
   private killsRoom = 5
+  private previewTimer = 0
   private difficulty: Difficulty = 'normal'
   /** 혼자 하기 봇 수 (1~3) */
   private bots = 1
@@ -58,7 +64,16 @@ export class Lobby {
     this.render()
     this.openLobbyList()
     const code = roomCodeFromUrl()
-    if (code) this.join(code)
+    if (code) {
+      if (this.nick.trim().length === 0) {
+        this.status(`초대 링크로 들어왔습니다. 닉네임을 입력하고 아래 "참가"를 누르세요. (코드 ${code})`, '')
+        const el = this.host.querySelector('#join-code') as HTMLInputElement | null
+        if (el) el.value = code
+        ;(this.host.querySelector('#nick') as HTMLInputElement | null)?.focus()
+      } else {
+        this.join(code)
+      }
+    }
   }
 
   // ---------- 화면 ----------
@@ -71,13 +86,20 @@ export class Lobby {
         <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html">프리뷰 보기</a></p>
         <div class="feats"><span>덕코프식 시야</span><span>개인전 · 2v2 팀전</span><span>인원에 따라 맵 4배</span><span>리스폰 중 Tab 캐릭터 교체</span><span>설치 없음 · 서버 없음</span></div>
 
-        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small><input class="nick" id="nick" maxlength="8" placeholder="닉네임 (선택)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false"></div>
+        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small><input class="nick" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false"></div>
         <div class="chars" id="chars"></div>
 
-        <div class="section-t">맵 <small>3명이면 2배, 4명이면 4배로 넓어진다</small></div>
-        <div class="row" style="margin-bottom:22px"><div class="seg" id="seg-map">
-          ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
-        </div><span class="hintline" id="map-desc">${MAPS[this.mapId].desc}</span></div>
+        <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명이면 4배</small></div>
+        <div class="maprow">
+          <div>
+            <div class="seg" id="seg-map">
+              ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+            </div>
+            <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
+            <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
+          </div>
+          <canvas id="map-preview" class="mappv"></canvas>
+        </div>
 
         <div class="modes">
           <div class="mode">
@@ -91,9 +113,9 @@ export class Lobby {
             </div><div class="seg" id="seg-solo-mode">
               <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2</button>
             </div></div>
-            <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-solo">
-              ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
-            </div></div>
+            <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
+              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+            </select></div>
             <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
           </div>
 
@@ -103,9 +125,9 @@ export class Lobby {
             <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
               <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2 팀전</button>
             </div></div>
-            <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-room">
-              ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
-            </div></div>
+            <div class="row"><label>목표 킬</label><select class="sel" id="kills-room">
+              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+            </select></div>
             <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
           </div>
 
@@ -141,22 +163,26 @@ export class Lobby {
     this.seg('#seg-map', (v) => {
       if (isMapId(v)) this.mapId = v
       ;(h.querySelector('#map-desc') as HTMLElement).textContent = MAPS[this.mapId].desc
+      this.drawPreview()
       this.hostChanged()
     })
     this.seg('#seg-diff', (v) => (this.difficulty = v as Difficulty))
     this.seg('#seg-bots', (v) => {
       this.bots = Number(v)
+      this.drawPreview()
       if (this.bots !== 3 && this.soloMode === 'teams') this.setSeg('#seg-solo-mode', 'ffa')
     })
     this.seg('#seg-solo-mode', (v) => {
       this.soloMode = v as 'ffa' | 'teams'
       if (this.soloMode === 'teams') this.setSeg('#seg-bots', '3')
     })
-    this.seg('#seg-kills-solo', (v) => (this.killsSolo = Number(v)))
-    this.seg('#seg-kills-room', (v) => {
-      this.killsRoom = Number(v)
+    const soloSel = h.querySelector('#kills-solo') as HTMLSelectElement
+    soloSel.onchange = () => (this.killsSolo = Number(soloSel.value))
+    const roomSel = h.querySelector('#kills-room') as HTMLSelectElement
+    roomSel.onchange = () => {
+      this.killsRoom = Number(roomSel.value)
       this.hostChanged()
-    })
+    }
     this.seg('#seg-room-mode', (v) => {
       this.roomMode = v as RoomMode
       if (this.role === 'host') this.members.forEach((m, i) => (m.team = this.roomMode === 'teams' ? i % 2 : 0))
@@ -184,6 +210,18 @@ export class Lobby {
     ;(h.querySelector('#join-code') as HTMLInputElement).addEventListener('keydown', (e) => {
       if (e.key === 'Enter') (h.querySelector('#btn-join') as HTMLButtonElement).click()
     })
+    requestAnimationFrame(() => this.drawPreview())
+  }
+
+  /** 맵 미리보기 (실제 판은 다른 시드로 생성되므로 '대략적인 구성') */
+  private drawPreview(): void {
+    const cv = this.host.querySelector('#map-preview') as HTMLCanvasElement | null
+    if (!cv) return
+    clearTimeout(this.previewTimer)
+    this.previewTimer = window.setTimeout(() => {
+      const players = this.role ? Math.max(2, this.members.length) : 1 + this.bots
+      drawMapPreview(cv, buildMap(this.mapId, scaleForPlayers(players), PREVIEW_SEED))
+    }, 0)
   }
 
   /** 호스트 설정(맵·목표·모드)이 바뀌면 방송·목록 갱신 */
@@ -307,7 +345,19 @@ export class Lobby {
   }
 
   // ---------- 방 만들기 / 참가 ----------
+  /** 방에 들어가기 전 닉네임 확인. 비어 있으면 입력칸으로 보낸다 */
+  private requireNick(): boolean {
+    if (this.nick.trim().length > 0) return true
+    const el = this.host.querySelector('#nick') as HTMLInputElement | null
+    el?.focus()
+    el?.classList.add('need')
+    setTimeout(() => el?.classList.remove('need'), 1200)
+    this.status('닉네임을 먼저 입력해 주세요. 게임 중 캐릭터 위에 표시됩니다. (8자까지)', 'bad')
+    return false
+  }
+
   private hostRoom(): void {
+    if (!this.requireNick()) return
     this.closeLink()
     const code = makeRoomCode()
     this.role = 'host'
@@ -324,6 +374,7 @@ export class Lobby {
   }
 
   private join(code: string): void {
+    if (!this.requireNick()) return
     this.closeLink()
     this.role = 'guest'
     this.link = openRoom(code, 'guest')

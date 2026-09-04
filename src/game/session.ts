@@ -6,7 +6,7 @@ import { CHARACTERS, CHARACTER_LIST, CharacterId, displayNames } from '../core/c
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
-import { createState, dropPlayer, hashState, snapshot, step } from '../core/sim'
+import { createState, dropPlayer, hashState, snapshot, step, syncSandbags } from '../core/sim'
 import { GameState, TICK_MS, isTeamMatch } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
@@ -78,7 +78,7 @@ export class Session {
     host: HTMLElement,
     private cfg: SessionConfig,
   ) {
-    this.map = buildMap(cfg.mapId ?? DEFAULT_MAP, cfg.mapScale ?? scaleForPlayers(cfg.chars.length))
+    this.map = buildMap(cfg.mapId ?? DEFAULT_MAP, cfg.mapScale ?? scaleForPlayers(cfg.chars.length), cfg.seed)
     this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars, teams: cfg.teams }, this.map)
     this.prev = snapshot(this.state)
     this.makeBots(cfg.seed)
@@ -88,7 +88,7 @@ export class Session {
         <div class="game-stage" id="stage">
           <div class="game-ui">
             <div class="top-right"><button class="btn secondary" id="btn-mute">소리</button><button class="btn secondary" id="btn-lobby">로비로</button></div>
-            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·직후 3초) · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
+            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
         </div>
@@ -298,6 +298,7 @@ export class Session {
         const snap = m.state as GameState
         this.state = snap
         this.state.events = []
+        syncSandbags(this.state, this.map)
         while (this.state.tick < target && this.lockstep.hasAll(this.state.tick)) {
           step(this.state, this.map, this.lockstep.get(this.state.tick))
           this.applyDrops()
@@ -326,6 +327,9 @@ export class Session {
   }
 
   private restart(seed: number): void {
+    // 맵도 시드로 새로 생성한다 (매 판 구조물이 달라진다)
+    this.map = buildMap(this.cfg.mapId ?? DEFAULT_MAP, this.cfg.mapScale ?? scaleForPlayers(this.cfg.chars.length), seed)
+    this.renderer.setMap(this.map)
     this.state = createState({ seed, targetKills: this.cfg.targetKills, chars: this.cfg.chars, teams: this.cfg.teams }, this.map)
     // 이미 나간 사람은 처음부터 빠진 채로
     for (const d of this.dropped) dropPlayer(this.state, d)

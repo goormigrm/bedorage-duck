@@ -89,6 +89,32 @@ export function circlesOverlap(
   return dx * dx + dy * dy < r * r
 }
 
+/** 점 (cx,cy) 에서 방향 (dx,dy) 인 직선까지의 수직 거리. 탄이 얼마나 정확히 겨눴는지 잰다. */
+export function pointLineDistance(cx: number, cy: number, x0: number, y0: number, dx: number, dy: number): number {
+  const l = Math.sqrt(dx * dx + dy * dy)
+  if (l === 0) return Math.sqrt((cx - x0) ** 2 + (cy - y0) ** 2)
+  return Math.abs(dx * (y0 - cy) - dy * (x0 - cx)) / l
+}
+
+/** 점 (cx,cy) 에서 선분 (x0,y0)-(x1,y1) 까지의 최단 거리. 부위 판정에 쓴다. */
+export function pointSegDistance(
+  cx: number,
+  cy: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): number {
+  const dx = x1 - x0
+  const dy = y1 - y0
+  const a = dx * dx + dy * dy
+  if (a === 0) return Math.sqrt((cx - x0) ** 2 + (cy - y0) ** 2)
+  let t = ((cx - x0) * dx + (cy - y0) * dy) / a
+  if (t < 0) t = 0
+  else if (t > 1) t = 1
+  return Math.sqrt((x0 + dx * t - cx) ** 2 + (y0 + dy * t - cy) ** 2)
+}
+
 /**
  * 선분 (x0,y0)-(x1,y1) 이 원(cx,cy,r) 과 만나는가. 빠른 탄의 터널링 방지.
  */

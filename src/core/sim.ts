@@ -1,9 +1,9 @@
 import { CHARACTERS, CHARACTER_LIST } from './characters'
-import { atan2A, cosA, sinA, len } from './fixedmath'
+import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
-import { GameMap, isWallAt, rayBlocked } from './map'
-import { circlesOverlap, moveCircle, segmentHitsCircle } from './physics'
-import { makeRng, rand, randInt } from './rng'
+import { GameMap, SANDBAG_HP, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
+import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
+import { makeRng, randInt } from './rng'
 import {
   Bullet,
   COUNTDOWN_TICKS,
@@ -15,13 +15,16 @@ import {
   MatchConfig,
   PLAYER_RADIUS,
   PlayerState,
+  DASH_COST,
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
+  STAMINA_MAX,
+  STAMINA_REGEN,
   SWAP_GRACE_TICKS,
   isEnemy,
   teamKills,
 } from './state'
-import { PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, partThresholds } from './weapons'
+import { PART_BODY, PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, headMult, partForOffset } from './weapons'
 
 const MAX_RECOIL_MUL = 3
 
@@ -40,7 +43,13 @@ export function createState(cfg: MatchConfig, map: GameMap): GameState {
     bullets: [],
     nextBulletId: 1,
     winner: -1,
+    sandbags: {},
     events: [],
+  }
+  // 같은 맵 객체로 다시 시작해도 똑같이 시작하도록 부서진 모래주머니를 되돌린다
+  for (const i of map.sandbagIdx) {
+    map.tiles[i] = TILE_SANDBAG
+    state.sandbags[i] = SANDBAG_HP
   }
   // 초기 스폰: 첫 사람은 무작위, 다음 사람은 이미 놓인 모두에게서 가장 먼 곳
   const used: { x: number; y: number }[] = []
@@ -91,6 +100,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     left: false,
     choosing: false,
     streak: 0,
+    stamina: STAMINA_MAX,
   }
 }
 
@@ -195,6 +205,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   }
   if (p.fireCooldown > 0) p.fireCooldown--
   if (p.dashCooldown > 0) p.dashCooldown--
+  if (p.dashTimer === 0 && p.stamina < STAMINA_MAX) p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN)
   if (p.invuln > 0) p.invuln--
   if (p.legInjury > 0) p.legInjury--
   if (p.reloadTimer > 0) {
@@ -242,8 +253,10 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     input.buttons & BTN_DASH &&
     p.dashCooldown === 0 &&
     p.dashTimer === 0 &&
+    p.stamina >= DASH_COST &&
     (mx !== 0 || my !== 0)
   ) {
+    p.stamina -= DASH_COST
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     p.dashDx = mx * inv
     p.dashDy = my * inv
@@ -265,12 +278,45 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   const trigger = w.auto ? firePressed : firePressed && !p.prevFire
   p.prevFire = firePressed
   if (playing && trigger && p.dashTimer === 0) {
-    if (p.ammo === 0 && p.reloadTimer === 0) {
+    const infinite = w.magSize === 0
+    if (!infinite && p.ammo === 0 && p.reloadTimer === 0) {
       p.reloadTimer = w.reloadTicks
       state.events.push({ type: 'reload', p: p.id })
-    } else if (p.fireCooldown === 0 && p.reloadTimer === 0 && p.ammo > 0) {
+    } else if (p.fireCooldown === 0 && p.reloadTimer === 0 && (infinite || p.ammo > 0)) {
       fire(state, map, p)
     }
+  }
+}
+
+/** 총구에서 나간 이 각도의 탄이 적의 머리(중심)를 정확히 겨누는가 → 모래주머니를 넘어간다 */
+function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: number, my: number, a: number): boolean {
+  const dx = cosA(a)
+  const dy = sinA(a)
+  for (const e of state.players) {
+    if (!isEnemy(shooter, e) || !e.alive || e.left) continue
+    const t = (e.x - mx) * dx + (e.y - my) * dy
+    if (t <= 0 || t > 1200) continue
+    if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * 0.34) continue
+    if (rayCast(map, mx, my, e.x, e.y, 'sight').blocked) continue
+    return true
+  }
+  return false
+}
+
+/** 근접 무기(후라이팬): 부채꼴 안의 적을 바로 때린다 */
+function meleeSwing(state: GameState, map: GameMap, p: PlayerState): void {
+  const w = WEAPONS[p.weapon]
+  const range = (w.meleeRange ?? 60) + PLAYER_RADIUS
+  const arc = w.meleeArc ?? 150
+  for (const victim of state.players) {
+    if (!isEnemy(p, victim) || !victim.alive || victim.left || victim.invuln > 0 || victim.dashTimer > 0) continue
+    const dx = victim.x - p.x
+    const dy = victim.y - p.y
+    if (len(dx, dy) > range) continue
+    if (Math.abs(angleDiff(atan2A(dy, dx), p.aim)) > arc) continue
+    if (rayCast(map, p.x, p.y, victim.x, victim.y, 'bullet', true).blocked) continue
+    p.streak = Math.min(99, p.streak + 1)
+    hurt(state, p, victim, Math.round(w.damage), PART_BODY, victim.x, victim.y)
   }
 }
 
@@ -283,6 +329,14 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
     mx = p.x
     my = p.y
   }
+  if (w.melee) {
+    p.fireCooldown = w.fireInterval
+    state.events.push({ type: 'fire', p: p.id, x: mx, y: my, aim: p.aim, weapon: p.weapon })
+    meleeSwing(state, map, p)
+    return
+  }
+  // 모래주머니에 붙어 쏘면(엄폐) 내 탄은 넘어간다
+  const inCover = nearSandbag(map, p.x, p.y)
   for (let i = 0; i < w.pellets; i++) {
     const off = spread > 0 ? randInt(state.rng, -spread, spread + 1) : 0
     const a = (p.aim + off) & 1023
@@ -302,14 +356,15 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
       oy: p.y,
       weapon: p.weapon,
       hitSomeone: false,
+      over: inCover || aimsAtHead(state, map, p, mx, my, a),
     }
     state.bullets.push(b)
   }
-  p.ammo--
+  if (w.magSize > 0) p.ammo--
   p.fireCooldown = w.fireInterval
   p.recoil = Math.min(w.recoil * MAX_RECOIL_MUL * 2, p.recoil + w.recoil)
   state.events.push({ type: 'fire', p: p.id, x: mx, y: my, aim: p.aim, weapon: p.weapon })
-  if (p.ammo === 0) {
+  if (w.magSize > 0 && p.ammo === 0) {
     p.reloadTimer = w.reloadTicks
     state.events.push({ type: 'reload', p: p.id })
   }
@@ -327,8 +382,10 @@ function stepBullets(state: GameState, map: GameMap): void {
     b.life--
     let dead = false
 
-    if (rayBlocked(map, b.px, b.py, b.x, b.y)) {
+    const tileHit = rayCast(map, b.px, b.py, b.x, b.y, 'bullet', b.over)
+    if (tileHit.blocked) {
       const aim = state.players[b.owner].aim
+      if (tileHit.tile === TILE_SANDBAG) damageSandbag(state, map, tileHit.tx, tileHit.ty, b.damage)
       state.events.push({ type: 'wall', x: b.x, y: b.y, aim })
       dead = true
     }
@@ -339,7 +396,7 @@ function stepBullets(state: GameState, map: GameMap): void {
       for (const victim of state.players) {
         if (!isEnemy(shooter, victim) || !victim.alive || victim.left || victim.invuln > 0 || victim.dashTimer > 0) continue // 대시(구르기) 중 무적
         if (segmentHitsCircle(b.px, b.py, b.x, b.y, victim.x, victim.y, PLAYER_RADIUS)) {
-          applyHit(state, b, victim)
+          applyHit(state, b, victim, pointLineDistance(victim.x, victim.y, b.px, b.py, b.vx, b.vy))
           dead = true
           break
         }
@@ -354,36 +411,74 @@ function stepBullets(state: GameState, map: GameMap): void {
   bullets.length = write
 }
 
-function applyHit(state: GameState, b: Bullet, victim: PlayerState): void {
-  const dist = len(victim.x - b.ox, victim.y - b.oy)
-  const [th, tb] = partThresholds(b.ads, dist)
-  const r = rand(state.rng)
-  const part = r < th ? PART_HEAD : r < tb ? 1 : PART_LEGS
-  let dmg = b.damage * PART_MULT[part] * falloff(WEAPONS[b.weapon], dist)
-  const shooter = state.players[b.owner]
-  if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
-  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(5, shooter.streak) * 0.08 // 기열덕: 연속 명중 +8% (최대 +40%)
-  dmg = Math.round(dmg)
-  b.hitSomeone = true
-  shooter.streak = Math.min(99, shooter.streak + 1)
+function damageSandbag(state: GameState, map: GameMap, tx: number, ty: number, dmg: number): void {
+  const i = ty * map.w + tx
+  const hp = state.sandbags[i]
+  if (hp === undefined) return
+  const left = hp - dmg
+  if (left <= 0) {
+    delete state.sandbags[i]
+    map.tiles[i] = 0
+    state.events.push({ type: 'break', tx, ty })
+  } else {
+    state.sandbags[i] = left
+  }
+}
+
+/** 상태(정본)에 맞춰 맵의 모래주머니 타일을 되돌린다 (리싱크 후) */
+export function syncSandbags(state: GameState, map: GameMap): void {
+  for (const i of map.sandbagIdx) {
+    map.tiles[i] = state.sandbags[i] === undefined ? 0 : TILE_SANDBAG
+  }
+}
+
+/** 실제 피해 적용 (근접·투사체 공용) */
+function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: number, part: number, hx: number, hy: number): void {
+  if (dmg <= 0) return
   victim.hp -= dmg
   victim.lastHitTick = state.tick
   if (part === PART_LEGS) victim.legInjury = 180
-  state.events.push({ type: 'hit', p: victim.id, by: b.owner, x: b.x, y: b.y, part, dmg })
+  state.events.push({ type: 'hit', p: victim.id, by: shooter.id, x: hx, y: hy, part, dmg })
   if (victim.hp <= 0) {
     victim.hp = 0
     victim.alive = false
-    victim.respawnTimer = victim.char === 'seungwoo' ? 120 : RESPAWN_TICKS // 승우덕: 리스폰 2초
+    victim.respawnTimer = victim.char === 'seungwoo' ? 120 : RESPAWN_TICKS
     victim.deaths++
     shooter.kills++
-    if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50) // 통닭덕: 킬 시 회복
-    state.events.push({ type: 'death', p: victim.id, by: b.owner, x: victim.x, y: victim.y })
+    if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50)
+    state.events.push({ type: 'death', p: victim.id, by: shooter.id, x: victim.x, y: victim.y })
     if (teamKills(state, shooter.team) >= state.targetKills && state.phase === 'playing') {
       state.phase = 'over'
       state.winner = shooter.team
       state.events.push({ type: 'over', winner: shooter.team })
     }
   }
+}
+
+/** dOff = 탄 궤적과 상대 중심 사이 최단 거리. 가운데를 정확히 맞히면 머리. */
+function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number): void {
+  const w = WEAPONS[b.weapon]
+  const dist = len(victim.x - b.ox, victim.y - b.oy)
+  const part = partForOffset(dOff, PLAYER_RADIUS)
+  const mult = part === PART_HEAD ? headMult(w) : PART_MULT[part]
+  let dmg = b.damage * mult * falloff(w, dist)
+  const shooter = state.players[b.owner]
+  if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
+  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(5, shooter.streak) * 0.08
+  dmg = Math.round(dmg)
+  b.hitSomeone = true
+  shooter.streak = Math.min(99, shooter.streak + 1)
+  // 근접 무기(후라이팬)를 든 사람은 앞에서 오는 총알을 기력으로 막는다
+  if (WEAPONS[victim.weapon].melee && victim.stamina > 0) {
+    const from = atan2A(b.oy - victim.y, b.ox - victim.x)
+    if (Math.abs(angleDiff(from, victim.aim)) < 213) {
+      const absorbed = Math.min(dmg, Math.floor(victim.stamina))
+      victim.stamina -= absorbed
+      dmg -= absorbed
+      state.events.push({ type: 'block', p: victim.id, x: b.x, y: b.y })
+    }
+  }
+  hurt(state, shooter, victim, dmg, part, b.x, b.y)
 }
 
 function respawn(state: GameState, map: GameMap, p: PlayerState): void {
@@ -414,6 +509,7 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   p.aliveTicks = 0
   p.lastHitTick = -10000
   p.streak = 0
+  p.stamina = STAMINA_MAX
   state.events.push({ type: 'respawn', p: p.id, x: p.x, y: p.y })
 }
 

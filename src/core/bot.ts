@@ -31,10 +31,11 @@ interface DiffDef {
 
 const deg = (d: number) => Math.round((d / 360) * 1024)
 
+// 2026-09-04 전체 하향: 예전 '쉬움'이 지금의 '보통' 정도다
 const DIFFS: Record<Difficulty, DiffDef> = {
-  easy: { reaction: 32, aimErr: deg(11), turnRate: 0.12, fireChance: 0.45, useAds: false, dashChance: 0.002, lead: 0, repathEvery: 24, wobble: deg(6) },
-  normal: { reaction: 14, aimErr: deg(5), turnRate: 0.28, fireChance: 0.8, useAds: true, dashChance: 0.012, lead: 0.5, repathEvery: 12, wobble: deg(3) },
-  hard: { reaction: 5, aimErr: deg(2), turnRate: 0.55, fireChance: 1, useAds: true, dashChance: 0.035, lead: 1.0, repathEvery: 6, wobble: deg(1) },
+  easy: { reaction: 62, aimErr: deg(18), turnRate: 0.07, fireChance: 0.3, useAds: false, dashChance: 0.001, lead: 0, repathEvery: 30, wobble: deg(9) },
+  normal: { reaction: 34, aimErr: deg(11), turnRate: 0.13, fireChance: 0.5, useAds: false, dashChance: 0.005, lead: 0.2, repathEvery: 20, wobble: deg(6) },
+  hard: { reaction: 16, aimErr: deg(5.5), turnRate: 0.3, fireChance: 0.8, useAds: true, dashChance: 0.02, lead: 0.6, repathEvery: 10, wobble: deg(3) },
 }
 
 const PREFERRED_RANGE: Record<WeaponId, number> = {
@@ -43,6 +44,8 @@ const PREFERRED_RANGE: Record<WeaponId, number> = {
   rifle: 260,
   shotgun: 110,
   sniper: 380,
+  mg: 200,
+  pan: 42,
 }
 
 export interface BotMemory {
@@ -207,7 +210,7 @@ export function botInput(
   const range = PREFERRED_RANGE[me.weapon]
   const canSee = los && mem.reaction === 0
   const onTarget = Math.abs(angleDiff(mem.aim, desired)) < deg(6) + Math.max(0, deg(10) - dist / 40)
-  const inRange = dist < range * 1.9
+  const inRange = w.melee ? dist < (w.meleeRange ?? 60) + 12 : dist < range * 1.9
   if (enemy && canSee && onTarget && inRange && enemy.invuln === 0) {
     if (rand(mem.rng) < d.fireChance) {
       // 반자동 무기는 눌렀다 떼야 하므로 격틱 발사

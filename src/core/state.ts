@@ -10,6 +10,11 @@ export const SPAWN_PROTECT_TICKS = 90
 export const COUNTDOWN_TICKS = 180
 export const DASH_TICKS = 10
 export const DASH_SPEED = 9
+/** 기력: 대시와 (근접 무기 보유 시) 총알 막기에 쓴다 */
+export const STAMINA_MAX = 100
+/** 틱당 회복 (약 4.5초에 가득) */
+export const STAMINA_REGEN = 22 / 60
+export const DASH_COST = 34
 /** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
 export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
@@ -56,6 +61,8 @@ export interface PlayerState {
   choosing: boolean
   /** 연속 명중 수 (기열덕 패시브). 빗나가면 0 */
   streak: number
+  /** 기력 0..STAMINA_MAX */
+  stamina: number
 }
 
 export interface Bullet {
@@ -75,6 +82,8 @@ export interface Bullet {
   weapon: WeaponId
   /** 누군가를 맞혔는가 (빗나감 판정용) */
   hitSomeone: boolean
+  /** 모래주머니를 넘어가는 탄 (엄폐 중 사격 또는 머리 조준) */
+  over: boolean
 }
 
 export type SimEvent =
@@ -86,6 +95,10 @@ export type SimEvent =
   | { type: 'reload'; p: number }
   | { type: 'wall'; x: number; y: number; aim: number }
   | { type: 'leave'; p: number }
+  /** 모래주머니 파괴 */
+  | { type: 'break'; tx: number; ty: number }
+  /** 근접 무기로 총알을 막음 */
+  | { type: 'block'; p: number; x: number; y: number }
   /** 캐릭터 선택 화면 진입 (소환 해제) */
   | { type: 'choose'; p: number }
   /** 캐릭터가 바뀜 */
@@ -114,6 +127,8 @@ export interface GameState {
   nextBulletId: number
   /** 이긴 팀 (개인전이면 플레이어 인덱스). -1 = 아직 */
   winner: number
+  /** 살아있는 모래주머니: 타일 인덱스 → 남은 내구도 */
+  sandbags: Record<number, number>
   /** 이번 step 에서 발생한 이벤트. 해시/스냅샷 대상 아님. */
   events: SimEvent[]
 }

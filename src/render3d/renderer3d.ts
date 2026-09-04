@@ -4,13 +4,14 @@
 import * as THREE from 'three'
 import { CHARACTERS } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
-import { GameMap } from '../core/map'
-import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
+import { GameMap, TILE } from '../core/map'
+import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
-import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex } from '../render/hud'
+import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
+import { renderMapTiles } from '../render/minimap'
 import { PITCH, YAW } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
-import { Viewer, Vision, canSee } from './vision'
+import { VIEW_RADIUS_TILES, Viewer, Vision, canSee } from './vision'
 import { U, World3D, buildWorld } from './world3d'
 
 export { VIEW_W, VIEW_H }
@@ -51,6 +52,10 @@ interface DuckVis {
   flash: number
   deadT: number
   fall: number
+  /** 피격 튐 쿨다운 (한 틱에 여러 발 맞아도 한 번만) */
+  hitCd: number
+  /** 근접 휘두르기 (1 → 0) */
+  swing: number
 }
 
 interface Flash {
@@ -85,6 +90,11 @@ export class Renderer3D {
   private vision: Vision
   /** 시야 밖(안 보이는) 플레이어 */
   private hidden: boolean[] = []
+  /** 마지막으로 본 뒤 남은 시간 — 경계에서 깜빡이지 않도록 (초) */
+  private seenT: number[] = []
+  /** 스코프(저격 정조준) 중인가 */
+  private scoped = false
+  private miniCanvas: HTMLCanvasElement | null = null
   private lastViewer: Viewer | null = null
   private rigs: CharacterRig[] = []
   private rigChars: string[] = []
@@ -104,6 +114,7 @@ export class Renderer3D {
   private camDist = FOLLOW_DIST
   private camInit = false
   private t = 0
+  private lastDt = 0.016
   private dpr = 1
   private bulletGeo = new THREE.SphereGeometry(0.07, 8, 6)
   private bulletMat = new THREE.MeshBasicMaterial({ color: 0xfff1a0 })
@@ -114,10 +125,13 @@ export class Renderer3D {
   private raycaster = new THREE.Raycaster()
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
 
+  map: GameMap
+
   constructor(
     readonly container: HTMLElement,
-    readonly map: GameMap,
+    map: GameMap,
   ) {
+    this.map = map
     this.canvas = document.createElement('canvas')
     this.canvas.className = 'gl'
     const hudCanvas = document.createElement('canvas')
@@ -141,6 +155,23 @@ export class Renderer3D {
     this.vision = new Vision(map)
     this.scene.add(this.vision.group)
     this.resize()
+  }
+
+  /** 새 판(새 맵)으로 교체 */
+  setMap(map: GameMap): void {
+    this.scene.remove(this.world.group)
+    this.world.dispose()
+    this.scene.remove(this.vision.group)
+    this.vision.dispose()
+    this.map = map
+    this.world = buildWorld(map)
+    this.scene.add(this.world.group)
+    this.vision = new Vision(map)
+    this.scene.add(this.vision.group)
+    this.scene.background = new THREE.Color(map.theme.outside)
+    this.scene.fog = new THREE.Fog(map.theme.fog, 34, 70)
+    this.miniCanvas = null
+    this.camInit = false
   }
 
   resize(): void {
@@ -200,10 +231,15 @@ export class Renderer3D {
         case 'fire': {
           const w = WEAPONS[e.weapon]
           const rig = this.rigs[e.p]
+          const v = this.vis[e.p]
+          if (w.melee) {
+            // 후라이팬: 휘두르는 모션
+            v.swing = 1
+            break
+          }
           const tip = new THREE.Vector3()
           rig.gunTip.getWorldPosition(tip)
           this.spawnFlash(tip, w.pellets > 1 ? 1.6 : 1)
-          const v = this.vis[e.p]
           v.vsx -= 0.12
           v.vsy += 0.08
           if (e.p === localPlayer) this.shake = Math.max(this.shake, w.pellets > 1 ? 0.12 : 0.05)
@@ -226,8 +262,12 @@ export class Renderer3D {
           const v = this.vis[e.p]
           this.hitShow[e.p] = 2.5
           v.flash = 0.12
-          v.vsx += 0.3
-          v.vsy -= 0.25
+          // 산탄·기관총처럼 한 틱에 여러 발 맞아도 튐은 한 번만 (예전엔 겹쳐서 튀었다)
+          if (v.hitCd <= 0) {
+            v.hitCd = 0.1
+            v.vsx += 0.28
+            v.vsy -= 0.24
+          }
           const head = e.part === PART_HEAD
           this.texts.push({ x: e.x * U, z: e.y * U, y: 1.9, text: head ? `${e.dmg} 헤드` : `${e.dmg}`, life: 0.8, max: 0.8, color: head ? '#ffd84a' : '#ffffff', big: head })
           for (let i = 0; i < 6; i++) {
@@ -273,6 +313,28 @@ export class Renderer3D {
           this.hitShow[e.p] = 0
           break
         }
+        case 'break': {
+          this.world.breakSandbag(e.tx, e.ty)
+          this.miniCanvas = null
+          const cx = (e.tx + 0.5) * 1
+          const cz = (e.ty + 0.5) * 1
+          for (let i = 0; i < 10; i++) {
+            const a = Math.random() * Math.PI * 2
+            const sp = 0.03 + Math.random() * 0.07
+            this.spawnParticle(cx, 0.3, cz, Math.cos(a) * sp, 0.06 + Math.random() * 0.07, Math.sin(a) * sp, 0.7, 0xc7ad76, 0.9)
+          }
+          this.spawnRing(cx, cz, 0.2, 1.2, 0.4, 0xd6bc84)
+          break
+        }
+        case 'block': {
+          for (let i = 0; i < 5; i++) {
+            const a = Math.random() * Math.PI * 2
+            const sp = 0.04 + Math.random() * 0.08
+            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.06, Math.sin(a) * sp, 0.3, 0xbfd8ff, 0.7)
+          }
+          this.texts.push({ x: e.x * U, z: e.y * U, y: 1.6, text: '막음', life: 0.5, max: 0.5, color: '#9fe0ff', big: false })
+          break
+        }
         case 'over':
           this.hud.showOver()
           break
@@ -314,6 +376,12 @@ export class Renderer3D {
   draw(prev: GameState, curr: GameState, alpha: number, dt: number, opts: RenderOptions): void {
     this.ensureRigs(curr)
     const ts = opts.timeScale ?? 1
+    this.lastDt = dt
+    this.scoped =
+      opts.localPlayer >= 0 &&
+      curr.players[opts.localPlayer].alive &&
+      curr.players[opts.localPlayer].ads &&
+      WEAPONS[curr.players[opts.localPlayer].weapon].scope === true
     this.t += dt
     const sdt = dt * ts
     this.updateEffects(sdt)
@@ -343,7 +411,9 @@ export class Renderer3D {
     this.drawPings()
     this.drawNameTags(curr, pos, opts)
     this.hud.drawVignette()
+    if (this.scoped && opts.cursor) this.drawScope(opts.cursor)
     this.hud.drawMain(curr, opts)
+    if (opts.showHud) this.drawMinimap(curr, opts)
   }
 
   /** 시야: 나(와 아군)가 보는 곳만 밝히고, 그 밖의 적은 숨긴다. 관전(-1)이나 fog:false 면 전부 보인다 */
@@ -365,11 +435,119 @@ export class Renderer3D {
     }
     if (viewers.length > 0) this.lastViewer = { x: me.alive ? me.x : viewers[0].x, y: me.alive ? me.y : viewers[0].y }
     else if (this.lastViewer) viewers.push(this.lastViewer) // 죽어 있는 동안은 마지막 자리에서 본다
-    this.vision.update(viewers)
+    const radius = VIEW_RADIUS_TILES * (this.scoped ? 1.8 : 1)
+    this.vision.update(viewers, radius)
+    if (this.seenT.length !== n) this.seenT = curr.players.map(() => 0)
     for (let i = 0; i < n; i++) {
       const p = curr.players[i]
-      this.hidden[i] = p.team !== me.team && !canSee(this.map, viewers, p.x, p.y)
+      const visible = p.team === me.team || canSee(this.map, viewers, p.x, p.y, radius * 32)
+      // 경계에서 깜빡이지 않도록 잠깐 남긴다
+      if (visible) this.seenT[i] = 0.22
+      else this.seenT[i] = Math.max(0, this.seenT[i] - this.lastDt)
+      this.hidden[i] = this.seenT[i] <= 0
     }
+  }
+
+  /** 저격 조준경: 커서 둘레만 남기고 어둡게 + 십자선 */
+  private drawScope(cur: { x: number; y: number }): void {
+    const ctx = this.hud.ctx
+    const r = 210
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, 0, VIEW_W, VIEW_H)
+    ctx.arc(cur.x, cur.y, r, 0, Math.PI * 2, true)
+    ctx.fillStyle = 'rgba(4,6,4,0.93)'
+    ctx.fill('evenodd')
+    ctx.restore()
+    const g = ctx.createRadialGradient(cur.x, cur.y, r * 0.55, cur.x, cur.y, r)
+    g.addColorStop(0, 'rgba(0,0,0,0)')
+    g.addColorStop(1, 'rgba(4,6,4,0.85)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(cur.x, cur.y, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(20,24,18,0.95)'
+    ctx.lineWidth = 6
+    ctx.beginPath()
+    ctx.arc(cur.x, cur.y, r + 2, 0, Math.PI * 2)
+    ctx.stroke()
+    // 십자선
+    ctx.strokeStyle = 'rgba(220,230,210,0.75)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(cur.x - r, cur.y)
+    ctx.lineTo(cur.x - 16, cur.y)
+    ctx.moveTo(cur.x + 16, cur.y)
+    ctx.lineTo(cur.x + r, cur.y)
+    ctx.moveTo(cur.x, cur.y - r)
+    ctx.lineTo(cur.x, cur.y - 16)
+    ctx.moveTo(cur.x, cur.y + 16)
+    ctx.lineTo(cur.x, cur.y + r)
+    ctx.stroke()
+    // 눈금
+    ctx.strokeStyle = 'rgba(220,230,210,0.55)'
+    for (let i = 1; i <= 4; i++) {
+      const y = cur.y + i * 26
+      const half = 10 - i
+      ctx.beginPath()
+      ctx.moveTo(cur.x - half, y)
+      ctx.lineTo(cur.x + half, y)
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(220,230,210,0.9)'
+    ctx.beginPath()
+    ctx.arc(cur.x, cur.y, 1.6, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  /** 왼쪽 위 미니맵 */
+  private drawMinimap(curr: GameState, opts: RenderOptions): void {
+    const map = this.map
+    if (!this.miniCanvas) this.miniCanvas = renderMapTiles(map)
+    const ctx = this.hud.ctx
+    const maxW = 190
+    const maxH = 150
+    const sc = Math.min(maxW / map.w, maxH / map.h)
+    const w = map.w * sc
+    const h = map.h * sc
+    const x = 16
+    const y = 16
+    ctx.save()
+    ctx.fillStyle = 'rgba(13,17,23,0.78)'
+    roundRect(ctx, x - 6, y - 6, w + 12, h + 12, 8)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(227,179,65,0.35)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.globalAlpha = 0.9
+    ctx.drawImage(this.miniCanvas, x, y, w, h)
+    ctx.globalAlpha = 1
+    const lp = opts.localPlayer
+    const teams = isTeamMatch(curr)
+    const myTeam = lp >= 0 ? curr.players[lp].team : -1
+    for (let i = 0; i < curr.players.length; i++) {
+      const p = curr.players[i]
+      if (!p.alive || p.left) continue
+      const mine = i === lp
+      const ally = teams && lp >= 0 && p.team === myTeam && !mine
+      if (!mine && !ally && this.hidden[i] && lp >= 0) continue // 안 보이는 적은 미니맵에도 없다
+      const px = x + (p.x / TILE) * sc
+      const py = y + (p.y / TILE) * sc
+      ctx.fillStyle = mine ? '#ffd84a' : ally ? '#5aa9ff' : '#ff5a4a'
+      ctx.beginPath()
+      ctx.arc(px, py, mine ? 3.4 : 2.8, 0, Math.PI * 2)
+      ctx.fill()
+      if (mine) {
+        const r = angleToRad(p.aim)
+        ctx.strokeStyle = '#ffd84a'
+        ctx.lineWidth = 1.6
+        ctx.beginPath()
+        ctx.moveTo(px, py)
+        ctx.lineTo(px + Math.cos(r) * 9, py + Math.sin(r) * 9)
+        ctx.stroke()
+      }
+    }
+    ctx.restore()
   }
 
   /** 총성 표시: 화면 안이면 그 자리에 퍼지는 링, 밖이면 화면 가장자리 화살표 */
@@ -446,17 +624,21 @@ export class Renderer3D {
       const hpK = Math.max(0, p.hp / c.maxHp)
       const fade = mine || ally || spectator ? 1 : Math.min(1, this.hitShow[i] * 2)
       ctx.globalAlpha = fade
+      // 체력: 머리 위 가로 막대
       ctx.fillStyle = 'rgba(0,0,0,0.55)'
       ctx.fillRect(s.x - w / 2, s.y + 4, w, mine ? 6 : 5)
       ctx.fillStyle = hpK > 0.5 ? '#6fd66a' : hpK > 0.25 ? '#f2c94c' : '#f25c4c'
       ctx.fillRect(s.x - w / 2 + 1, s.y + 5, (w - 2) * hpK, mine ? 4 : 3)
-      if (mine) {
-        // 기력(대시) 바
-        const dk = p.dashCooldown > 0 ? 1 - p.dashCooldown / c.dashCooldown : 1
+      // 기력: 캐릭터 오른쪽 세로 막대 (나·아군만)
+      if (mine || ally) {
+        const bh = 34
+        const bx = s.x + w / 2 + 6
+        const by = s.y + 30
+        const sk = Math.max(0, Math.min(1, p.stamina / STAMINA_MAX))
         ctx.fillStyle = 'rgba(0,0,0,0.55)'
-        ctx.fillRect(s.x - w / 2, s.y + 11, w, 4)
-        ctx.fillStyle = dk >= 1 ? '#9fe0ff' : '#5b7c8a'
-        ctx.fillRect(s.x - w / 2 + 1, s.y + 12, (w - 2) * dk, 2)
+        ctx.fillRect(bx, by - bh, 6, bh)
+        ctx.fillStyle = sk > 0.34 ? '#9fe0ff' : '#e08a5a'
+        ctx.fillRect(bx + 1, by - 1 - (bh - 2) * sk, 4, (bh - 2) * sk)
       }
       ctx.globalAlpha = 1
     }
@@ -510,8 +692,10 @@ export class Renderer3D {
     const damp = 14
     v.vsx += (-k * (v.sx - 1) - damp * v.vsx) * dt
     v.vsy += (-k * (v.sy - 1) - damp * v.vsy) * dt
-    v.sx += v.vsx * dt
-    v.sy += v.vsy * dt
+    v.vsx = Math.max(-4, Math.min(4, v.vsx))
+    v.vsy = Math.max(-4, Math.min(4, v.vsy))
+    v.sx = Math.max(0.62, Math.min(1.5, v.sx + v.vsx * dt))
+    v.sy = Math.max(0.62, Math.min(1.5, v.sy + v.vsy * dt))
     v.flash = Math.max(0, v.flash - dt)
     rig.setFlash(v.flash > 0 ? Math.min(1, v.flash * 8) : 0)
 
@@ -543,6 +727,8 @@ export class Renderer3D {
     }
     // 정조준: 팔을 조금 더 앞으로
     rig.arms.position.z = p.ads ? 0.18 : 0.1
+    // 후라이팬 휘두르기
+    rig.arms.rotation.y = v.swing > 0 ? Math.sin(v.swing * Math.PI) * 1.5 : 0
     root.scale.set(v.sx, v.sy, v.sx)
     // 스폰 보호: 살짝 반투명 깜빡임
     if (p.invuln > 0) setRigOpacity(rig, 0.6 + 0.3 * Math.sin(this.t * 14))
@@ -642,6 +828,10 @@ export class Renderer3D {
     }
     for (const v of this.vis) if (v.deadT >= 0) v.deadT += dt
     for (let i = 0; i < this.hitShow.length; i++) this.hitShow[i] = Math.max(0, this.hitShow[i] - dt)
+    for (const v of this.vis) {
+      if (v.hitCd > 0) v.hitCd -= dt
+      if (v.swing > 0) v.swing = Math.max(0, v.swing - dt * 4)
+    }
     this.shake = Math.max(0, this.shake - dt * 1.4)
   }
 
@@ -689,10 +879,11 @@ export class Renderer3D {
       tz = pos[lp].z
       if (me.alive && me.ads) {
         const r = angleToRad(me.aim)
-        tx += Math.cos(r) * 3
-        tz += Math.sin(r) * 3
+        const reach = this.scoped ? 8 : 3
+        tx += Math.cos(r) * reach
+        tz += Math.sin(r) * reach
       }
-      dist = FOLLOW_DIST
+      dist = FOLLOW_DIST * (this.scoped ? 1.75 : 1)
     }
     // 맵 밖이 덜 보이도록 클램프 (요 45° 라 두 축 같은 여유)
     const margin = dist * 0.3
@@ -747,7 +938,7 @@ export class Renderer3D {
 }
 
 function newVis(): DuckVis {
-  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, deadT: -1, fall: 0 }
+  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, deadT: -1, fall: 0, hitCd: 0, swing: 0 }
 }
 
 export { hex, PLAYER_RADIUS }

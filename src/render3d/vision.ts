@@ -3,15 +3,18 @@
 // 적은 시야 안(벽에 가리지 않고 반경 안)일 때만 그린다. 탄·이펙트는 그대로 보인다(총성이 나는 곳을 알 수 있게).
 
 import * as THREE from 'three'
-import { GameMap, TILE, TILE_CRATE, TILE_WALL, isWall, rayBlocked } from '../core/map'
-import { CRATE_H, WALL_H } from './world3d'
+import { GameMap, TILE, TILE_CRATE, TILE_SANDBAG, TILE_WALL, blocksSight, rayBlocked } from '../core/map'
+import { CRATE_H, SANDBAG_H, WALL_H } from './world3d'
 
 /** 시야 반경 (타일) */
 export const VIEW_RADIUS_TILES = 13
 export const VIEW_RADIUS_PX = VIEW_RADIUS_TILES * TILE
-const RAYS = 200
-/** 마스크 캔버스 해상도 (타일당 px) */
-const PX = 6
+const RAYS = 360
+/** 마스크 캔버스 해상도 (타일당 px). 넓은 맵은 낮춰서 비용을 맞춘다 */
+function pxFor(map: GameMap): number {
+  const tiles = map.w * map.h
+  return tiles > 4000 ? 8 : tiles > 1600 ? 12 : 16
+}
 
 export interface Viewer {
   /** sim 좌표 (px) */
@@ -45,7 +48,7 @@ function castRay(map: GameMap, x: number, y: number, dx: number, dy: number, max
       t = maxDist
       break
     }
-    if (isWall(map, tx, ty)) break
+    if (blocksSight(map, tx, ty)) break
   }
   return { x: x + dx * t, y: y + dy * t }
 }
@@ -71,10 +74,13 @@ export class Vision {
   private geos: THREE.BufferGeometry[] = []
   private darkness = 'rgba(6,8,5,0.78)'
 
+  private px: number
+
   constructor(readonly map: GameMap) {
+    this.px = pxFor(map)
     this.canvas = document.createElement('canvas')
-    this.canvas.width = map.w * PX
-    this.canvas.height = map.h * PX
+    this.canvas.width = map.w * this.px
+    this.canvas.height = map.h * this.px
     this.ctx = this.canvas.getContext('2d')!
     this.tex = new THREE.CanvasTexture(this.canvas)
     this.tex.colorSpace = THREE.SRGBColorSpace
@@ -95,9 +101,11 @@ export class Vision {
     // 벽·상자 윗면 덮개 (타일마다 사각형, uv 는 맵 좌표)
     this.group.add(this.topQuads(TILE_WALL, WALL_H + 0.02))
     this.group.add(this.topQuads(TILE_CRATE, CRATE_H + 0.02))
+    this.group.add(this.topQuads(TILE_SANDBAG, SANDBAG_H + 0.02))
     // 벽·상자 옆면 덮개: 바닥과 맞닿은 면마다 세로 사각형. 밝기는 그 앞 바닥 타일이 보이는지로 정한다
     this.group.add(this.sideQuads(TILE_WALL, WALL_H))
     this.group.add(this.sideQuads(TILE_CRATE, CRATE_H))
+    this.group.add(this.sideQuads(TILE_SANDBAG, SANDBAG_H))
     this.fill([])
   }
 
@@ -176,37 +184,43 @@ export class Vision {
     return mesh
   }
 
-  /** 시청자(들) 기준으로 마스크를 다시 그린다. 매 프레임 호출해도 싸다 (200 레이 × DDA) */
-  update(viewers: Viewer[]): void {
-    this.fill(viewers)
+  /** 시청자(들) 기준으로 마스크를 다시 그린다. radius 는 타일 단위 (스코프 조준 시 넓어진다) */
+  update(viewers: Viewer[], radiusTiles = VIEW_RADIUS_TILES): void {
+    this.fill(viewers, radiusTiles)
   }
 
-  private fill(viewers: Viewer[]): void {
+  private fill(viewers: Viewer[], radiusTiles = VIEW_RADIUS_TILES): void {
     const ctx = this.ctx
     const map = this.map
+    const PX = this.px
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.filter = 'none'
     ctx.globalCompositeOperation = 'source-over'
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
     ctx.fillStyle = this.darkness
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+    // 가장자리를 부드럽게: 다각형을 지울 때만 블러를 건다 (계단 현상 제거)
     ctx.globalCompositeOperation = 'destination-out'
+    ctx.filter = `blur(${(PX * 0.35).toFixed(1)}px)`
     for (const v of viewers) {
       const cx = v.x / TILE
       const cy = v.y / TILE
       ctx.beginPath()
       for (let i = 0; i < RAYS; i++) {
         const a = (i / RAYS) * Math.PI * 2
-        const p = castRay(map, cx, cy, Math.cos(a), Math.sin(a), VIEW_RADIUS_TILES)
+        const p = castRay(map, cx, cy, Math.cos(a), Math.sin(a), radiusTiles)
         if (i === 0) ctx.moveTo(p.x * PX, p.y * PX)
         else ctx.lineTo(p.x * PX, p.y * PX)
       }
       ctx.closePath()
-      const g = ctx.createRadialGradient(cx * PX, cy * PX, 0, cx * PX, cy * PX, VIEW_RADIUS_TILES * PX)
+      const g = ctx.createRadialGradient(cx * PX, cy * PX, 0, cx * PX, cy * PX, radiusTiles * PX)
       g.addColorStop(0, 'rgba(0,0,0,1)')
-      g.addColorStop(0.72, 'rgba(0,0,0,1)')
+      g.addColorStop(0.74, 'rgba(0,0,0,1)')
       g.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.fillStyle = g
       ctx.fill()
     }
+    ctx.filter = 'none'
     ctx.globalCompositeOperation = 'source-over'
     this.tex.needsUpdate = true
   }

@@ -1,13 +1,22 @@
-// 맵 데이터. 정적이므로 GameState 에 넣지 않는다.
-// 문자 그리드는 maps.ts 의 레지스트리에서 온다: # 벽, . 바닥, S 스폰 후보, o 낮은 상자(충돌은 벽과 동일)
+// 맵. 테두리와 크기는 maps.ts 의 문자 그리드에서 오고, **안쪽 구조물은 매 판 시드로 생성**한다.
+// 같은 시드면 모든 브라우저가 똑같은 맵을 만든다(결정론). 맵은 GameState 밖의 정적 데이터지만,
+// 모래주머니가 부서지면 sim 이 tiles 를 바꾼다 (내구도는 GameState.sandbags 가 정본).
 
 import { DEFAULT_MAP, MAPS, MapDef, MapId, MapScale, MapTheme, expandRows } from './maps'
+import { Rng, makeRng, randInt } from './rng'
 
 export const TILE = 32
 
 export const TILE_FLOOR = 0
 export const TILE_WALL = 1
 export const TILE_CRATE = 2
+/** 모래주머니: 이동·탄을 막지만 시야는 넘어가고, 엄폐 중인 사람의 탄과 헤드샷 탄은 넘어간다 */
+export const TILE_SANDBAG = 3
+
+/** 모래주머니 내구도 */
+export const SANDBAG_HP = 240
+/** 이 거리 안에 모래주머니가 있으면 '엄폐 중'으로 보고 내 탄이 모래주머니를 넘어간다 */
+export const COVER_DIST = 46
 
 export interface GameMap {
   id: MapId
@@ -15,39 +24,211 @@ export interface GameMap {
   theme: MapTheme
   /** 인원별 확장 배율 (1, 2, 4) */
   scale: MapScale
+  /** 생성 시드 */
+  seed: number
   w: number
   h: number
   tiles: Uint8Array
+  /** 처음 생성된 모래주머니 타일 인덱스 (부서져도 유지 — 리싱크 복원용) */
+  sandbagIdx: number[]
   spawns: { x: number; y: number }[]
   /** 픽셀 단위 */
   pw: number
   ph: number
 }
 
-export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP, scale: MapScale = 1): GameMap {
+export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP, scale: MapScale = 1, seed = 1): GameMap {
   const def = typeof idOrDef === 'string' ? MAPS[idOrDef] : idOrDef
   const rows = expandRows(def.rows, scale)
   const h = rows.length
   const w = rows[0].length
   const tiles = new Uint8Array(w * h)
-  const spawns: { x: number; y: number }[] = []
+  // 테두리만 문자 그리드에서 가져온다 (안쪽은 아래에서 생성)
   for (let y = 0; y < h; y++) {
-    const row = rows[y]
     for (let x = 0; x < w; x++) {
-      const c = row[x]
-      if (c === '#') tiles[y * w + x] = TILE_WALL
-      else if (c === 'o') tiles[y * w + x] = TILE_CRATE
-      else tiles[y * w + x] = TILE_FLOOR
-      if (c === 'S') spawns.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 })
+      const edge = x === 0 || y === 0 || x === w - 1 || y === h - 1
+      tiles[y * w + x] = edge ? TILE_WALL : TILE_FLOOR
     }
   }
-  return { id: def.id, name: def.name, theme: def.theme, scale, w, h, tiles, spawns, pw: w * TILE, ph: h * TILE }
+  const map: GameMap = {
+    id: def.id, name: def.name, theme: def.theme, scale, seed,
+    w, h, tiles, sandbagIdx: [], spawns: [], pw: w * TILE, ph: h * TILE,
+  }
+  generate(map, def, seed)
+  for (let i = 0; i < tiles.length; i++) if (tiles[i] === TILE_SANDBAG) map.sandbagIdx.push(i)
+  map.spawns = pickSpawns(map)
+  return map
 }
 
-/** 이동·탄 충돌용: 벽과 상자 모두 막힘 */
+// ---------- 생성 ----------
+
+function idHash(s: string): number {
+  let hv = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    hv ^= s.charCodeAt(i)
+    hv = Math.imul(hv, 0x01000193)
+  }
+  return hv >>> 0
+}
+
+function generate(map: GameMap, def: MapDef, seed: number): void {
+  const rng = makeRng((seed ^ idHash(def.id) ^ (map.scale * 0x9e3779b1)) >>> 0)
+  const area = (map.w - 2) * (map.h - 2)
+  const g = def.gen
+  const k = area / 1064 // 40x30 기준 1
+  // 1) 벽 덩어리
+  const blocks = Math.round(g.blocks * k)
+  for (let i = 0; i < blocks; i++) placeWallShape(map, rng, g.maxLen)
+  // 2) 상자 군집
+  const crates = Math.round(g.crates * k)
+  for (let i = 0; i < crates; i++) placeCluster(map, rng, TILE_CRATE, randInt(rng, 1, 5))
+  // 3) 모래주머니 진지: 중앙 + (넓은 맵이면) 사분면
+  const forts: [number, number][] = [[map.w / 2, map.h / 2]]
+  if (map.scale >= 2) {
+    forts.push([map.w * 0.25, map.h * 0.5], [map.w * 0.75, map.h * 0.5])
+  }
+  if (map.scale === 4) {
+    forts.push([map.w * 0.5, map.h * 0.25], [map.w * 0.5, map.h * 0.75])
+  }
+  for (const [fx, fy] of forts) placeFort(map, Math.round(fx), Math.round(fy))
+  // 4) 흩어진 모래주머니 줄
+  const bags = Math.round(g.sandbags * k)
+  for (let i = 0; i < bags; i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 7))
+}
+
+function free(map: GameMap, x0: number, y0: number, w: number, h: number, clear: number): boolean {
+  for (let y = y0 - clear; y < y0 + h + clear; y++) {
+    for (let x = x0 - clear; x < x0 + w + clear; x++) {
+      if (x < 1 || y < 1 || x >= map.w - 1 || y >= map.h - 1) return false
+      if (map.tiles[y * map.w + x] !== TILE_FLOOR) return false
+    }
+  }
+  return true
+}
+
+function fill(map: GameMap, x0: number, y0: number, w: number, h: number, tile: number): void {
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) map.tiles[y * map.w + x] = tile
+}
+
+/** 막대·ㄱ자·덩어리 중 하나를 빈 곳에 놓는다 (통로가 남도록 여유 2칸) */
+function placeWallShape(map: GameMap, rng: Rng, maxLen: number): void {
+  for (let tries = 0; tries < 40; tries++) {
+    const kind = randInt(rng, 0, 4)
+    const len = randInt(rng, 3, maxLen + 1)
+    const x = randInt(rng, 2, map.w - 3)
+    const y = randInt(rng, 2, map.h - 3)
+    if (kind === 0 && free(map, x, y, len, 1, 2)) {
+      fill(map, x, y, len, 1, TILE_WALL)
+      return
+    }
+    if (kind === 1 && free(map, x, y, 1, len, 2)) {
+      fill(map, x, y, 1, len, TILE_WALL)
+      return
+    }
+    if (kind === 2 && free(map, x, y, len, len, 2)) {
+      // ㄱ자
+      fill(map, x, y, len, 1, TILE_WALL)
+      fill(map, x, y, 1, len, TILE_WALL)
+      return
+    }
+    if (kind === 3 && free(map, x, y, 3, 2, 2)) {
+      fill(map, x, y, 3, 2, TILE_WALL)
+      return
+    }
+  }
+}
+
+function placeCluster(map: GameMap, rng: Rng, tile: number, n: number): void {
+  for (let tries = 0; tries < 30; tries++) {
+    const x = randInt(rng, 2, map.w - 3)
+    const y = randInt(rng, 2, map.h - 3)
+    const w = n > 2 ? 2 : n
+    const h = Math.ceil(n / 2)
+    if (!free(map, x, y, w, h, 1)) continue
+    fill(map, x, y, w, h, tile)
+    return
+  }
+}
+
+function placeLine(map: GameMap, rng: Rng, tile: number, len: number): void {
+  for (let tries = 0; tries < 30; tries++) {
+    const horiz = randInt(rng, 0, 2) === 0
+    const x = randInt(rng, 2, map.w - 3)
+    const y = randInt(rng, 2, map.h - 3)
+    const w = horiz ? len : 1
+    const h = horiz ? 1 : len
+    if (!free(map, x, y, w, h, 1)) continue
+    fill(map, x, y, w, h, tile)
+    return
+  }
+}
+
+/** 사방에 입구가 있는 작은 모래주머니 진지 */
+function placeFort(map: GameMap, cx: number, cy: number): void {
+  const put = (x: number, y: number) => {
+    if (x < 1 || y < 1 || x >= map.w - 1 || y >= map.h - 1) return
+    if (map.tiles[y * map.w + x] === TILE_FLOOR) map.tiles[y * map.w + x] = TILE_SANDBAG
+  }
+  for (const dx of [-2, -1, 1, 2]) {
+    put(cx + dx, cy - 2)
+    put(cx + dx, cy + 2)
+  }
+  for (const dy of [-1, 1]) {
+    put(cx - 3, cy + dy)
+    put(cx + 3, cy + dy)
+  }
+}
+
+/** 사방이 트인 칸 중 서로 멀리 떨어진 곳을 스폰으로 (결정론) */
+function pickSpawns(map: GameMap): { x: number; y: number }[] {
+  const cand: { x: number; y: number }[] = []
+  for (let ty = 2; ty < map.h - 2; ty++) {
+    for (let tx = 2; tx < map.w - 2; tx++) {
+      let ok = true
+      for (let dy = -1; dy <= 1 && ok; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (map.tiles[(ty + dy) * map.w + tx + dx] !== TILE_FLOOR) {
+            ok = false
+            break
+          }
+        }
+      }
+      if (ok) cand.push({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 })
+    }
+  }
+  if (cand.length === 0) return [{ x: map.pw / 2, y: map.ph / 2 }]
+  // 가장 왼쪽 위 후보에서 시작해, 이미 고른 곳들에서 가장 먼 후보를 차례로 고른다
+  const out = [cand[0]]
+  const want = Math.min(10, cand.length)
+  while (out.length < want) {
+    let best = -1
+    let bestD = -1
+    for (let i = 0; i < cand.length; i++) {
+      let d = Infinity
+      for (const o of out) d = Math.min(d, (cand[i].x - o.x) ** 2 + (cand[i].y - o.y) ** 2)
+      if (d > bestD) {
+        bestD = d
+        best = i
+      }
+    }
+    if (best < 0 || bestD < (TILE * 5) ** 2) break
+    out.push(cand[best])
+  }
+  return out
+}
+
+// ---------- 조회 ----------
+
+/** 이동 충돌: 벽·상자·모래주머니 모두 막힘 */
 export function isWall(map: GameMap, tx: number, ty: number): boolean {
   if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return true
   return map.tiles[ty * map.w + tx] !== TILE_FLOOR
+}
+
+/** 시야: 높은 벽만 막는다 (상자·모래주머니는 낮아서 넘어 본다) */
+export function blocksSight(map: GameMap, tx: number, ty: number): boolean {
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return true
+  return map.tiles[ty * map.w + tx] === TILE_WALL
 }
 
 export function tileAt(map: GameMap, tx: number, ty: number): number {
@@ -59,11 +240,42 @@ export function isWallAt(map: GameMap, px: number, py: number): boolean {
   return isWall(map, Math.floor(px / TILE), Math.floor(py / TILE))
 }
 
+/** 이 지점이 모래주머니에 붙어 있는가 (엄폐 중) */
+export function nearSandbag(map: GameMap, px: number, py: number, dist = COVER_DIST): boolean {
+  const r = Math.ceil(dist / TILE)
+  const ctx0 = Math.floor(px / TILE)
+  const cty0 = Math.floor(py / TILE)
+  for (let ty = cty0 - r; ty <= cty0 + r; ty++) {
+    for (let tx = ctx0 - r; tx <= ctx0 + r; tx++) {
+      if (tileAt(map, tx, ty) !== TILE_SANDBAG) continue
+      const cx = Math.max(tx * TILE, Math.min((tx + 1) * TILE, px))
+      const cy = Math.max(ty * TILE, Math.min((ty + 1) * TILE, py))
+      if ((cx - px) ** 2 + (cy - py) ** 2 <= dist * dist) return true
+    }
+  }
+  return false
+}
+
+export interface RayHit {
+  blocked: boolean
+  tx: number
+  ty: number
+  tile: number
+}
+
 /**
- * 격자 레이캐스트 (DDA). (x0,y0)→(x1,y1) 사이에 벽이 있으면 true.
- * 봇의 시야 판정과 탄 충돌 보조에 사용.
+ * 격자 레이캐스트 (DDA). mode 'sight' 는 높은 벽만, 'bullet' 은 벽·상자와 (over 가 아니면) 모래주머니.
+ * 막혔으면 막은 타일을 함께 돌려준다.
  */
-export function rayBlocked(map: GameMap, x0: number, y0: number, x1: number, y1: number): boolean {
+export function rayCast(
+  map: GameMap,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  mode: 'sight' | 'bullet',
+  over = false,
+): RayHit {
   let tx = Math.floor(x0 / TILE)
   let ty = Math.floor(y0 / TILE)
   const tx1 = Math.floor(x1 / TILE)
@@ -74,14 +286,17 @@ export function rayBlocked(map: GameMap, x0: number, y0: number, x1: number, y1:
   const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0
   const tDeltaX = stepX !== 0 ? Math.abs(TILE / dx) : Infinity
   const tDeltaY = stepY !== 0 ? Math.abs(TILE / dy) : Infinity
-  let tMaxX =
-    stepX > 0 ? ((tx + 1) * TILE - x0) / dx : stepX < 0 ? (tx * TILE - x0) / dx : Infinity
-  let tMaxY =
-    stepY > 0 ? ((ty + 1) * TILE - y0) / dy : stepY < 0 ? (ty * TILE - y0) / dy : Infinity
+  let tMaxX = stepX > 0 ? ((tx + 1) * TILE - x0) / dx : stepX < 0 ? (tx * TILE - x0) / dx : Infinity
+  let tMaxY = stepY > 0 ? ((ty + 1) * TILE - y0) / dy : stepY < 0 ? (ty * TILE - y0) / dy : Infinity
   let guard = map.w + map.h + 2
   while (guard-- > 0) {
-    if (isWall(map, tx, ty)) return true
-    if (tx === tx1 && ty === ty1) return false
+    const tile = tileAt(map, tx, ty)
+    const blocks =
+      mode === 'sight'
+        ? tile === TILE_WALL || tx < 0 || ty < 0 || tx >= map.w || ty >= map.h
+        : tile === TILE_WALL || tile === TILE_CRATE || (tile === TILE_SANDBAG && !over)
+    if (blocks) return { blocked: true, tx, ty, tile }
+    if (tx === tx1 && ty === ty1) return { blocked: false, tx, ty, tile }
     if (tMaxX < tMaxY) {
       tMaxX += tDeltaX
       tx += stepX
@@ -90,5 +305,10 @@ export function rayBlocked(map: GameMap, x0: number, y0: number, x1: number, y1:
       ty += stepY
     }
   }
-  return true
+  return { blocked: true, tx, ty, tile: TILE_WALL }
+}
+
+/** 시야 판정 (봇 LOS·전장의 안개) */
+export function rayBlocked(map: GameMap, x0: number, y0: number, x1: number, y1: number): boolean {
+  return rayCast(map, x0, y0, x1, y1, 'sight').blocked
 }

@@ -24,7 +24,8 @@ let mapId = mapParam && isMapId(mapParam) ? mapParam : DEFAULT_MAP
 const playerCount = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(q.get('n') ?? 2) || 2))
 const scaleParam = Number(q.get('scale') ?? 0)
 const mapScale: MapScale = isMapScale(scaleParam) ? scaleParam : scaleForPlayers(playerCount)
-let map = buildMap(mapId, mapScale)
+let mapSeed = (Date.now() % 100000) | 0
+let map = buildMap(mapId, mapScale, mapSeed)
 let renderer = new Renderer3D(stage, map)
 const sfx = new Sfx()
 sfx.startBgm()
@@ -67,6 +68,10 @@ function pickChars(): CharacterId[] {
 function newMatch(): Match {
   const chars = pickChars()
   const seed = (seedCounter = (seedCounter * 1103515245 + 12345) >>> 0)
+  // 매 판 맵 구조물도 새로 생성
+  mapSeed = seed
+  map = buildMap(mapId, mapScale, mapSeed)
+  renderer.setMap(map)
   const teams = teamMode ? chars.map((_, i) => i % 2) : undefined
   const state = createState({ seed, targetKills: 5, chars, teams }, map)
   return {
@@ -112,9 +117,8 @@ function restart(): void {
 
 function switchMap(id: typeof mapId): void {
   mapId = id
-  map = buildMap(mapId, mapScale)
-  renderer.dispose()
-  renderer = new Renderer3D(stage, map)
+  map = buildMap(mapId, mapScale, mapSeed)
+  renderer.setMap(map)
   fit()
   restart()
 }

@@ -7,7 +7,7 @@ export type CharacterId =
 /** 이모지풍 캐리커처 외형 정의. 렌더러가 이 데이터만 보고 그린다. */
 export interface Look {
   skin: number
-  hair: 'none' | 'short' | 'buzz' | 'flat' | 'side' | 'bowl' | 'spiky' | 'fringe'
+  hair: 'none' | 'short' | 'buzz' | 'flat' | 'side' | 'bowl' | 'spiky' | 'fringe' | 'bob'
   hairColor: number
   /** 옆머리(삭발한 옆면) 색. 지정하면 spiky 머리 아래 회색 밴드처럼 그림 */
   sideColor?: number
@@ -25,7 +25,7 @@ export interface Look {
   lipColor?: number
   eyes: 'normal' | 'calm' | 'squint' | 'angry' | 'happy' | 'sharp' | 'lidded'
   brows: 'normal' | 'thick' | 'none' | 'arched'
-  mouth: 'flat' | 'smile' | 'thick' | 'grin' | 'frown' | 'sing' | 'pout'
+  mouth: 'flat' | 'smile' | 'thick' | 'grin' | 'frown' | 'sing' | 'pout' | 'shout'
   /** 귀 크기 배율 (기본 1) */
   earScale?: number
   /** 얼굴 윤곽: round(기본) | jowl(넓은 볼·턱살, 철면수심 마스코트) */
@@ -47,6 +47,22 @@ export interface Look {
   undershirt?: number
   /** 가슴 명찰 색 */
   badge?: number
+  /** 셔츠 가로 줄무늬 색 */
+  stripe?: number
+  /** 앞치마 색 (앞면에만 그린다) */
+  apron?: number
+  /** 후드 색 (목 뒤에 두르는 고리) */
+  hood?: number
+  /** 바지 색 (기본 남색) */
+  pants?: number
+  /** 모자 앞 핀 색 (extra: 'cap') */
+  capPin?: number
+  /** 동물 아바타. cat = 고양이 귀·주둥이·수염 (옥냥이) */
+  animal?: 'cat'
+  /** 동물 털 색 (귀 바깥). 없으면 skin */
+  furColor?: number
+  /** 가로 폭 배율 (기본 1). 낮을수록 마른 몸 */
+  slim?: number
   headScale: number
   bodyScale: number
   extra: 'none' | 'cap' | 'headband' | 'mic'
@@ -77,10 +93,10 @@ export interface CharacterDef {
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   cheolmyeon: {
-    id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장. 빨간 얼굴의 차돌야차, 크루에서 가장 단단한 남자.',
+    id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장. 기관총을 들고 버티는 차돌야차.',
     prominence: 1,
-    maxHp: 135, speed: 2.8, weapon: 'shotgun', dashCooldown: 110,
-    passiveName: '차돌', passiveDesc: '최대 체력 135. 피격 시 넉백 없음.',
+    maxHp: 270, speed: 2.8, weapon: 'mg', dashCooldown: 110,
+    passiveName: '차돌', passiveDesc: '최대 체력 270 (기관총을 버티는 몸).',
     bodyColor: 0xff5a36, accentColor: 0x1e1e1e,
     look: {
       // 철면수심 공식 마스코트: 빨간 얼굴, 삐죽삐죽한 검은 머리 + 정수리 흰 별, 회색 옆머리, 반쯤 감은 눈, 쭉 내민 입술, 큰 귀
@@ -93,7 +109,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   chim: {
     id: 'chim', name: '침착덕', basedOn: '침착맨', tagline: '크루의 중심. 유튜브 배너의 그 아저씨, 무슨 일이 있어도 침착하게.',
     prominence: 2,
-    maxHp: 100, speed: 3.2, weapon: 'rifle', dashCooldown: 90,
+    maxHp: 200, speed: 3.2, weapon: 'rifle', dashCooldown: 90,
     passiveName: '침착', passiveDesc: '반동 회복 속도 2배. 연사해도 탄이 덜 퍼집니다.',
     bodyColor: 0xf5c542, accentColor: 0x7a1a2e,
     look: {
@@ -106,7 +122,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   dangun: {
     id: 'dangun', name: '단군덕', basedOn: '단군', tagline: '무대 위의 게임 캐스터. 물방울 재킷과 파란 선글라스, 마이크는 놓지 않는다.',
     prominence: 3,
-    maxHp: 90, speed: 3.6, weapon: 'pistol', dashCooldown: 70,
+    maxHp: 180, speed: 3.6, weapon: 'pistol', dashCooldown: 70,
     passiveName: '중계', passiveDesc: '이동 속도 최상. 시야 밖 상대가 총을 쏘면 그 위치가 잠깐 표시됩니다.',
     bodyColor: 0x7ee0a0, accentColor: 0x2f56b8,
     look: {
@@ -116,10 +132,10 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     },
   },
   magic: {
-    id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '창설 멤버이자 치과의사. 남색 스크럽에 명찰, 스스로를 치료합니다.',
+    id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '치과의사. 산탄총을 들고 스스로를 치료합니다.',
     prominence: 4,
-    maxHp: 150, speed: 2.9, weapon: 'smg', dashCooldown: 80,
-    passiveName: '진료', passiveDesc: '최대 체력 150 (최고). 피격 후 3초가 지나면 초당 4씩 체력 회복.',
+    maxHp: 300, speed: 2.9, weapon: 'shotgun', dashCooldown: 80,
+    passiveName: '진료', passiveDesc: '최대 체력 300 (최고). 피격 후 3초가 지나면 초당 8씩 체력 회복.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
       // 실제 사진 기준: 검은 짧은 머리 + 옆으로 넘긴 앞머리, 얇은 검은 사각 안경, 이 드러나는 웃음, 턱 수염 자국,
@@ -132,7 +148,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   jupeol: {
     id: 'jupeol', name: '주펄덕', basedOn: '주펄', tagline: '침펄 콤비의 반쪽. 가까이 오면 토론이 시작됩니다.',
     prominence: 5,
-    maxHp: 100, speed: 3.3, weapon: 'smg', dashCooldown: 90,
+    maxHp: 200, speed: 3.3, weapon: 'smg', dashCooldown: 90,
     passiveName: '토론', passiveDesc: '150px 안의 상대에게 피해 +20%.',
     bodyColor: 0xc48cff, accentColor: 0x243a5e,
     look: {
@@ -141,89 +157,104 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       headScale: 1.05, bodyScale: 1.1, extra: 'none',
     },
   },
-  // ---- 2차 멤버 (외형은 참고 사진을 받으면 다듬는다) ----
+  // ---- 2차 멤버 (참고 사진 반영, 2026-09-04) ----
   uwon: {
-    id: 'uwon', name: '우원덕', basedOn: '우원박', tagline: '배우. 구른 뒤에도 잠깐 무적, 연기력으로 탄을 피한다.',
+    id: 'uwon', name: '우원덕', basedOn: '우원박', tagline: '단정한 정장의 배우. 구른 뒤에도 잠깐 무적이다.',
     prominence: 6,
-    maxHp: 95, speed: 3.5, weapon: 'pistol', dashCooldown: 80,
+    maxHp: 190, speed: 3.5, weapon: 'pistol', dashCooldown: 80,
     passiveName: '연기', passiveDesc: '대시가 끝난 뒤에도 0.2초 무적.',
-    bodyColor: 0xff9f6b, accentColor: 0x8a2b2b,
+    bodyColor: 0xffb08a, accentColor: 0x2f4a7d,
     look: {
-      skin: 0xf2cdb0, hair: 'side', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
-      eyes: 'sharp', brows: 'thick', mouth: 'smile', shirt: 0x8a2b2b,
-      headScale: 1.0, bodyScale: 1.0, extra: 'none',
+      // 사진: 이마를 덮는 검은 앞머리, 맑은 피부, 남색 정장 + 흰 셔츠 + 남색 패턴 넥타이
+      skin: 0xf9dfc9, hair: 'fringe', hairColor: 0x120f0e, glasses: 'none', beard: 'none',
+      eyes: 'calm', brows: 'normal', mouth: 'smile',
+      shirt: 0xf4f4f0, coat: 0x1b2438, tie: 0x2f4a7d,
+      pants: 0x1b2438, headScale: 0.95, bodyScale: 0.95, slim: 0.9, extra: 'none',
     },
   },
   giyeol: {
-    id: 'giyeol', name: '기열덕', basedOn: '기열킹', tagline: '뇌절의 왕. 연속으로 맞히면 점점 아프다.',
+    id: 'giyeol', name: '기열덕', basedOn: '기열킹', tagline: '뇌절의 왕. 입을 크게 벌리고 달려든다.',
     prominence: 7,
-    maxHp: 100, speed: 3.2, weapon: 'smg', dashCooldown: 90,
+    maxHp: 200, speed: 3.2, weapon: 'smg', dashCooldown: 90,
     passiveName: '뇌절', passiveDesc: '연속 명중마다 피해 +8% (최대 +40%). 빗나가면 초기화.',
-    bodyColor: 0x7bd389, accentColor: 0x1f6f3f,
+    bodyColor: 0xff5f5f, accentColor: 0xd42b2b,
     look: {
-      skin: 0xf3d2b4, hair: 'short', hairColor: 0x3a2a1a, glasses: 'none', beard: 'stubble',
-      eyes: 'angry', brows: 'thick', mouth: 'grin', shirt: 0x2e8b57,
-      headScale: 1.05, bodyScale: 1.15, extra: 'none',
+      // 사진: 갈색 짧은 머리, 크게 벌린 입, 검은 정장 + 흰 셔츠 + 빨간 넥타이
+      skin: 0xf6cfae, hair: 'short', hairColor: 0x4a3524, glasses: 'none', beard: 'none',
+      eyes: 'happy', brows: 'thick', mouth: 'shout',
+      shirt: 0xf4f4f0, coat: 0x17171a, tie: 0xd42b2b,
+      pants: 0x17171a, headScale: 1.05, bodyScale: 1.05, extra: 'none',
     },
   },
   pungwol: {
-    id: 'pungwol', name: '풍월덕', basedOn: '풍월량', tagline: '바람처럼. 대시 쿨다운이 절반이지만 체력은 낮다.',
+    id: 'pungwol', name: '풍월덕', basedOn: '풍월량', tagline: '금발 버섯머리에 파란 후드. 산탄총을 들고 바람처럼 구른다.',
     prominence: 8,
-    maxHp: 85, speed: 3.7, weapon: 'rifle', dashCooldown: 45,
-    passiveName: '바람', passiveDesc: '대시 쿨다운 절반. 체력 85.',
-    bodyColor: 0x8fd3ff, accentColor: 0x3a6ea5,
+    maxHp: 170, speed: 3.7, weapon: 'shotgun', dashCooldown: 45,
+    passiveName: '바람', passiveDesc: '대시 쿨다운 절반. 체력 170 (가장 낮음).',
+    bodyColor: 0x8fd3ff, accentColor: 0x7fa8d4,
     look: {
-      skin: 0xf1c9a5, hair: 'buzz', hairColor: 0x1a1614, glasses: 'round', beard: 'stubble',
-      eyes: 'calm', brows: 'normal', mouth: 'flat', shirt: 0x3a6ea5,
-      headScale: 0.95, bodyScale: 0.95, extra: 'none',
+      // 사진: 금발 버섯머리(바가지), 통통한 볼, 가늘게 뜬 눈, 옅은 미소, 하늘색 후드티
+      skin: 0xf6d6ba, hair: 'bowl', hairColor: 0xe6c568, glasses: 'none', beard: 'none',
+      eyes: 'squint', brows: 'normal', mouth: 'smile',
+      shirt: 0x8fb4d9, hood: 0x7fa4c9,
+      pants: 0x3b4a63, headScale: 1.15, bodyScale: 1.1, extra: 'none',
     },
   },
   oknyang: {
-    id: 'oknyang', name: '옥냥덕', basedOn: '옥냥이', tagline: '실질적 리더. 정조준해도 느려지지 않는다.',
+    id: 'oknyang', name: '옥냥덕', basedOn: '옥냥이', tagline: '주황 고양이. 눈을 감고 웃지만 저격은 정확하다.',
     prominence: 9,
-    maxHp: 100, speed: 3.0, weapon: 'sniper', dashCooldown: 90,
+    maxHp: 200, speed: 3.0, weapon: 'sniper', dashCooldown: 90,
     passiveName: '냉정', passiveDesc: '정조준 중 이동 속도 감소 없음.',
-    bodyColor: 0xd9d9d9, accentColor: 0x555555,
+    bodyColor: 0xf5854a, accentColor: 0xf0a83c,
     look: {
-      skin: 0xf3d4bb, hair: 'flat', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
-      eyes: 'squint', brows: 'normal', mouth: 'smile', shirt: 0x555555,
-      headScale: 1.0, bodyScale: 1.0, extra: 'none',
+      // 아바타: 주황 고양이, 흰 얼굴 무늬, 감은 눈 웃음, 혀 내민 큰 입, 노란 후드
+      skin: 0xf5854a, animal: 'cat', furColor: 0xdd6428, hair: 'none', hairColor: 0xdd6428,
+      glasses: 'none', beard: 'none', eyes: 'happy', brows: 'none', mouth: 'grin',
+      shirt: 0xf0a83c, hood: 0xe09526,
+      pants: 0xc07a1e, headScale: 1.12, bodyScale: 1.0, earScale: 1, extra: 'none',
     },
   },
   tongdak: {
-    id: 'tongdak', name: '통닭덕', basedOn: '통닭천사', tagline: '치킨의 천사. 킬을 하면 배가 부르다.',
+    id: 'tongdak', name: '통닭덕', basedOn: '통닭천사', tagline: '검은 단발에 줄무늬 스웨터. 저격으로 한 방을 노린다.',
     prominence: 10,
-    maxHp: 120, speed: 2.9, weapon: 'shotgun', dashCooldown: 100,
-    passiveName: '치킨', passiveDesc: '킬 시 체력 50 회복.',
-    bodyColor: 0xffc857, accentColor: 0xb8621b,
+    maxHp: 240, speed: 2.9, weapon: 'sniper', dashCooldown: 100,
+    passiveName: '치킨', passiveDesc: '킬 시 체력 50 회복. 체력 240.',
+    bodyColor: 0xff8fa3, accentColor: 0xd83c4a,
     look: {
-      skin: 0xf2c9a0, hair: 'none', hairColor: 0x2a2320, glasses: 'none', beard: 'full',
-      eyes: 'happy', brows: 'normal', mouth: 'grin', shirt: 0xe0a030,
-      headScale: 1.1, bodyScale: 1.3, extra: 'none',
+      // 사진: 검은 단발, 옅은 미소, 빨강·하늘 굵은 줄무늬 스웨터
+      skin: 0xf9e2ce, hair: 'bob', hairColor: 0x14100e, glasses: 'none', beard: 'none',
+      eyes: 'happy', brows: 'normal', mouth: 'smile',
+      shirt: 0xd83c4a, stripe: 0x8fc7e8,
+      pants: 0x22242c, headScale: 1.0, bodyScale: 1.0, extra: 'none',
     },
   },
   juwoojae: {
-    id: 'juwoojae', name: '주우재덕', basedOn: '주우재', tagline: '런웨이 위의 모델. 다리가 길어 대시가 멀리 간다.',
+    id: 'juwoojae', name: '주우재덕', basedOn: '주우재', tagline: '가죽 재킷에 청바지. 마르고 길어서 구르면 멀리 간다.',
     prominence: 11,
-    maxHp: 100, speed: 3.3, weapon: 'rifle', dashCooldown: 85,
+    maxHp: 200, speed: 3.3, weapon: 'rifle', dashCooldown: 85,
     passiveName: '런웨이', passiveDesc: '대시 거리 +50%.',
-    bodyColor: 0xf0e0c0, accentColor: 0x8c7b64,
+    bodyColor: 0xe8e2d4, accentColor: 0x1c1c1f,
     look: {
-      skin: 0xf4d7bd, hair: 'side', hairColor: 0x1a1614, glasses: 'none', beard: 'none',
-      eyes: 'sharp', brows: 'thick', mouth: 'smile', shirt: 0x1c1c1c, coat: 0xc9bfae,
-      headScale: 0.95, bodyScale: 0.9, extra: 'none',
+      // 사진: 검은 가죽 라이더 재킷 + 크림 셔츠 + 진청 데님. 아주 마르고 길다
+      skin: 0xf7dcc4, hair: 'fringe', hairColor: 0x14100e, glasses: 'none', beard: 'none',
+      eyes: 'sharp', brows: 'normal', mouth: 'flat',
+      shirt: 0xefe7d6, coat: 0x1c1c1f,
+      pants: 0x27354f, headScale: 0.9, bodyScale: 0.8, slim: 0.68, extra: 'none',
     },
   },
   seungwoo: {
-    id: 'seungwoo', name: '승우덕', basedOn: '승우아빠', tagline: '요리사. 다시 태어나는 게 빠르고 든든하다.',
+    id: 'seungwoo', name: '승빠덕', basedOn: '승우아빠', tagline: '검은 모자에 파란 앞치마. 후라이팬으로 총알을 막고 후려친다.',
     prominence: 12,
-    maxHp: 110, speed: 3.0, weapon: 'pistol', dashCooldown: 90,
-    passiveName: '요리', passiveDesc: '리스폰 2초, 스폰 보호 3초.',
-    bodyColor: 0xffb3c6, accentColor: 0x9c2f4f,
+    maxHp: 220, speed: 3.4, weapon: 'pan', dashCooldown: 90,
+    passiveName: '방패', passiveDesc: '후라이팬으로 앞에서 오는 총알을 기력으로 막는다. 리스폰 2초.',
+    bodyColor: 0x5aa9ff, accentColor: 0x16161a,
     look: {
-      skin: 0xf1cdb2, hair: 'short', hairColor: 0x1f1a17, glasses: 'none', beard: 'goatee',
-      eyes: 'calm', brows: 'normal', mouth: 'smile', shirt: 0xf4f4f4,
-      headScale: 1.05, bodyScale: 1.2, extra: 'none',
+      // 사진: 검은 볼캡(작은 빨간 핀), 검은 티, 파란 앞치마, 짧은 머리, 옅은 수염
+      skin: 0xf2cdae, hair: 'buzz', hairColor: 0x171412, glasses: 'none', beard: 'stubble',
+      eyes: 'calm', brows: 'normal', mouth: 'flat',
+      shirt: 0x1a1a1c, apron: 0x2f5c99,
+      pants: 0x2a2a30, headScale: 1.05, bodyScale: 1.12,
+      extra: 'cap', capBand: 0x16161a, capPin: 0xd63a3a,
     },
   },
 }

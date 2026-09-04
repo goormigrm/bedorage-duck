@@ -1,5 +1,5 @@
 // 맵 레지스트리. 맵을 추가하려면 MAPS 에 항목 하나를 넣으면 로비·프리뷰·네트워크가 자동으로 인식한다.
-// 문자 그리드: # 벽, . 바닥, S 스폰 후보, o 낮은 상자(벽과 동일 충돌, 렌더에서 낮게)
+// rows 는 이제 **크기와 테두리**만 정한다. 안쪽 구조물은 map.ts 가 매 판 시드로 생성한다(gen).
 
 export type MapId = 'studio' | 'yard'
 
@@ -22,11 +22,25 @@ export interface MapTheme {
   fog: number
 }
 
+/** 안쪽 구조물 생성 밀도 (40x30 기준 개수, 맵이 넓어지면 비례해 늘어난다) */
+export interface MapGen {
+  /** 벽 덩어리 (막대·ㄱ자·블록) */
+  blocks: number
+  /** 상자 군집 */
+  crates: number
+  /** 흩어진 모래주머니 줄 (중앙 진지는 항상 별도로 생긴다) */
+  sandbags: number
+  /** 벽 덩어리 최대 길이 */
+  maxLen: number
+}
+
 export interface MapDef {
   id: MapId
   name: string
   desc: string
+  /** 크기·테두리 전용 (안쪽 글자는 무시된다) */
   rows: string[]
+  gen: MapGen
   theme: MapTheme
 }
 
@@ -101,8 +115,9 @@ export const MAPS: Record<MapId, MapDef> = {
   studio: {
     id: 'studio',
     name: '스튜디오',
-    desc: '침착맨 스튜디오 실내. 방과 복도, 책상 엄폐물.',
+    desc: '실내. 벽이 많아 통로 싸움이 잦다. 가운데 모래주머니 진지.',
     rows: STUDIO_ROWS,
+    gen: { blocks: 15, crates: 7, sandbags: 3, maxLen: 7 },
     theme: {
       floor: 0xd8d3bf, floorAlt: 0xd1cbb6, floorLine: 0xc4bda6,
       wall: 0x5c6347, wallTop: 0x7a8360, crate: 0x8c6a3e, outside: 0x1c1f17,
@@ -112,8 +127,9 @@ export const MAPS: Record<MapId, MapDef> = {
   yard: {
     id: 'yard',
     name: '마당',
-    desc: '야외 마당. 넓은 중앙과 상자·담장 엄폐물, 네 귀퉁이 창고.',
+    desc: '야외. 벽이 적고 상자·모래주머니로 엄폐한다. 시야가 트여 저격이 강하다.',
     rows: YARD_ROWS,
+    gen: { blocks: 7, crates: 14, sandbags: 6, maxLen: 5 },
     theme: {
       floor: 0x9fb26a, floorAlt: 0x93a660, floorLine: 0x86985a,
       wall: 0x6e6a60, wallTop: 0x8d887b, crate: 0xa87b45, outside: 0x1b2418,
