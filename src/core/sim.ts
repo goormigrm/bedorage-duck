@@ -14,6 +14,9 @@ import {
   DASH_TICKS,
   GameState,
   MAX_PLAYERS,
+  MEDKIT_HEAL_FRAC,
+  MEDKIT_RADIUS,
+  MEDKIT_TTL,
   MIN_PLAYERS,
   MatchConfig,
   DASH_COST,
@@ -47,6 +50,8 @@ export function createState(cfg: MatchConfig, map: GameMap): GameState {
     nextBulletId: 1,
     winner: -1,
     sandbags: {},
+    medkits: [],
+    nextMedkitId: 1,
     events: [],
   }
   // 같은 맵 객체로 다시 시작해도 똑같이 시작하도록 부서진 모래주머니를 되돌린다
@@ -151,8 +156,40 @@ export function step(state: GameState, map: GameMap, inputs: Input[]): void {
   }
 
   stepBullets(state, map)
+  stepMedkits(state)
 
   state.tick++
+}
+
+/**
+ * 바닥의 힐팩: 시간이 지나면 사라지고, 다친 사람이 밟으면 회복된다.
+ * 죽인 사람이 이어서 싸울 수 있게 해 주는 장치라, 체력이 가득이면 줍지 않고 남겨 둔다.
+ */
+function stepMedkits(state: GameState): void {
+  if (state.medkits.length === 0) return
+  let write = 0
+  for (let i = 0; i < state.medkits.length; i++) {
+    const m = state.medkits[i]
+    m.ttl--
+    if (m.ttl <= 0) continue
+    let taken = false
+    // 플레이어 순서대로 본다 (동시에 밟으면 번호가 앞선 사람이 줍는다 — 양쪽 화면에서 같아야 한다)
+    for (const p of state.players) {
+      if (!p.alive || p.left || p.choosing) continue
+      const max = CHARACTERS[p.char].maxHp
+      if (p.hp >= max) continue
+      const dx = p.x - m.x
+      const dy = p.y - m.y
+      if (dx * dx + dy * dy > (MEDKIT_RADIUS + PLAYER_RADIUS) * (MEDKIT_RADIUS + PLAYER_RADIUS)) continue
+      const amount = Math.min(max - p.hp, Math.round(max * MEDKIT_HEAL_FRAC))
+      p.hp += amount
+      state.events.push({ type: 'heal', p: p.id, x: m.x, y: m.y, amount })
+      taken = true
+      break
+    }
+    if (!taken) state.medkits[write++] = m
+  }
+  state.medkits.length = write
 }
 
 /** 경기 도중 나간 사람 처리 (호스트가 정한 틱에 모두가 같이 호출해야 결정론이 유지된다) */
@@ -442,6 +479,14 @@ export function syncSandbags(state: GameState, map: GameMap): void {
 }
 
 /** 실제 피해 적용 (근접·투사체 공용) */
+/** 힐팩을 떨군다. 너무 쌓이지 않게 한 사람이 연달아 죽어도 자리를 조금씩 흩는다 */
+function dropMedkit(state: GameState, x: number, y: number): void {
+  state.medkits.push({ id: state.nextMedkitId++, x, y, ttl: MEDKIT_TTL })
+  state.events.push({ type: 'drop', x, y })
+  // 오래된 것부터 정리 (동시에 너무 많으면 지저분하고 유리해진다)
+  while (state.medkits.length > 6) state.medkits.shift()
+}
+
 function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: number, part: number, hx: number, hy: number): void {
   if (dmg <= 0) return
   victim.hp -= dmg
@@ -456,6 +501,8 @@ function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: 
     shooter.kills++
     if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50)
     state.events.push({ type: 'death', p: victim.id, by: shooter.id, x: victim.x, y: victim.y })
+    // 죽은 자리에 힐팩을 남긴다. 이긴 쪽이 그 자리를 차지하면 이어서 싸울 수 있다
+    dropMedkit(state, victim.x, victim.y)
     if (teamKills(state, shooter.team) >= state.targetKills && state.phase === 'playing') {
       state.phase = 'over'
       state.winner = shooter.team

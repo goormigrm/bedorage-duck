@@ -106,6 +106,8 @@ export class Renderer3D {
   private aimSmooth: number[] = []
   /** 피격 후 체력 바를 보여 줄 남은 시간(초). 상대는 맞았을 때만 보인다 */
   private hitShow: number[] = []
+  /** 힐팩 표시 (id → 메시). 흰 상자에 빨간 십자 */
+  private medkitMeshes = new Map<number, THREE.Group>()
   private bulletPool: THREE.Mesh[] = []
   private particles: Particle[] = []
   private particlePool: THREE.Mesh[] = []
@@ -182,6 +184,8 @@ export class Renderer3D {
     this.scene.fog = new THREE.Fog(map.theme.fog, 34, 70)
     this.miniCanvas = null
     this.bagShown.clear()
+    for (const g of this.medkitMeshes.values()) this.scene.remove(g)
+    this.medkitMeshes.clear()
     this.camInit = false
   }
 
@@ -346,6 +350,19 @@ export class Renderer3D {
           this.spawnRing(cx, cz, 0.2, 1.2, 0.4, 0xd6bc84)
           break
         }
+        case 'drop': {
+          this.spawnRing(e.x * U, e.y * U, 0.2, 1.1, 0.5, 0x7ef0a0)
+          break
+        }
+        case 'heal': {
+          this.texts.push({ x: e.x * U, z: e.y * U, y: 1.7, text: `+${e.amount}`, life: 0.9, max: 0.9, color: '#7ef0a0', big: true })
+          for (let i = 0; i < 8; i++) {
+            const a = Math.random() * Math.PI * 2
+            const sp = 0.02 + Math.random() * 0.05
+            this.spawnParticle(e.x * U, 0.5, e.y * U, Math.cos(a) * sp, 0.07 + Math.random() * 0.05, Math.sin(a) * sp, 0.7, 0x7ef0a0, 0.7)
+          }
+          break
+        }
         case 'block': {
           for (let i = 0; i < 5; i++) {
             const a = Math.random() * Math.PI * 2
@@ -418,6 +435,7 @@ export class Renderer3D {
     this.updateVision(curr, opts)
     for (let i = 0; i < n; i++) this.updateRig(i, curr.players[i], pos[i], sdt)
     this.updateBullets(prev, curr, alpha)
+    this.updateMedkits(curr)
     this.updateCamera(curr, pos, dt, opts)
 
     this.gl.render(this.scene, this.camera)
@@ -779,6 +797,42 @@ export class Renderer3D {
     // 스폰 보호: 살짝 반투명 깜빡임
     if (p.invuln > 0) setRigOpacity(rig, 0.6 + 0.3 * Math.sin(this.t * 14))
     else if (p.invuln === 0 && p.aliveTicks < 92) setRigOpacity(rig, 1)
+  }
+
+  /** 바닥의 힐팩. 살짝 떠서 위아래로 흔들리고 천천히 돈다 — 눈에 띄어야 주우러 간다 */
+  private updateMedkits(curr: GameState): void {
+    const live = new Set<number>()
+    for (const m of curr.medkits) {
+      live.add(m.id)
+      let g = this.medkitMeshes.get(m.id)
+      if (!g) {
+        g = new THREE.Group()
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(0.42, 0.28, 0.42),
+          new THREE.MeshLambertMaterial({ color: 0xf2f4f0 }),
+        )
+        box.castShadow = true
+        g.add(box)
+        const crossMat = new THREE.MeshBasicMaterial({ color: 0xe4483a })
+        const bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.02, 0.09), crossMat)
+        const bar2 = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.26), crossMat)
+        bar1.position.y = 0.15
+        bar2.position.y = 0.15
+        g.add(bar1, bar2)
+        this.scene.add(g)
+        this.medkitMeshes.set(m.id, g)
+      }
+      // 사라지기 3초 전부터 깜빡여 알려 준다
+      const blink = m.ttl < 180 && Math.floor(m.ttl / 8) % 2 === 0
+      g.visible = !blink
+      g.position.set(m.x * U, 0.3 + Math.sin(this.t * 3 + m.id) * 0.06, m.y * U)
+      g.rotation.y = this.t * 0.9 + m.id
+    }
+    for (const [id, g] of this.medkitMeshes) {
+      if (live.has(id)) continue
+      this.scene.remove(g)
+      this.medkitMeshes.delete(id)
+    }
   }
 
   private updateBullets(prev: GameState, curr: GameState, alpha: number): void {

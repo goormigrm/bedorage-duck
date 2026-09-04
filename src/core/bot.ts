@@ -2,6 +2,7 @@
 // (Math.random 금지 → 전용 Rng, 삼각함수 → fixedmath)
 // 여러 명이 있으면 보이는 적 중 가장 가까운 사람을 표적으로 삼고, 안 보이면 마지막으로 본 곳을 뒤진다.
 
+import { CHARACTERS } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from './input'
 import { GameMap, TILE, isWall, rayBlocked } from './map'
@@ -240,6 +241,26 @@ export function botInput(
     mode = 'wander'
     if (mem.wanderX < 0 || mem.wanderTimer <= 0 || len(mem.wanderX - me.x, mem.wanderY - me.y) < 24) {
       pickWanderNear(map, mem, enemy.x, enemy.y, 10 * TILE)
+    }
+  }
+
+  // 다쳤으면 가까운 힐팩을 주우러 간다. 안 그러면 봇만 손해라 대전이 한쪽으로 기운다
+  if (me.hp < CHARACTERS[me.char].maxHp * 0.65 && state.medkits.length > 0) {
+    let bx = 0
+    let by = 0
+    let bd = Infinity
+    for (const m of state.medkits) {
+      const d = len(m.x - me.x, m.y - me.y)
+      // 교전 중이면 아주 가까운 것만, 아니면 좀 멀어도 주우러 간다
+      if (d > (mode === 'fight' ? 220 : 620) || d >= bd) continue
+      bd = d
+      bx = m.x
+      by = m.y
+    }
+    if (bd < Infinity) {
+      mode = 'hunt'
+      goalX = bx
+      goalY = by
     }
   }
 

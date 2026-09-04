@@ -246,6 +246,18 @@ export class Sfx {
           }
           break
         }
+        case 'drop': {
+          const b = this.bus(sp(e.x, e.y), 0.5)
+          this.tone(b.node, b.t0, 0.12, 'sine', 420, 300, 0.3, 0.004)
+          break
+        }
+        case 'heal': {
+          const b = this.bus(e.p === localPlayer ? { gain: 1, pan: 0, far: 0 } : sp(e.x, e.y), 0.8)
+          // 올라가는 두 음 — 좋은 일이 생겼다는 신호
+          this.tone(b.node, b.t0, 0.12, 'sine', 660, 680, 0.34, 0.004)
+          this.tone(b.node, b.t0 + 0.09, 0.16, 'sine', 990, 1010, 0.3, 0.004)
+          break
+        }
         case 'block': {
           const b = this.bus(sp(e.x, e.y), 0.9)
           for (const f of [900, 1350, 1800]) this.tone(b.node, b.t0, 0.35, 'sine', f, f * 0.94, 0.24, 0.002)

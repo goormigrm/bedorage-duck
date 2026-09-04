@@ -205,6 +205,16 @@ export class Session {
       solo ? '일시정지' : '메뉴',
       solo ? '봇은 기다려 줍니다.' : '대전 중에는 게임이 멈추지 않습니다.',
       [
+        // 모바일은 화면 위쪽에 ≡ 하나만 두고 소리·로비로를 이 안에 넣는다
+        {
+          label: this.sfx.muted ? '소리 켜기' : '소리 끄기',
+          primary: false,
+          onClick: () => {
+            this.sfx.toggle()
+            this.syncMute()
+            this.showMenu() // 라벨 갱신
+          },
+        },
         { label: '계속', primary: true, onClick: () => this.hideOverlay() },
         { label: '로비로', primary: false, onClick: () => this.exit() },
       ],

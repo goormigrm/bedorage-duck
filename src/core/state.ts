@@ -21,6 +21,11 @@ export const BLOCK_COST = 0.55
 export const BLOCK_LOCK_TICKS = 30
 /** 앞에서 오는 탄을 후라이팬으로 막을 확률. 나머지는 그대로 맞는다 (2026-09-06: 승빠덕이 여전히 너무 세서 50%) */
 export const BLOCK_CHANCE = 0.5
+/** 죽은 자리에 떨어지는 힐팩: 회복량(최대 체력 비율) · 유지 시간 · 줍는 반경 */
+export const MEDKIT_HEAL_FRAC = 0.35
+export const MEDKIT_TTL = 60 * 20
+export const MEDKIT_RADIUS = 26
+
 /** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
 export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
@@ -107,6 +112,10 @@ export type SimEvent =
   | { type: 'break'; tx: number; ty: number }
   /** 근접 무기로 총알을 막음 */
   | { type: 'block'; p: number; x: number; y: number }
+  /** 힐팩이 떨어짐 */
+  | { type: 'drop'; x: number; y: number }
+  /** 힐팩을 주움 */
+  | { type: 'heal'; p: number; x: number; y: number; amount: number }
   /** 캐릭터 선택 화면 진입 (소환 해제) */
   | { type: 'choose'; p: number }
   /** 캐릭터가 바뀜 */
@@ -124,6 +133,15 @@ export interface MatchConfig {
 }
 /** 맵은 GameState 밖(정적)이라 MatchConfig 에 넣지 않고 세션 설정으로 따로 전달한다 */
 
+/** 죽은 자리에 떨어지는 힐팩. 이긴 쪽이 이어서 싸울 수 있게 해 준다 */
+export interface Medkit {
+  id: number
+  x: number
+  y: number
+  /** 남은 틱 */
+  ttl: number
+}
+
 export interface GameState {
   tick: number
   rng: Rng
@@ -137,6 +155,9 @@ export interface GameState {
   winner: number
   /** 살아있는 모래주머니: 타일 인덱스 → 남은 내구도 */
   sandbags: Record<number, number>
+  /** 바닥에 떨어진 힐팩 */
+  medkits: Medkit[]
+  nextMedkitId: number
   /** 이번 step 에서 발생한 이벤트. 해시/스냅샷 대상 아님. */
   events: SimEvent[]
 }

@@ -95,11 +95,233 @@ function generate(map: GameMap, def: MapDef, seed: number): void {
   for (let i = 0; i < Math.round(g.sandbags * k); i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 6))
   // 5) 갇힌 곳이 생겼으면 뚫는다
   ensureConnected(map)
+  // 6) 뺑 돌아가야 하는 곳에 지름길을 낸다 (미로처럼 되는 것 방지)
+  openShortcuts(map)
+  // 7) 그래도 멀리 돌아가는 구간이 남으면 곧게 이어 준다
+  straightenPaths(map)
+}
+
+/** 8방향 걸음 수 거리 (실제 이동이 8방향이라 4방향으로 재면 대각선을 과대평가한다) */
+function walkField(map: GameMap, start: number): Float64Array {
+  const total = map.w * map.h
+  const d = new Float64Array(total).fill(-1)
+  // 대각선이 √2 라 단순 BFS 로는 안 되고, 작은 우선순위 없이 두 번 훑는 것으로 충분한 근사를 낸다
+  const q: number[] = [start]
+  d[start] = 0
+  let head = 0
+  while (head < q.length) {
+    const cur = q[head++]
+    const cx = cur % map.w
+    const cy = (cur / map.w) | 0
+    for (let k = 0; k < 8; k++) {
+      const dx = k < 4 ? [1, -1, 0, 0][k] : [1, 1, -1, -1][k - 4]
+      const dy = k < 4 ? [0, 0, 1, -1][k] : [1, -1, 1, -1][k - 4]
+      const nx = cx + dx
+      const ny = cy + dy
+      if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h) continue
+      const n = ny * map.w + nx
+      if (map.tiles[n] !== TILE_FLOOR) continue
+      // 대각선은 두 옆칸이 모두 비어야 지나간다 (모서리 끼임 방지)
+      if (dx !== 0 && dy !== 0) {
+        if (map.tiles[cy * map.w + nx] !== TILE_FLOOR || map.tiles[ny * map.w + cx] !== TILE_FLOOR) continue
+      }
+      const nd = d[cur] + (dx !== 0 && dy !== 0 ? 1.41421356 : 1)
+      if (d[n] < 0 || nd < d[n] - 1e-9) {
+        d[n] = nd
+        q.push(n)
+      }
+    }
+  }
+  return d
+}
+
+/**
+ * 멀리 돌아가야 하는 두 지점을 직선으로 이어 준다.
+ *
+ * `openShortcuts` 는 '벽 하나 사이인데 멀리 돌아가는' 국소적인 곳만 고친다.
+ * 방 배치 자체가 미로가 되면 그것으로는 부족해서, 맵을 격자로 훑어
+ * **직선 거리 대비 걸어야 하는 거리(우회도)** 가 가장 나쁜 쌍을 찾아 그 사이 벽을 직선으로 뚫는다.
+ * 너무 많이 뚫으면 엄폐가 사라지므로 몇 군데만 손본다.
+ */
+function straightenPaths(map: GameMap, rounds = 8): void {
+  // 맵을 고르게 대표하는 표본 (격자에서 바닥인 칸). 스폰은 구석에 잡히므로 가장자리도 포함한다
+  const pts: number[] = []
+  const gap = map.scale === 1 ? 6 : 8
+  for (let y = 2; y < map.h - 2; y += gap) {
+    for (let x = 2; x < map.w - 2; x += gap) {
+      const i = y * map.w + x
+      if (map.tiles[i] === TILE_FLOOR) pts.push(i)
+    }
+  }
+  if (pts.length < 2) return
+  const SQ2 = 1.41421356
+  for (let r = 0; r < rounds; r++) {
+    let worst = 0
+    let wa = -1
+    let wb = -1
+    for (const a of pts) {
+      const d = walkField(map, a)
+      const ax = a % map.w
+      const ay = (a / map.w) | 0
+      for (const b of pts) {
+        if (b <= a) continue
+        const steps = d[b]
+        if (steps < 0) continue
+        const bx = b % map.w
+        const by = (b / map.w) | 0
+        const straight = Math.hypot(ax - bx, ay - by)
+        if (straight < 10) continue
+        const ratio = steps / straight
+        if (ratio > worst) {
+          worst = ratio
+          wa = a
+          wb = b
+        }
+      }
+    }
+    // 1.45 = 직선의 1.45배 넘게 걸어야 하는 구간. 이 정도면 "뺑 돌았다"고 느낀다
+    if (wa < 0 || worst < 1.45) return
+    carveLine(map, wa % map.w, (wa / map.w) | 0, wb % map.w, (wb / map.w) | 0)
+    void SQ2
+  }
+}
+
+/** 두 점을 잇는 직선 위의 벽을 2칸 폭으로 뚫는다 (상자·모래주머니는 그대로 둔다) */
+function carveLine(map: GameMap, x0: number, y0: number, x1: number, y1: number): void {
+  let x = x0
+  let y = y0
+  const dx = Math.abs(x1 - x0)
+  const dy = Math.abs(y1 - y0)
+  const sx = x0 < x1 ? 1 : -1
+  const sy = y0 < y1 ? 1 : -1
+  let err = dx - dy
+  let guard = map.w + map.h + 8
+  while (guard-- > 0) {
+    for (const [ox, oy] of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+    ] as [number, number][]) {
+      const tx = x + ox
+      const ty = y + oy
+      if (tx < 1 || ty < 1 || tx >= map.w - 1 || ty >= map.h - 1) continue
+      const i = ty * map.w + tx
+      if (map.tiles[i] === TILE_WALL) map.tiles[i] = TILE_FLOOR
+    }
+    if (x === x1 && y === y1) break
+    const e2 = err * 2
+    if (e2 > -dy) {
+      err -= dy
+      x += sx
+    }
+    if (e2 < dx) {
+      err += dx
+      y += sy
+    }
+  }
+}
+
+/**
+ * 어디로든 '가깝게' 통하도록 지름길을 낸다.
+ *
+ * `ensureConnected` 는 갇힌 곳만 없앨 뿐, 길이 이어져 있어도 한참 돌아가는 구조는 그대로 둔다.
+ * 실제로 스튜디오(방 분할)에서 미로처럼 뺑 돌아가는 일이 잦았다.
+ *
+ * 방법: 한 지점에서 걸음 수 거리(BFS)를 재고, **뚫었을 때 양쪽 거리 차가 큰 벽**을 찾아 구멍을 낸다.
+ * 거리 차가 크다는 것은 바로 옆인데도 한참 돌아야 한다는 뜻이다. 그런 곳부터 순서대로 뚫는다.
+ * rng 를 쓰지 않아 같은 맵이면 결과가 같다(결정론 유지).
+ */
+function openShortcuts(map: GameMap, rounds = 30): void {
+  const total = map.w * map.h
+  const dist = new Int32Array(total)
+  for (let r = 0; r < rounds; r++) {
+    // 걸음 수 거리 (첫 바닥 칸 기준)
+    dist.fill(-1)
+    let start = -1
+    for (let i = 0; i < total; i++) {
+      if (map.tiles[i] === TILE_FLOOR) {
+        start = i
+        break
+      }
+    }
+    if (start < 0) return
+    const queue = [start]
+    dist[start] = 0
+    let head = 0
+    while (head < queue.length) {
+      const cur = queue[head++]
+      const cx = cur % map.w
+      const cy = (cur / map.w) | 0
+      const d = dist[cur] + 1
+      if (cx > 0 && dist[cur - 1] < 0 && map.tiles[cur - 1] === TILE_FLOOR) { dist[cur - 1] = d; queue.push(cur - 1) }
+      if (cx < map.w - 1 && dist[cur + 1] < 0 && map.tiles[cur + 1] === TILE_FLOOR) { dist[cur + 1] = d; queue.push(cur + 1) }
+      if (cy > 0 && dist[cur - map.w] < 0 && map.tiles[cur - map.w] === TILE_FLOOR) { dist[cur - map.w] = d; queue.push(cur - map.w) }
+      if (cy < map.h - 1 && dist[cur + map.w] < 0 && map.tiles[cur + map.w] === TILE_FLOOR) { dist[cur + map.w] = d; queue.push(cur + map.w) }
+    }
+    // 뚫으면 가장 많이 가까워지는 자리 찾기.
+    // 벽이 두 겹·세 겹인 곳도 있으므로 한 칸이 아니라 **최대 3칸까지 관통**해 반대편 바닥을 본다.
+    let bestFrom = -1
+    let bestStep = 0
+    let bestLen = 0
+    let bestGain = 0
+    const DIRS: [number, number][] = [
+      [1, 0],
+      [0, 1],
+    ]
+    for (let y = 1; y < map.h - 1; y++) {
+      for (let x = 1; x < map.w - 1; x++) {
+        const i = y * map.w + x
+        if (map.tiles[i] !== TILE_FLOOR || dist[i] < 0) continue
+        for (const [dx, dy] of DIRS) {
+          const step = dy * map.w + dx
+          // 벽을 1~3칸 지나 반대편 바닥이 나오는가
+          for (let len = 1; len <= 3; len++) {
+            const nx = x + dx * (len + 1)
+            const ny = y + dy * (len + 1)
+            if (nx < 1 || ny < 1 || nx >= map.w - 1 || ny >= map.h - 1) break
+            let solid = true
+            for (let k = 1; k <= len; k++) {
+              if (map.tiles[i + step * k] !== TILE_WALL) {
+                solid = false
+                break
+              }
+            }
+            if (!solid) break
+            const j = i + step * (len + 1)
+            if (map.tiles[j] !== TILE_FLOOR || dist[j] < 0) continue
+            // 두꺼운 벽일수록 뚫는 값어치를 조금 깎는다 (얇은 곳부터 뚫리도록)
+            const gain = Math.abs(dist[i] - dist[j]) - (len - 1) * 4
+            if (gain > bestGain) {
+              bestGain = gain
+              bestFrom = i
+              bestStep = step
+              bestLen = len
+            }
+          }
+        }
+      }
+    }
+    // 바로 옆인데 8걸음 넘게 돌아야 한다면 뚫을 값어치가 있다
+    if (bestFrom < 0 || bestGain < 8) break
+    // 한 칸만 뚫으면 지나갈 수는 있어도 답답하다. 벽을 따라 두 칸 폭으로 넓힌다
+    const wide = bestStep === 1 ? map.w : 1
+    for (let k = 1; k <= bestLen; k++) {
+      const t = bestFrom + bestStep * k
+      map.tiles[t] = TILE_FLOOR
+      const t2 = t + wide
+      const tx2 = t2 % map.w
+      const ty2 = (t2 / map.w) | 0
+      if (tx2 > 0 && ty2 > 0 && tx2 < map.w - 1 && ty2 < map.h - 1 && map.tiles[t2] === TILE_WALL) {
+        map.tiles[t2] = TILE_FLOOR
+      }
+    }
+  }
 }
 
 /** 영역을 재귀로 갈라 방과 문을 만든다 (실내 맵) */
 function carveRooms(map: GameMap, rng: Rng, depth: number): void {
-  const MIN = 6
+  // 방을 너무 잘게 쪼개면 미로가 된다. 최소 변을 키워 방을 크게, 대신 문을 넉넉히 낸다
+  const MIN = 8
   const put = (x: number, y: number, tile: number) => {
     if (x < 1 || y < 1 || x >= map.w - 1 || y >= map.h - 1) return
     map.tiles[y * map.w + x] = tile
@@ -115,8 +337,8 @@ function carveRooms(map: GameMap, rng: Rng, depth: number): void {
     if (horiz) {
       const y = y0 + MIN + randInt(rng, 0, h - MIN * 2)
       for (let x = x0; x <= x1; x++) put(x, y, TILE_WALL)
-      // 문 1~2개 (3칸 폭)
-      for (let i = 0, n = 1 + randInt(rng, 0, 2); i < n; i++) {
+      // 문 (3칸 폭) — 벽이 길수록 더 많이 낸다. 적으면 한 문으로 몰려 뺑 돌게 된다
+      for (let i = 0, n = 2 + Math.floor(w / 14) + randInt(rng, 0, 2); i < n; i++) {
         const dx = x0 + 1 + randInt(rng, 0, Math.max(1, w - 4))
         for (let j = 0; j < 3; j++) put(dx + j, y, TILE_FLOOR)
       }
@@ -125,7 +347,7 @@ function carveRooms(map: GameMap, rng: Rng, depth: number): void {
     } else {
       const x = x0 + MIN + randInt(rng, 0, w - MIN * 2)
       for (let y = y0; y <= y1; y++) put(x, y, TILE_WALL)
-      for (let i = 0, n = 1 + randInt(rng, 0, 2); i < n; i++) {
+      for (let i = 0, n = 2 + Math.floor(h / 14) + randInt(rng, 0, 2); i < n; i++) {
         const dy = y0 + 1 + randInt(rng, 0, Math.max(1, h - 4))
         for (let j = 0; j < 3; j++) put(x, dy + j, TILE_FLOOR)
       }

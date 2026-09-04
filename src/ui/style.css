@@ -304,7 +304,8 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tbtn.big { grid-area: fire; width: 100%; height: 62px; border-radius: 34px; font-size: 15px; font-weight: 700;
   color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }
-.tbtn.menu { position: fixed; left: 12px; top: 12px; width: 46px; height: 46px; font-size: 20px; }
+.tbtn.menu { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 12px);
+  top: calc(env(safe-area-inset-top, 0px) + 10px); width: 46px; height: 46px; font-size: 20px; }
 @media (max-height: 420px) {
   .tstick { width: 112px; height: 112px; margin: -56px 0 0 -56px; }
   .tstick i { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
@@ -316,9 +317,6 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 /* ---- 모바일 상단: 점수판(캔버스 중앙)과 버튼이 겹치지 않게 ---- */
 /* stage 안에 두면 축소돼서 누르기 어렵고, 4인 점수판이 넓어지면 겹친다.
    터치 기기에서는 실제 화면 우상단에 고정하고 크기를 손가락에 맞춘다. */
-@media (pointer: coarse) {
-  .game-ui .top-right { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 6px);
-    right: calc(env(safe-area-inset-right, 0px) + 8px); gap: 6px; z-index: 30; }
-  .game-ui .top-right .btn { padding: 9px 12px; font-size: 12px; border-radius: 10px;
-    background: rgba(22,27,34,.82); -webkit-tap-highlight-color: transparent; }
-}
+/* 터치 조작 중에는 소리·로비로가 ≡ 메뉴 안으로 들어간다. 상단에는 ≡ 하나만 둔다.
+   미디어 쿼리가 아니라 클래스로 판단해야 ?touch=1 로 PC 에서 시험할 때도 같게 보인다 */
+.game-root.touching .game-ui .top-right { display: none; }
