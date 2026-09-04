@@ -35,6 +35,8 @@ export interface SessionConfig {
   delay?: number
   /** 대전: 플레이어 인덱스 순 피어 id (내 것 포함) */
   peerIds?: string[]
+  /** 닉네임 (인덱스 순, 빈 문자열이면 캐릭터 이름) */
+  names?: string[]
   onExit: () => void
 }
 
@@ -110,7 +112,7 @@ export class Session {
     this.syncMute = syncMute
     this.sfx.startBgm()
 
-    this.names = displayNames(cfg.chars)
+    this.names = this.computeNames()
 
     if (cfg.mode === 'p2p' && cfg.link) {
       const ids = cfg.peerIds ?? []
@@ -127,6 +129,15 @@ export class Session {
     this.ticker.start()
     this.raf = requestAnimationFrame(this.frame)
     ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase, state: () => this.state }
+  }
+
+  /** 표시 이름: 닉네임이 있으면 닉네임, 없으면 캐릭터 이름(중복이면 번호) */
+  private computeNames(): string[] {
+    const base = displayNames(this.state.players.map((p) => p.char))
+    return base.map((n, i) => {
+      const nick = this.cfg.names?.[i]?.trim()
+      return nick ? nick.slice(0, 8) : n
+    })
   }
 
   private newLockstep(): Lockstep {
@@ -362,7 +373,7 @@ export class Session {
       this.prev = snapshot(this.state)
       step(this.state, this.map, inputs)
       this.applyDrops()
-      for (const e of this.state.events) if (e.type === 'swap') this.names = displayNames(this.state.players.map((p) => p.char))
+      for (const e of this.state.events) if (e.type === 'swap') this.names = this.computeNames()
       this.renderer.onEvents(this.state.events, this.state, lp, this.names)
       this.sfx.onEvents(this.state.events, this.state, lp)
       if (this.lockstep && this.state.tick % 60 === 0) {

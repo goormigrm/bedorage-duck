@@ -124,11 +124,13 @@ export type Member = {
   char: string
   ready: boolean
   team: number
+  /** 닉네임 (비어 있으면 캐릭터 이름을 쓴다) */
+  name: string
 }
 
 export type CtlMessage =
   /** 내 상태 (캐릭터·준비·팀). 모두에게 */
-  | { t: 'hello'; char: string; ready: boolean; team: number }
+  | { t: 'hello'; char: string; ready: boolean; team: number; name: string }
   /** 호스트 → 모두: 방 상태 정본 */
   | { t: 'room'; mode: RoomMode; targetKills: number; map: string; members: Member[] }
   /** 호스트 → 정원 초과로 들어온 피어 */

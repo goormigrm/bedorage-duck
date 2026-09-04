@@ -31,6 +31,8 @@ export class Lobby {
   /** 혼자 하기 모드: 개인전 / 2v2 팀전 (봇 3) */
   private soloMode: 'ffa' | 'teams' = 'ffa'
   private roomMode: RoomMode = 'ffa'
+  /** 닉네임 (선택, 8자, localStorage 기억) */
+  private nick = ''
   private lobbyLink: LobbyLink | null = null
   private link: RoomLink | null = null
   private role: 'host' | 'guest' | null = null
@@ -48,6 +50,11 @@ export class Lobby {
     private host: HTMLElement,
     private handlers: LobbyHandlers,
   ) {
+    try {
+      this.nick = (localStorage.getItem('bd.nick') ?? '').slice(0, 8)
+    } catch {
+      /* 저장소 없음 */
+    }
     this.render()
     this.openLobbyList()
     const code = roomCodeFromUrl()
@@ -64,7 +71,7 @@ export class Lobby {
         <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html">프리뷰 보기</a></p>
         <div class="feats"><span>덕코프식 시야</span><span>개인전 · 2v2 팀전</span><span>인원에 따라 맵 4배</span><span>리스폰 중 Tab 캐릭터 교체</span><span>설치 없음 · 서버 없음</span></div>
 
-        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
+        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small><input class="nick" id="nick" maxlength="8" placeholder="닉네임 (선택)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false"></div>
         <div class="chars" id="chars"></div>
 
         <div class="section-t">맵 <small>3명이면 2배, 4명이면 4배로 넓어진다</small></div>
@@ -155,6 +162,17 @@ export class Lobby {
       if (this.role === 'host') this.members.forEach((m, i) => (m.team = this.roomMode === 'teams' ? i % 2 : 0))
       this.myTeam = this.roomMode === 'teams' ? 0 : 0
       this.hostChanged()
+    })
+    const nickEl = h.querySelector('#nick') as HTMLInputElement
+    nickEl.addEventListener('change', () => {
+      this.nick = nickEl.value.trim().slice(0, 8)
+      nickEl.value = this.nick
+      try {
+        localStorage.setItem('bd.nick', this.nick)
+      } catch {
+        /* 무시 */
+      }
+      this.pushSelf()
     })
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
@@ -279,6 +297,7 @@ export class Lobby {
       mode: 'solo',
       chars,
       teams,
+      names: chars.map((_, i) => (i === 0 ? this.nick : '')),
       targetKills: this.killsSolo,
       seed: (Math.random() * 0xffffffff) >>> 0,
       localPlayer: 0,
@@ -296,7 +315,7 @@ export class Lobby {
     this.hostId = this.link.selfId
     this.myReady = false
     this.myTeam = 0
-    this.members = [{ id: this.link.selfId, char: this.char, ready: false, team: 0 }]
+    this.members = [{ id: this.link.selfId, char: this.char, ready: false, team: 0, name: this.nick }]
     history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
     this.announce()
@@ -402,16 +421,18 @@ export class Lobby {
   private onHello(m: Extract<CtlMessage, { t: 'hello' }>, from: string): void {
     if (this.role !== 'host' || !this.link) return
     const existing = this.members.find((x) => x.id === from)
+    const name = (m.name ?? '').slice(0, 8)
     if (existing) {
       existing.char = m.char
       existing.ready = m.ready
+      existing.name = name
       if (this.roomMode === 'teams') existing.team = m.team === 1 ? 1 : 0
     } else {
       if (this.members.length >= MAX_PLAYERS || this.starting) {
         this.link.sendCtl({ t: 'full' }, from)
         return
       }
-      this.members.push({ id: from, char: m.char, ready: false, team: this.autoTeam() })
+      this.members.push({ id: from, char: m.char, ready: false, team: this.autoTeam(), name })
     }
     this.broadcastRoom()
     this.announce()
@@ -434,7 +455,7 @@ export class Lobby {
 
   private sendHello(to?: string): void {
     if (!this.link) return
-    this.link.sendCtl({ t: 'hello', char: this.char, ready: this.myReady, team: this.myTeam }, to)
+    this.link.sendCtl({ t: 'hello', char: this.char, ready: this.myReady, team: this.myTeam, name: this.nick }, to)
   }
 
   /** 내 캐릭터·준비·팀이 바뀌었다: 호스트면 정본 갱신 후 방송, 게스트면 hello */
@@ -446,6 +467,7 @@ export class Lobby {
         me.char = this.char
         me.ready = this.myReady
         me.team = this.roomMode === 'teams' ? this.myTeam : 0
+        me.name = this.nick
       }
       this.broadcastRoom()
       this.announce()
@@ -509,6 +531,7 @@ export class Lobby {
       link,
       delay,
       peerIds: players.map((p) => p.id),
+      names: players.map((p) => p.name ?? ''),
     })
   }
 
@@ -539,10 +562,12 @@ export class Lobby {
       const c = (CHARACTERS as Record<string, { name: string } | undefined>)[m.char]
       const who = (i === 0 ? '호스트' : `${i + 1}`) + (mine ? ' · 나' : '')
       const badge = teams ? `<span class="team ${m.team === 0 ? 'team-a' : 'team-b'}">${TEAM_NAMES[m.team]}</span>` : ''
+      const nick = (m.name ?? '').trim()
+      const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] ?? ch)
       slots.push(`<div class="slot ${m.ready ? 'ready' : ''} ${mine ? 'mine' : ''}">
         <div class="who">${who}${badge}</div>
-        <div class="cname">${c ? c.name : m.char}</div>
-        <div class="rd">${m.ready ? '준비 완료' : '준비 안 됨'}</div>
+        <div class="cname">${nick ? esc(nick) : c ? c.name : m.char}</div>
+        <div class="rd">${nick ? `${c ? c.name : m.char} · ` : ''}${m.ready ? '준비 완료' : '준비 안 됨'}</div>
       </div>`)
     }
     const html = `
