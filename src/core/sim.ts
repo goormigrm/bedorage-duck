@@ -24,7 +24,7 @@ import {
   isEnemy,
   teamKills,
 } from './state'
-import { PART_BODY, PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, headMult, partForOffset } from './weapons'
+import { HEAD_FRAC, PART_BODY, PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, headMult, partForOffset } from './weapons'
 
 const MAX_RECOIL_MUL = 3
 
@@ -205,7 +205,10 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   }
   if (p.fireCooldown > 0) p.fireCooldown--
   if (p.dashCooldown > 0) p.dashCooldown--
-  if (p.dashTimer === 0 && p.stamina < STAMINA_MAX) p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN)
+  // 근접 무기는 기력이 방어에도 쓰이므로 두 배로 찬다
+  if (p.dashTimer === 0 && p.stamina < STAMINA_MAX) {
+    p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * (w.melee ? 1.8 : 1))
+  }
   if (p.invuln > 0) p.invuln--
   if (p.legInjury > 0) p.legInjury--
   if (p.reloadTimer > 0) {
@@ -217,7 +220,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
 
   // 매직덕 패시브: 피격 3초 후 초당 4 회복
   if (c.id === 'magic' && state.tick - p.lastHitTick > 180 && p.hp < c.maxHp) {
-    p.hp = Math.min(c.maxHp, p.hp + 4 / 60)
+    p.hp = Math.min(c.maxHp, p.hp + 6 / 60)
   }
 
   p.aim = input.aim & 1023
@@ -296,7 +299,7 @@ function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: nu
     if (!isEnemy(shooter, e) || !e.alive || e.left) continue
     const t = (e.x - mx) * dx + (e.y - my) * dy
     if (t <= 0 || t > 1200) continue
-    if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * 0.34) continue
+    if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * HEAD_FRAC) continue
     if (rayCast(map, mx, my, e.x, e.y, 'sight').blocked) continue
     return true
   }
@@ -405,7 +408,7 @@ function stepBullets(state: GameState, map: GameMap): void {
 
     if (!dead && b.life <= 0) dead = true
     // 맞히지 못하고 사라진 탄 → 기열덕 연속 명중 초기화
-    if (dead && !b.hitSomeone) state.players[b.owner].streak = 0
+    if (dead && !b.hitSomeone) state.players[b.owner].streak = Math.max(0, state.players[b.owner].streak - 1)
     if (!dead) bullets[write++] = b
   }
   bullets.length = write
@@ -464,7 +467,7 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   let dmg = b.damage * mult * falloff(w, dist)
   const shooter = state.players[b.owner]
   if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
-  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(5, shooter.streak) * 0.08
+  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(6, shooter.streak) * 0.09
   dmg = Math.round(dmg)
   b.hitSomeone = true
   shooter.streak = Math.min(99, shooter.streak + 1)
@@ -472,8 +475,9 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   if (WEAPONS[victim.weapon].melee && victim.stamina > 0) {
     const from = atan2A(b.oy - victim.y, b.ox - victim.x)
     if (Math.abs(angleDiff(from, victim.aim)) < 213) {
-      const absorbed = Math.min(dmg, Math.floor(victim.stamina))
-      victim.stamina -= absorbed
+      const perDmg = 0.55
+      const absorbed = Math.min(dmg, Math.floor(victim.stamina / perDmg))
+      victim.stamina = Math.max(0, victim.stamina - absorbed * perDmg)
       dmg -= absorbed
       state.events.push({ type: 'block', p: victim.id, x: b.x, y: b.y })
     }

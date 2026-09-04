@@ -95,8 +95,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   cheolmyeon: {
     id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장. 기관총을 들고 버티는 차돌야차.',
     prominence: 1,
-    maxHp: 270, speed: 2.8, weapon: 'mg', dashCooldown: 110,
-    passiveName: '차돌', passiveDesc: '최대 체력 270 (기관총을 버티는 몸).',
+    maxHp: 290, speed: 2.8, weapon: 'mg', dashCooldown: 110,
+    passiveName: '차돌', passiveDesc: '최대 체력 290. 기관총을 퍼붓는 동안 맞아 주는 몸.',
     bodyColor: 0xff5a36, accentColor: 0x1e1e1e,
     look: {
       // 철면수심 공식 마스코트: 빨간 얼굴, 삐죽삐죽한 검은 머리 + 정수리 흰 별, 회색 옆머리, 반쯤 감은 눈, 쭉 내민 입술, 큰 귀
@@ -122,7 +122,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   dangun: {
     id: 'dangun', name: '단군덕', basedOn: '단군', tagline: '무대 위의 게임 캐스터. 물방울 재킷과 파란 선글라스, 마이크는 놓지 않는다.',
     prominence: 3,
-    maxHp: 180, speed: 3.6, weapon: 'pistol', dashCooldown: 70,
+    maxHp: 200, speed: 3.6, weapon: 'pistol', dashCooldown: 58,
     passiveName: '중계', passiveDesc: '이동 속도 최상. 시야 밖 상대가 총을 쏘면 그 위치가 잠깐 표시됩니다.',
     bodyColor: 0x7ee0a0, accentColor: 0x2f56b8,
     look: {
@@ -134,8 +134,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   magic: {
     id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '치과의사. 산탄총을 들고 스스로를 치료합니다.',
     prominence: 4,
-    maxHp: 300, speed: 2.9, weapon: 'shotgun', dashCooldown: 80,
-    passiveName: '진료', passiveDesc: '최대 체력 300 (최고). 피격 후 3초가 지나면 초당 8씩 체력 회복.',
+    maxHp: 260, speed: 2.9, weapon: 'shotgun', dashCooldown: 80,
+    passiveName: '진료', passiveDesc: '최대 체력 260 (최고). 피격 후 3초가 지나면 초당 6씩 체력 회복.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
       // 실제 사진 기준: 검은 짧은 머리 + 옆으로 넘긴 앞머리, 얇은 검은 사각 안경, 이 드러나는 웃음, 턱 수염 자국,
@@ -176,7 +176,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'giyeol', name: '기열덕', basedOn: '기열킹', tagline: '뇌절의 왕. 입을 크게 벌리고 달려든다.',
     prominence: 7,
     maxHp: 200, speed: 3.2, weapon: 'smg', dashCooldown: 90,
-    passiveName: '뇌절', passiveDesc: '연속 명중마다 피해 +8% (최대 +40%). 빗나가면 초기화.',
+    passiveName: '뇌절', passiveDesc: '연속 명중마다 피해 +9% (최대 +54%). 빗나가면 한 단계씩 깎인다.',
     bodyColor: 0xff5f5f, accentColor: 0xd42b2b,
     look: {
       // 사진: 갈색 짧은 머리, 크게 벌린 입, 검은 정장 + 흰 셔츠 + 빨간 넥타이
@@ -189,8 +189,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   pungwol: {
     id: 'pungwol', name: '풍월덕', basedOn: '풍월량', tagline: '금발 버섯머리에 파란 후드. 산탄총을 들고 바람처럼 구른다.',
     prominence: 8,
-    maxHp: 170, speed: 3.7, weapon: 'shotgun', dashCooldown: 45,
-    passiveName: '바람', passiveDesc: '대시 쿨다운 절반. 체력 170 (가장 낮음).',
+    maxHp: 220, speed: 3.7, weapon: 'shotgun', dashCooldown: 45,
+    passiveName: '바람', passiveDesc: '대시 쿨다운 절반. 산탄총을 들고 가장 빠르게 파고든다.',
     bodyColor: 0x8fd3ff, accentColor: 0x7fa8d4,
     look: {
       // 사진: 금발 버섯머리(바가지), 통통한 볼, 가늘게 뜬 눈, 옅은 미소, 하늘색 후드티
@@ -217,8 +217,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   tongdak: {
     id: 'tongdak', name: '통닭덕', basedOn: '통닭천사', tagline: '검은 단발에 줄무늬 스웨터. 저격으로 한 방을 노린다.',
     prominence: 10,
-    maxHp: 240, speed: 2.9, weapon: 'sniper', dashCooldown: 100,
-    passiveName: '치킨', passiveDesc: '킬 시 체력 50 회복. 체력 240.',
+    maxHp: 220, speed: 2.9, weapon: 'sniper', dashCooldown: 100,
+    passiveName: '치킨', passiveDesc: '킬 시 체력 50 회복.',
     bodyColor: 0xff8fa3, accentColor: 0xd83c4a,
     look: {
       // 사진: 검은 단발, 옅은 미소, 빨강·하늘 굵은 줄무늬 스웨터
@@ -245,8 +245,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   seungwoo: {
     id: 'seungwoo', name: '승빠덕', basedOn: '승우아빠', tagline: '검은 모자에 파란 앞치마. 후라이팬으로 총알을 막고 후려친다.',
     prominence: 12,
-    maxHp: 220, speed: 3.4, weapon: 'pan', dashCooldown: 90,
-    passiveName: '방패', passiveDesc: '후라이팬으로 앞에서 오는 총알을 기력으로 막는다. 리스폰 2초.',
+    maxHp: 245, speed: 3.7, weapon: 'pan', dashCooldown: 34,
+    passiveName: '방패', passiveDesc: '앞에서 오는 총알을 기력으로 막는다(피해 1당 기력 0.55). 기력 회복 1.8배, 짧은 쿨다운으로 굴러서 붙는다.',
     bodyColor: 0x5aa9ff, accentColor: 0x16161a,
     look: {
       // 사진: 검은 볼캡(작은 빨간 핀), 검은 티, 파란 앞치마, 짧은 머리, 옅은 수염

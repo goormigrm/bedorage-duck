@@ -60,51 +60,51 @@ const deg = (d: number) => Math.round((d / 360) * 1024)
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   pistol: {
-    id: 'pistol', name: '권총', damage: 26, pellets: 1, fireInterval: 13, auto: true,
+    id: 'pistol', name: '권총', damage: 27, pellets: 1, fireInterval: 11, auto: true,
     magSize: 14, reloadTicks: 90, spreadHip: deg(5), spreadAds: deg(1.6), recoil: deg(2.2),
     recoilRecover: deg(0.55), speed: 15, life: 60, moveMul: 1.0, length: 14, color: 0x9aa0a6,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,
   },
   smg: {
-    id: 'smg', name: 'SMG', damage: 15, pellets: 1, fireInterval: 5, auto: true,
+    id: 'smg', name: 'SMG', damage: 16, pellets: 1, fireInterval: 5, auto: true,
     magSize: 32, reloadTicks: 110, spreadHip: deg(8), spreadAds: deg(4.2), recoil: deg(1.4),
     recoilRecover: deg(0.5), speed: 14, life: 55, moveMul: 0.96, length: 18, color: 0x7c8590,
-    falloffStart: 260, falloffEnd: 620, falloffMin: 0.6,
+    falloffStart: 320, falloffEnd: 700, falloffMin: 0.62,
   },
   rifle: {
-    id: 'rifle', name: '소총', damage: 26, pellets: 1, fireInterval: 9, auto: true,
-    magSize: 30, reloadTicks: 130, spreadHip: deg(5.5), spreadAds: deg(1.4), recoil: deg(2.2),
+    id: 'rifle', name: '소총', damage: 23, pellets: 1, fireInterval: 10, auto: true,
+    magSize: 30, reloadTicks: 130, spreadHip: deg(6.5), spreadAds: deg(1.4), recoil: deg(2.6),
     recoilRecover: deg(0.5), speed: 17, life: 70, moveMul: 0.92, length: 24, color: 0x5f6b48,
-    falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,
+    falloffStart: 420, falloffEnd: 820, falloffMin: 0.78,
   },
-  // 근접에서 압도적(탄당 14×7 = 98), 멀면 급감. 한 방에 죽이지는 못한다
+  // 근접에서 압도적(탄당 17×7 = 119), 멀면 급감. 한 방에 죽이지는 못한다
   shotgun: {
-    id: 'shotgun', name: '산탄총', damage: 14, pellets: 7, fireInterval: 42, auto: true,
-    magSize: 6, reloadTicks: 150, spreadHip: deg(9), spreadAds: deg(6), recoil: deg(4),
-    recoilRecover: deg(0.4), speed: 13, life: 32, moveMul: 0.9, length: 26, color: 0x8b5a2b,
-    falloffStart: 170, falloffEnd: 470, falloffMin: 0.35,
+    id: 'shotgun', name: '산탄총', damage: 17, pellets: 7, fireInterval: 38, auto: true,
+    magSize: 6, reloadTicks: 150, spreadHip: deg(7.5), spreadAds: deg(5), recoil: deg(4),
+    recoilRecover: deg(0.4), speed: 14, life: 34, moveMul: 0.9, length: 26, color: 0x8b5a2b,
+    falloffStart: 200, falloffEnd: 500, falloffMin: 0.35,
   },
   // 유일하게 한 방이 나오는 무기. 대신 재장전이 길고, 정조준(우클릭) 없이는 거의 맞지 않는다
   sniper: {
-    id: 'sniper', name: '저격총', damage: 120, pellets: 1, fireInterval: 90, auto: true,
+    id: 'sniper', name: '저격총', damage: 112, pellets: 1, fireInterval: 78, auto: true,
     magSize: 5, reloadTicks: 260, spreadHip: deg(15), spreadAds: deg(0.4), recoil: deg(7),
-    recoilRecover: deg(0.35), speed: 26, life: 90, moveMul: 0.8, length: 32, color: 0x3d4a5c,
+    recoilRecover: deg(0.35), speed: 26, life: 90, moveMul: 0.7, length: 32, color: 0x3d4a5c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1, scope: true,
   },
   // 명중률은 낮고 반동은 세지만 탄이 많아 계속 퍼붓는다
   mg: {
-    id: 'mg', name: '기관총', damage: 14, pellets: 1, fireInterval: 5, auto: true,
-    magSize: 80, reloadTicks: 210, spreadHip: deg(12), spreadAds: deg(7.5), recoil: deg(2.4),
-    recoilRecover: deg(0.35), speed: 15, life: 60, moveMul: 0.86, length: 30, color: 0x4a4f45,
+    id: 'mg', name: '기관총', damage: 16, pellets: 1, fireInterval: 5, auto: true,
+    magSize: 80, reloadTicks: 210, spreadHip: deg(8), spreadAds: deg(4.5), recoil: deg(2.4),
+    recoilRecover: deg(0.35), speed: 15, life: 60, moveMul: 0.9, length: 30, color: 0x4a4f45,
     falloffStart: 320, falloffEnd: 760, falloffMin: 0.55,
   },
   // 승빠덕 전용 근접 무기. 꾹 누르면 계속 휘두르고, 기력으로 총알을 막는다
   pan: {
-    id: 'pan', name: '후라이팬', damage: 62, pellets: 1, fireInterval: 26, auto: true,
+    id: 'pan', name: '후라이팬', damage: 80, pellets: 1, fireInterval: 26, auto: true,
     magSize: 0, reloadTicks: 0, spreadHip: 0, spreadAds: 0, recoil: 0,
     recoilRecover: 0, speed: 0, life: 0, moveMul: 1.02, length: 20, color: 0x33383c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,
-    melee: true, meleeRange: 62, meleeArc: deg(55),
+    melee: true, meleeRange: 70, meleeArc: deg(60),
   },
 }
 
@@ -118,13 +118,17 @@ export function headMult(w: WeaponDef): number {
   return w.pellets > 1 ? 1.5 : PART_MULT[PART_HEAD]
 }
 
+/** 머리로 치는 범위 (상대 반지름 대비). 모래주머니를 넘기는 '머리 조준' 판정도 이 값을 쓴다 */
+export const HEAD_FRAC = 0.28
+const BODY_FRAC = 0.72
+
 /**
  * 부위 판정 — 확률이 아니라 '얼마나 정확히 맞혔는가'로 정한다 (덕코프식).
- * d = 탄 궤적과 상대 중심 사이의 최단 거리, r = 상대 반지름.
- * 정중앙에 맞히면 머리, 가장자리를 스치면 다리.
+ * d = 탄 궤적(직선)과 상대 중심 사이의 거리, r = 상대 반지름.
+ * 정중앙을 지나면 머리, 가장자리를 스치면 다리.
  */
 export function partForOffset(d: number, r: number): number {
-  if (d <= r * 0.34) return PART_HEAD
-  if (d <= r * 0.74) return PART_BODY
+  if (d <= r * HEAD_FRAC) return PART_HEAD
+  if (d <= r * BODY_FRAC) return PART_BODY
   return PART_LEGS
 }

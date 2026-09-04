@@ -260,9 +260,14 @@ export function botInput(
       fx -= ux
       fy -= uy
     }
-    // 스트레이프 (수직 방향)
-    fx += -uy * mem.strafeDir * 0.9
-    fy += ux * mem.strafeDir * 0.9
+    // 스트레이프 (수직 방향). 근접 무기는 옆으로 새지 않고 곧장 파고든다
+    const strafe = w.melee ? 0.25 : 0.9
+    fx += -uy * mem.strafeDir * strafe
+    fy += ux * mem.strafeDir * strafe
+    if (w.melee && dist > range) {
+      fx += ux * 1.6
+      fy += uy * 1.6
+    }
     // 벽에 막히면 스트레이프 방향 전환
     const px = me.x + fx * 24
     const py = me.y + fy * 24
@@ -276,7 +281,9 @@ export function botInput(
     // 회피 대시: 상대가 방금 쐈거나 내가 맞았을 때
     const gotHit = me.hp < mem.lastMyHp
     const enemyJustFired = enemy.fireCooldown === WEAPONS[enemy.weapon].fireInterval
-    if (
+    if (w.melee && me.dashCooldown === 0 && me.stamina >= 40 && dist > 90 && dist < 420 && (out.mx !== 0 || out.my !== 0)) {
+      out.buttons |= BTN_DASH // 굴러서 거리를 좁힌다
+    } else if (
       me.dashCooldown === 0 &&
       (out.mx !== 0 || out.my !== 0) &&
       (gotHit || enemyJustFired) &&
