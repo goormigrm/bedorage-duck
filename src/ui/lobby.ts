@@ -59,13 +59,15 @@ export class Lobby {
     const h = this.host
     h.innerHTML = `
       <div class="lobby">
-        <h1>배도라지 <span>덕</span></h1>
-        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html" style="color:var(--ink-2)">프리뷰 보기</a></p>
+        <div class="season">BEDORAGE DUCK · P2P · 2~4 PLAYERS</div>
+        <h1><span class="t1">배도라지</span> <span class="t2">덕</span></h1>
+        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html">프리뷰 보기</a></p>
+        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 2v2 팀전</span><span>인원에 따라 맵 4배</span><span>리스폰 중 Tab 캐릭터 교체</span><span>설치 없음 · 서버 없음</span></div>
 
-        <div class="section-t">캐릭터</div>
+        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
         <div class="chars" id="chars"></div>
 
-        <div class="section-t">맵</div>
+        <div class="section-t">맵 <small>3명이면 2배, 4명이면 4배로 넓어진다</small></div>
         <div class="row" style="margin-bottom:22px"><div class="seg" id="seg-map">
           ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
         </div><span class="hintline" id="map-desc">${MAPS[this.mapId].desc}</span></div>
@@ -85,7 +87,7 @@ export class Lobby {
             <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-solo">
               ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
             </div></div>
-            <div class="row"><button class="btn" id="btn-solo">시작</button></div>
+            <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
           </div>
 
           <div class="mode">
@@ -97,7 +99,7 @@ export class Lobby {
             <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-room">
               ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
             </div></div>
-            <div class="row"><button class="btn" id="btn-host">방 만들기</button></div>
+            <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
           </div>
 
           <div class="mode">
@@ -117,13 +119,12 @@ export class Lobby {
       const el = document.createElement('button')
       el.className = 'char' + (c.id === this.char ? ' on' : '')
       el.dataset.id = c.id
+      el.style.setProperty('--c', '#' + c.bodyColor.toString(16).padStart(6, '0'))
       el.innerHTML = `
         <canvas></canvas>
-        <div>
-          <b>${c.name}</b>
-          <small>${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}</small>
-          <div class="pv"><b style="display:inline;font-size:12px">${c.passiveName}</b> ${c.passiveDesc}</div>
-        </div>`
+        <b>${c.name}</b>
+        <small>${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}</small>
+        <div class="pv"><b>${c.passiveName}</b> ${c.passiveDesc}</div>`
       el.onclick = () => this.selectChar(c.id)
       chars.appendChild(el)
       const cv = el.querySelector('canvas') as HTMLCanvasElement
@@ -549,8 +550,8 @@ export class Lobby {
         <div class="row"><button class="btn secondary" id="btn-copy">링크 복사</button><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
       <div class="link">${url}</div>
       <div class="slots">${slots.join('')}</div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
+      <div class="room-actions">
+        <button class="btn main" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
         ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
         <span class="hintline">${MAPS[this.mapId].name} · ${ROOM_MODE_LABEL[this.roomMode]} · 목표 ${this.killsRoom}킬 · ${this.members.length}/${MAX_PLAYERS}명${connected && link.peers.size > 0 ? ` · ${link.rtt} ms` : ''} · 둘 이상 모두 준비되면 자동 시작</span>
       </div>`
