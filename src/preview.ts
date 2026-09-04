@@ -1,5 +1,5 @@
 // 프리뷰(트레일러 캡처용) 페이지: 봇 vs 봇 자동 플레이 + 시네마틱 카메라 + 슬로모션. 3D.
-// URL: ?ff=900 (틱 빨리감기) · ?notitle=1 · ?diff=hard,normal · ?map=yard · ?n=4 (인원 2~4) · ?teams=1 (2v2)
+// URL: ?ff=900 (틱 빨리감기) · ?notitle=1 · ?diff=hard,normal · ?map=yard · ?n=4 (인원 2~4) · ?teams=1 (2v2) · ?scale=1|2|4 (맵 배율)
 //      ?sheet=1 (캐릭터 시트, &focus=<id>)
 
 import * as THREE from 'three'
@@ -7,7 +7,7 @@ import { Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from './core/bot'
 import { CHARACTER_LIST, CharacterId, displayNames } from './core/characters'
 import { Input } from './core/input'
 import { buildMap } from './core/map'
-import { DEFAULT_MAP, MAP_LIST, isMapId } from './core/maps'
+import { DEFAULT_MAP, MAP_LIST, MapScale, isMapId, isMapScale, scaleForPlayers } from './core/maps'
 import { createState, snapshot, step } from './core/sim'
 import { GameState, MAX_PLAYERS, MIN_PLAYERS, TICK_MS } from './core/state'
 import { WEAPONS } from './core/weapons'
@@ -20,10 +20,12 @@ const hint = document.getElementById('hint') as HTMLDivElement
 const q = new URLSearchParams(location.search)
 const mapParam = q.get('map')
 let mapId = mapParam && isMapId(mapParam) ? mapParam : DEFAULT_MAP
-let map = buildMap(mapId)
+const playerCount = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(q.get('n') ?? 2) || 2))
+const scaleParam = Number(q.get('scale') ?? 0)
+const mapScale: MapScale = isMapScale(scaleParam) ? scaleParam : scaleForPlayers(playerCount)
+let map = buildMap(mapId, mapScale)
 let renderer = new Renderer3D(stage, map)
 
-const playerCount = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(q.get('n') ?? 2) || 2))
 const teamMode = q.has('teams') && playerCount === 4
 let diffs: Difficulty[] = ['hard', 'normal', 'normal', 'hard']
 let showHud = true
@@ -107,7 +109,7 @@ function restart(): void {
 
 function switchMap(id: typeof mapId): void {
   mapId = id
-  map = buildMap(mapId)
+  map = buildMap(mapId, mapScale)
   renderer.dispose()
   renderer = new Renderer3D(stage, map)
   fit()
@@ -217,7 +219,7 @@ function drawOverlay(): void {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = 'rgba(245,242,230,0.55)'
-  ctx.fillText(`BEDORAGE DUCK · PREVIEW · ${map.name} · ${playerCount}인${teamMode ? ' 2v2' : ''}`, 18, 30)
+  ctx.fillText(`BEDORAGE DUCK · PREVIEW · ${map.name} ×${map.scale} · ${playerCount}인${teamMode ? ' 2v2' : ''}`, 18, 30)
   if (timeScale < 1) {
     ctx.fillStyle = 'rgba(20,22,16,0.7)'
     roundRect(ctx, 18, 40, 92, 22, 4)

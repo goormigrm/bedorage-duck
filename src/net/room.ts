@@ -134,7 +134,7 @@ export type CtlMessage =
   /** 호스트 → 정원 초과로 들어온 피어 */
   | { t: 'full' }
   /** 호스트 → 모두: 시작. players 순서가 플레이어 인덱스 */
-  | { t: 'start'; seed: number; targetKills: number; delay: number; map: string; mode: RoomMode; players: Member[] }
+  | { t: 'start'; seed: number; targetKills: number; delay: number; map: string; scale: number; mode: RoomMode; players: Member[] }
   | { t: 'ping'; s: number }
   | { t: 'pong'; s: number }
   | { t: 'hash'; tick: number; h: number }

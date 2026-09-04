@@ -3,6 +3,7 @@
 import { radToAngle } from '../core/fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from '../core/input'
 import { VIEW_H, VIEW_W } from '../render/hud'
+import { moveDirFromScreen } from '../render3d/camera'
 
 interface AimSource {
   screenToWorld(sx: number, sy: number): { x: number; y: number }
@@ -69,12 +70,14 @@ export class LocalInput {
   /** 내 캐릭터 월드 위치를 받아 조준각을 계산한다 */
   sample(renderer: AimSource, meX: number, meY: number): Input {
     const k = this.keys
-    let mx = 0
-    let my = 0
-    if (k.has('a') || k.has('arrowleft')) mx -= 1
-    if (k.has('d') || k.has('arrowright')) mx += 1
-    if (k.has('w') || k.has('arrowup')) my -= 1
-    if (k.has('s') || k.has('arrowdown')) my += 1
+    // 화면 기준 (W = 화면 위) → 카메라 요를 반영한 월드 8방향
+    let sx = 0
+    let sy = 0
+    if (k.has('a') || k.has('arrowleft')) sx -= 1
+    if (k.has('d') || k.has('arrowright')) sx += 1
+    if (k.has('w') || k.has('arrowup')) sy -= 1
+    if (k.has('s') || k.has('arrowdown')) sy += 1
+    const { mx, my } = moveDirFromScreen(sx, sy)
     const w = renderer.screenToWorld(this.mouse.x, this.mouse.y)
     const dx = w.x - meX
     const dy = w.y - meY

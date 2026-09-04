@@ -128,3 +128,31 @@ export const DEFAULT_MAP: MapId = 'studio'
 export function isMapId(s: string): s is MapId {
   return s in MAPS
 }
+
+// ---------- 인원별 맵 확장 ----------
+// 2명 = 원본, 3명 = 가로 2배(거울), 4명 = 가로·세로 2배(4배). 거울로 붙이므로 어느 쪽에서 시작해도 공평하다.
+// 이음새는 테두리 벽을 한 줄 빼고 붙여 열린 통로가 된다 (안쪽 열이 벽이면 그 줄은 막힌 채로 남는다).
+
+export type MapScale = 1 | 2 | 4
+
+export function scaleForPlayers(n: number): MapScale {
+  return n >= 4 ? 4 : n === 3 ? 2 : 1
+}
+
+export function isMapScale(v: number): v is MapScale {
+  return v === 1 || v === 2 || v === 4
+}
+
+export function expandRows(rows: string[], scale: MapScale): string[] {
+  if (scale === 1) return rows
+  const mirrorX = (r: string) => {
+    const inner = r.slice(0, -1)
+    return inner + inner.split('').reverse().join('')
+  }
+  let out = rows.map(mirrorX)
+  if (scale === 4) {
+    const top = out.slice(0, -1)
+    out = [...top, ...[...top].reverse()]
+  }
+  return out
+}

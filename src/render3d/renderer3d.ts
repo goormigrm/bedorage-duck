@@ -1,5 +1,5 @@
 // Three.js 렌더러. sim 상태(prev, curr)를 보간해 그린다. sim 을 절대 바꾸지 않는다.
-// 카메라: 고정 피치 55°, 요(YAW) 고정. HUD 는 2D 캔버스 오버레이. 인원 2~4명.
+// 카메라: 고정 피치 55°, 요 45° 고정(camera.ts). HUD 는 2D 캔버스 오버레이. 인원 2~4명.
 
 import * as THREE from 'three'
 import { CHARACTERS } from '../core/characters'
@@ -8,15 +8,14 @@ import { GameMap } from '../core/map'
 import { GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex } from '../render/hud'
+import { PITCH, YAW } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
 import { U, World3D, buildWorld } from './world3d'
 
 export { VIEW_W, VIEW_H }
 export type { RenderOptions }
 
-const PITCH = (55 / 180) * Math.PI
-/** 카메라 요(수평 회전). 0 = 맵 축 정렬 */
-export const YAW = 0
+export { YAW }
 const FOLLOW_DIST = 15.5
 const GUN_H = 0.95
 
@@ -540,11 +539,10 @@ export class Renderer3D {
       }
       dist = FOLLOW_DIST
     }
-    // 맵 밖이 덜 보이도록 클램프 (가시 폭 근사)
-    const halfW = dist * 0.42
-    const halfH = dist * 0.28
-    tx = Math.max(halfW - 1, Math.min(this.map.w - halfW + 1, tx))
-    tz = Math.max(halfH - 1, Math.min(this.map.h - halfH + 3, tz))
+    // 맵 밖이 덜 보이도록 클램프 (요 45° 라 두 축 같은 여유)
+    const margin = dist * 0.3
+    tx = Math.max(margin - 2, Math.min(this.map.w - margin + 2, tx))
+    tz = Math.max(margin - 2, Math.min(this.map.h - margin + 2, tz))
     if (!this.camInit) {
       this.camTarget.set(tx, 0, tz)
       this.camDist = dist

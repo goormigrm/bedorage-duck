@@ -1,7 +1,7 @@
 // 맵 데이터. 정적이므로 GameState 에 넣지 않는다.
 // 문자 그리드는 maps.ts 의 레지스트리에서 온다: # 벽, . 바닥, S 스폰 후보, o 낮은 상자(충돌은 벽과 동일)
 
-import { DEFAULT_MAP, MAPS, MapDef, MapId, MapTheme } from './maps'
+import { DEFAULT_MAP, MAPS, MapDef, MapId, MapScale, MapTheme, expandRows } from './maps'
 
 export const TILE = 32
 
@@ -13,6 +13,8 @@ export interface GameMap {
   id: MapId
   name: string
   theme: MapTheme
+  /** 인원별 확장 배율 (1, 2, 4) */
+  scale: MapScale
   w: number
   h: number
   tiles: Uint8Array
@@ -22,9 +24,9 @@ export interface GameMap {
   ph: number
 }
 
-export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP): GameMap {
+export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP, scale: MapScale = 1): GameMap {
   const def = typeof idOrDef === 'string' ? MAPS[idOrDef] : idOrDef
-  const rows = def.rows
+  const rows = expandRows(def.rows, scale)
   const h = rows.length
   const w = rows[0].length
   const tiles = new Uint8Array(w * h)
@@ -39,7 +41,7 @@ export function buildMap(idOrDef: MapId | MapDef = DEFAULT_MAP): GameMap {
       if (c === 'S') spawns.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 })
     }
   }
-  return { id: def.id, name: def.name, theme: def.theme, w, h, tiles, spawns, pw: w * TILE, ph: h * TILE }
+  return { id: def.id, name: def.name, theme: def.theme, scale, w, h, tiles, spawns, pw: w * TILE, ph: h * TILE }
 }
 
 /** 이동·탄 충돌용: 벽과 상자 모두 막힘 */

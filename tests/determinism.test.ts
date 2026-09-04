@@ -4,7 +4,7 @@ import { CharacterId } from '../src/core/characters'
 import { atan2A, radToAngle } from '../src/core/fixedmath'
 import { Input } from '../src/core/input'
 import { GameMap, buildMap } from '../src/core/map'
-import { MAP_LIST, MapId } from '../src/core/maps'
+import { MAP_LIST, MapId, expandRows, scaleForPlayers } from '../src/core/maps'
 import { createState, dropPlayer, hashState, snapshot, step } from '../src/core/sim'
 import { GameState, teamKills } from '../src/core/state'
 
@@ -159,6 +159,39 @@ describe('맵', () => {
   it('마당 맵에서도 봇 경기가 끝난다', () => {
     const yard = buildMap('yard')
     const { state } = runBots({ seed: 9, chars: ['cheolmyeon', 'dangun'], diffs: ['hard', 'hard'], targetKills: 2, maxTicks: 60 * 240, map: yard })
+    expect(state.phase).toBe('over')
+  })
+})
+
+describe('맵 확장', () => {
+  it('2배는 가로 거울, 4배는 가로·세로 거울이고 테두리가 유지된다', () => {
+    for (const def of MAP_LIST) {
+      const w = def.rows[0].length
+      const h = def.rows.length
+      const x2 = expandRows(def.rows, 2)
+      expect(x2.length).toBe(h)
+      expect(x2[0].length).toBe(w * 2 - 2)
+      const x4 = expandRows(def.rows, 4)
+      expect(x4.length).toBe(h * 2 - 2)
+      for (const r of x4) {
+        expect(r.length).toBe(w * 2 - 2)
+        expect(r[0]).toBe('#')
+        expect(r[r.length - 1]).toBe('#')
+      }
+      expect(x4[0]).toMatch(/^#+$/)
+      expect(x4[x4.length - 1]).toMatch(/^#+$/)
+      for (const r of x4) expect(r).toBe(r.split('').reverse().join(''))
+      const m = buildMap(def.id as MapId, 4)
+      expect(m.spawns.length).toBe(buildMap(def.id as MapId, 1).spawns.length * 4)
+    }
+    expect(scaleForPlayers(2)).toBe(1)
+    expect(scaleForPlayers(3)).toBe(2)
+    expect(scaleForPlayers(4)).toBe(4)
+  })
+
+  it('4배 맵에서 4인 봇 경기가 끝난다', () => {
+    const big = buildMap('studio', 4)
+    const { state } = runBots({ seed: 3, chars: ['cheolmyeon', 'chim', 'dangun', 'magic'], diffs: ['hard', 'hard', 'hard', 'hard'], targetKills: 2, maxTicks: 60 * 400, map: big })
     expect(state.phase).toBe('over')
   })
 })

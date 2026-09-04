@@ -5,7 +5,7 @@ import { BotMemory, Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../c
 import { CHARACTERS, CharacterId, displayNames } from '../core/characters'
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
-import { DEFAULT_MAP, MapId } from '../core/maps'
+import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, snapshot, step } from '../core/sim'
 import { GameState, TICK_MS, isTeamMatch } from '../core/state'
 import { Lockstep } from '../net/lockstep'
@@ -25,6 +25,8 @@ export interface SessionConfig {
   seed: number
   localPlayer: number
   mapId?: MapId
+  /** 맵 확장 배율. 생략하면 인원수로 정한다 */
+  mapScale?: MapScale
   difficulty?: Difficulty
   link?: RoomLink
   delay?: number
@@ -68,7 +70,7 @@ export class Session {
     host: HTMLElement,
     private cfg: SessionConfig,
   ) {
-    this.map = buildMap(cfg.mapId ?? DEFAULT_MAP)
+    this.map = buildMap(cfg.mapId ?? DEFAULT_MAP, cfg.mapScale ?? scaleForPlayers(cfg.chars.length))
     this.state = createState({ seed: cfg.seed, targetKills: cfg.targetKills, chars: cfg.chars, teams: cfg.teams }, this.map)
     this.prev = snapshot(this.state)
     this.makeBots(cfg.seed)

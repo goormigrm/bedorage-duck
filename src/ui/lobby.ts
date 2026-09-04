@@ -3,7 +3,7 @@
 
 import { Difficulty } from '../core/bot'
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../core/characters'
-import { DEFAULT_MAP, MAPS, MAP_LIST, MapId, isMapId } from '../core/maps'
+import { DEFAULT_MAP, MAPS, MAP_LIST, MapId, isMapId, isMapScale, scaleForPlayers } from '../core/maps'
 import { MAX_PLAYERS, MIN_PLAYERS } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import {
@@ -387,7 +387,7 @@ export class Lobby {
         this.closeLink()
         break
       case 'start':
-        if (this.role === 'guest' && from === this.hostId) this.launchFrom(m.players, m.seed, m.delay, m.mode, m.map, m.targetKills)
+        if (this.role === 'guest' && from === this.hostId) this.launchFrom(m.players, m.seed, m.delay, m.mode, m.map, m.targetKills, m.scale)
         break
       case 'leave':
         this.peerGone(from)
@@ -483,12 +483,13 @@ export class Lobby {
     const map = this.mapId
     const kills = this.killsRoom
     const mode = this.roomMode
-    link.sendCtl({ t: 'start', seed, targetKills: kills, delay, map, mode, players })
+    const scale = scaleForPlayers(players.length)
+    link.sendCtl({ t: 'start', seed, targetKills: kills, delay, map, scale, mode, players })
     this.announce('playing')
-    setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills), 150)
+    setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills, scale), 150)
   }
 
-  private launchFrom(players: Member[], seed: number, delay: number, mode: RoomMode, map: string, targetKills: number): void {
+  private launchFrom(players: Member[], seed: number, delay: number, mode: RoomMode, map: string, targetKills: number, scale: number): void {
     const link = this.link
     if (!link) return
     const idx = players.findIndex((p) => p.id === link.selfId)
@@ -503,6 +504,7 @@ export class Lobby {
       seed,
       localPlayer: idx,
       mapId: isMapId(map) ? map : DEFAULT_MAP,
+      mapScale: isMapScale(scale) ? scale : scaleForPlayers(players.length),
       link,
       delay,
       peerIds: players.map((p) => p.id),
