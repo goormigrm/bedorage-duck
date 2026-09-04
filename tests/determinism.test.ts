@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Difficulty, botInput, makeBot } from '../src/core/bot'
-import { CharacterId } from '../src/core/characters'
+import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../src/core/characters'
 import { atan2A, radToAngle } from '../src/core/fixedmath'
-import { Input } from '../src/core/input'
+import { BTN_SWAP, Input } from '../src/core/input'
 import { GameMap, buildMap } from '../src/core/map'
 import { MAP_LIST, MapId, expandRows, scaleForPlayers } from '../src/core/maps'
 import { createState, dropPlayer, hashState, snapshot, step } from '../src/core/sim'
@@ -122,6 +122,49 @@ describe('4인 개인전 (FFA)', () => {
     expect(s.players[2].left).toBe(true)
     // 남은 셋은 계속 경기
     expect(s.tick).toBe(800)
+  })
+})
+
+describe('캐릭터 교체 (Tab)', () => {
+  const idle = (aim = 0): Input => ({ mx: 0, my: 0, aim, buttons: 0, char: 0 })
+
+  it('죽은 뒤 Tab → 고르는 동안 소환되지 않고, 고르면 새 캐릭터로 상대에게서 먼 곳에 리스폰', () => {
+    const s = createState({ seed: 8, targetKills: 99, chars: ['chim', 'cheolmyeon'] }, map)
+    s.phase = 'playing'
+    s.phaseTimer = 0
+    const p = s.players[0]
+    p.alive = false
+    p.respawnTimer = 60
+    step(s, map, [{ ...idle(), buttons: BTN_SWAP }, idle()])
+    expect(p.choosing).toBe(true)
+    expect(s.events.some((e) => e.type === 'choose')).toBe(true)
+    for (let t = 0; t < 200; t++) step(s, map, [idle(), idle()])
+    expect(p.alive).toBe(false)
+    const idx = CHARACTER_LIST.findIndex((c) => c.id === 'dangun')
+    step(s, map, [{ ...idle(), char: idx + 1 }, idle()])
+    expect(p.choosing).toBe(false)
+    expect(p.alive).toBe(true)
+    expect(p.char).toBe('dangun')
+    expect(p.weapon).toBe(CHARACTERS.dangun.weapon)
+    expect(p.hp).toBe(CHARACTERS.dangun.maxHp)
+    expect(Math.hypot(p.x - s.players[1].x, p.y - s.players[1].y)).toBeGreaterThan(300)
+    // 리스폰 직후 Tab → 다시 소환 해제, 3초 뒤 골라야 리스폰
+    step(s, map, [{ ...idle(), buttons: BTN_SWAP }, idle()])
+    expect(p.alive).toBe(false)
+    expect(p.choosing).toBe(true)
+    step(s, map, [{ ...idle(), char: idx + 1 }, idle()])
+    expect(p.choosing).toBe(false)
+    expect(p.alive).toBe(false) // 대기 시간이 남아 있다
+    for (let t = 0; t < 200; t++) step(s, map, [idle(), idle()])
+    expect(p.alive).toBe(true)
+  })
+
+  it('리스폰 3초가 지나면 Tab 이 무시된다', () => {
+    const s = createState({ seed: 9, targetKills: 99, chars: ['chim', 'cheolmyeon'] }, map)
+    for (let t = 0; t < 400; t++) step(s, map, [idle(), idle()])
+    step(s, map, [{ ...idle(), buttons: BTN_SWAP }, idle()])
+    expect(s.players[0].alive).toBe(true)
+    expect(s.players[0].choosing).toBe(false)
   })
 })
 

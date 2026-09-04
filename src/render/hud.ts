@@ -123,15 +123,11 @@ export class Hud {
     if (teams) this.drawTeamScore(s, opts)
     else this.drawFfaScore(s, opts)
 
-    // 아래 카드
+    // 아래: 내 카드(체력·기력·탄약) + 다른 사람 목록 (상대 체력은 숨김, 관전·아군만 표시)
     const lp = opts.localPlayer
-    if (n === 2) {
-      this.drawPlayerCard(s.players[0], CHARACTERS[s.players[0].char], opts.names[0], 24, VIEW_H - 24, 'left', lp === 0)
-      this.drawPlayerCard(s.players[1], CHARACTERS[s.players[1].char], opts.names[1], VIEW_W - 24, VIEW_H - 24, 'right', lp === 1)
-    } else {
-      if (lp !== -1) this.drawPlayerCard(s.players[lp], CHARACTERS[s.players[lp].char], opts.names[lp], 24, VIEW_H - 24, 'left', true)
-      this.drawOthersList(s, opts)
-    }
+    if (lp !== -1) this.drawPlayerCard(s.players[lp], CHARACTERS[s.players[lp].char], opts.names[lp], 24, VIEW_H - 24, 'left', true)
+    this.drawOthersList(s, opts)
+    void n
 
     if (s.phase === 'countdown') {
       const sec = Math.ceil(s.phaseTimer / 60)
@@ -316,18 +312,22 @@ export class Hud {
         ctx.fillStyle = TEAM_COLORS[m.p.team] ?? '#999'
         ctx.fillText(TEAM_NAMES[m.p.team] ?? '', x + 22 + ctx.measureText(opts.names[m.i]).width + 30, ry + rowH / 2 - 1)
       }
-      // 체력
-      const hpK = m.p.left ? 0 : Math.max(0, m.p.hp / c.maxHp)
-      ctx.fillStyle = 'rgba(255,255,255,0.1)'
-      roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70, 8, 3)
-      ctx.fill()
-      ctx.fillStyle = !m.p.alive ? '#555' : hpK > 0.5 ? '#6fd66a' : hpK > 0.25 ? '#f2c94c' : '#f25c4c'
-      roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70 * hpK, 8, 3)
-      ctx.fill()
+      // 체력 바는 관전자와 아군에게만. 상대 정보는 숨긴다
+      const reveal = opts.localPlayer === -1 || (teams && opts.localPlayer >= 0 && s.players[opts.localPlayer].team === m.p.team)
+      if (reveal) {
+        const hpK = m.p.left ? 0 : Math.max(0, m.p.hp / c.maxHp)
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'
+        roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70, 8, 3)
+        ctx.fill()
+        ctx.fillStyle = !m.p.alive ? '#555' : hpK > 0.5 ? '#6fd66a' : hpK > 0.25 ? '#f2c94c' : '#f25c4c'
+        roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70 * hpK, 8, 3)
+        ctx.fill()
+      }
       ctx.font = '600 12px "IBM Plex Mono", monospace'
       ctx.textAlign = 'right'
       ctx.fillStyle = '#b3b8a5'
-      ctx.fillText(m.p.left ? '나감' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`, x + w - 12, ry + rowH / 2 - 1)
+      const status = m.p.left ? '나감' : m.p.choosing ? '캐릭터 선택 중' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`
+      ctx.fillText(status, x + w - 12, ry + rowH / 2 - 1)
     })
   }
 
@@ -368,7 +368,7 @@ export class Hud {
     ctx.fill()
     ctx.font = '600 12px "IBM Plex Mono", monospace'
     ctx.fillStyle = '#f5f2e6'
-    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : p.left ? '나감' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
+    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : p.left ? '나감' : p.choosing ? '선택 중' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
     ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#b3b8a5'
     ctx.fillText(w.name, ix, by + 70)

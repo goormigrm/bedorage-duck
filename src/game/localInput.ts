@@ -1,7 +1,7 @@
 // 키보드·마우스 → Input. 화면 좌표는 1280x720 논리 프레임.
 
 import { radToAngle } from '../core/fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from '../core/input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from '../core/input'
 import { VIEW_H, VIEW_W } from '../render/hud'
 import { moveDirFromScreen } from '../render3d/camera'
 
@@ -15,6 +15,12 @@ export class LocalInput {
   private mouseDown = new Set<number>()
   private lastAim = 0
   private detach: (() => void) | null = null
+  /** Tab 눌림 (다음 샘플 한 번만 BTN_SWAP) */
+  private swapPressed = false
+  /** 캐릭터 선택 확정 (다음 샘플 한 번만 전송). 0 = 없음 */
+  pendingChar = 0
+  /** 캐릭터 선택 창이 열려 있을 때 1~5 키 → pendingChar */
+  pickerOpen = false
 
   attach(stage: HTMLElement): void {
     const onKey = (e: KeyboardEvent, down: boolean) => {
@@ -22,6 +28,12 @@ export class LocalInput {
       if (['w', 'a', 's', 'd', ' ', 'r', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) {
         if (down) this.keys.add(k)
         else this.keys.delete(k)
+        e.preventDefault()
+      } else if (k === 'tab') {
+        if (down && !e.repeat) this.swapPressed = true
+        e.preventDefault()
+      } else if (down && this.pickerOpen && k >= '1' && k <= '9') {
+        this.pendingChar = Number(k)
         e.preventDefault()
       }
     }
@@ -87,6 +99,12 @@ export class LocalInput {
     if (this.mouseDown.has(2)) buttons |= BTN_ADS
     if (k.has(' ') || k.has('shift')) buttons |= BTN_DASH
     if (k.has('r')) buttons |= BTN_RELOAD
-    return { mx, my, aim: this.lastAim, buttons }
+    if (this.swapPressed) {
+      buttons |= BTN_SWAP
+      this.swapPressed = false
+    }
+    const char = this.pendingChar
+    this.pendingChar = 0
+    return { mx, my, aim: this.lastAim, buttons, char }
   }
 }

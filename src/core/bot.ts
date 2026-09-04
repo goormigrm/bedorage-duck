@@ -141,7 +141,7 @@ export function botInput(
   const d = DIFFS[diff]
   const me = state.players[meIdx]
   const w = WEAPONS[me.weapon]
-  const out: Input = { mx: 0, my: 0, aim: mem.aim, buttons: 0 }
+  const out: Input = { mx: 0, my: 0, aim: mem.aim, buttons: 0, char: 0 }
   if (!me.alive) {
     mem.reaction = d.reaction
     return out

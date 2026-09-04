@@ -10,6 +10,8 @@ export const SPAWN_PROTECT_TICKS = 90
 export const COUNTDOWN_TICKS = 180
 export const DASH_TICKS = 10
 export const DASH_SPEED = 9
+/** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
+export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
 export const MAX_PLAYERS = 4
 export const MIN_PLAYERS = 2
@@ -50,6 +52,8 @@ export interface PlayerState {
   aliveTicks: number
   /** 경기 도중 나간 사람. 더 이상 리스폰하지 않고 표적에서도 제외 */
   left: boolean
+  /** 캐릭터 고르는 중: 소환되지 않아 맞지도 않는다. 고르면 먼 곳에 리스폰 */
+  choosing: boolean
 }
 
 export interface Bullet {
@@ -78,6 +82,10 @@ export type SimEvent =
   | { type: 'reload'; p: number }
   | { type: 'wall'; x: number; y: number; aim: number }
   | { type: 'leave'; p: number }
+  /** 캐릭터 선택 화면 진입 (소환 해제) */
+  | { type: 'choose'; p: number }
+  /** 캐릭터가 바뀜 */
+  | { type: 'swap'; p: number; char: CharacterId }
   | { type: 'start' }
   | { type: 'over'; winner: number }
 

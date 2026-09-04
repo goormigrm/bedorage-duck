@@ -2,12 +2,14 @@
 // 대전: 플레이어 0 = 호스트. 호스트가 해시 비교·리싱크·이탈자 드롭 틱을 정한다.
 
 import { BotMemory, Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../core/bot'
-import { CHARACTERS, CharacterId, displayNames } from '../core/characters'
+import { CHARACTERS, CHARACTER_LIST, CharacterId, displayNames } from '../core/characters'
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, snapshot, step } from '../core/sim'
 import { GameState, TICK_MS, isTeamMatch } from '../core/state'
+import { WEAPONS } from '../core/weapons'
+import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
 import { TEAM_NAMES, VIEW_H, VIEW_W } from '../render/hud'
@@ -63,6 +65,7 @@ export class Session {
   private disposed = false
   private hashes = new Map<number, number>()
   private names: string[]
+  private pickerOpen = false
   private ticker: Ticker
   private lastTick = performance.now()
 
@@ -80,7 +83,7 @@ export class Session {
         <div class="game-stage" id="stage">
           <div class="game-ui">
             <div class="top-right"><button class="btn secondary" id="btn-lobby">로비로</button></div>
-            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Esc</b> 메뉴</div>
+            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·직후 3초) · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
         </div>
@@ -137,6 +140,12 @@ export class Session {
   private onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       if (this.state.phase === 'over') return
+      if (this.pickerOpen) {
+        // 취소 = 지금 캐릭터 그대로
+        this.input.pendingChar = CHARACTER_LIST.findIndex((c) => c.id === this.state.players[this.cfg.localPlayer].char) + 1
+        e.preventDefault()
+        return
+      }
       if (this.overlay.hidden) this.showMenu()
       else this.hideOverlay()
       e.preventDefault()
@@ -173,6 +182,36 @@ export class Session {
   private hideOverlay(): void {
     this.overlay.hidden = true
     if (this.cfg.mode === 'solo' && this.state.phase !== 'over') this.paused = false
+  }
+
+  // ---------- 캐릭터 교체 창 ----------
+  private showPicker(): void {
+    const box = this.overlay.querySelector('#overlay-box') as HTMLElement
+    box.classList.add('picker')
+    const cur = this.state.players[this.cfg.localPlayer].char
+    box.innerHTML = `<h2>캐릭터 교체</h2><p>고르는 동안은 소환되지 않습니다. 고르면 상대에게서 먼 곳에 리스폰. <b>1~5</b> 키 또는 클릭 · <b>Esc</b> 그대로</p><div class="pick-grid"></div>`
+    const grid = box.querySelector('.pick-grid') as HTMLElement
+    CHARACTER_LIST.forEach((c, i) => {
+      const el = document.createElement('button')
+      el.className = 'pick' + (c.id === cur ? ' on' : '')
+      el.innerHTML = `<canvas></canvas><b>${c.name}</b><small>${WEAPONS[c.weapon].name} · HP ${c.maxHp}<br>${c.passiveName}</small><span class="key">${i + 1}</span>`
+      el.onclick = () => (this.input.pendingChar = i + 1)
+      grid.appendChild(el)
+      const cv = el.querySelector('canvas') as HTMLCanvasElement
+      requestAnimationFrame(() => drawPortrait(cv, c))
+    })
+    this.overlay.hidden = false
+    this.pickerOpen = true
+    this.input.pickerOpen = true
+  }
+
+  private hidePicker(): void {
+    const box = this.overlay.querySelector('#overlay-box') as HTMLElement
+    box.classList.remove('picker')
+    box.innerHTML = ''
+    this.overlay.hidden = true
+    this.pickerOpen = false
+    this.input.pickerOpen = false
   }
 
   // ---------- 대전: 피어 ----------
@@ -306,6 +345,7 @@ export class Session {
       this.prev = snapshot(this.state)
       step(this.state, this.map, inputs)
       this.applyDrops()
+      for (const e of this.state.events) if (e.type === 'swap') this.names = displayNames(this.state.players.map((p) => p.char))
       this.renderer.onEvents(this.state.events, this.state, lp, this.names)
       if (this.lockstep && this.state.tick % 60 === 0) {
         const h = hashState(this.state)
@@ -329,6 +369,9 @@ export class Session {
     let message = this.message
     if (this.lockstep && this.stallSince >= 0 && now - this.stallSince > 400) message = '상대 입력 대기 중…'
     const alpha = Math.min(1, this.acc / TICK_MS)
+    const choosing = this.state.players[lp].choosing && this.state.phase === 'playing'
+    if (choosing && !this.pickerOpen) this.showPicker()
+    else if (!choosing && this.pickerOpen) this.hidePicker()
     const sub = this.cfg.chars.map((_, i) => this.subLabel(i))
     this.renderer.draw(this.prev, this.state, alpha, dt, {
       showHud: true,
@@ -344,7 +387,7 @@ export class Session {
   }
 
   private subLabel(i: number): string {
-    const c = CHARACTERS[this.cfg.chars[i]]
+    const c = CHARACTERS[this.state.players[i].char]
     if (i === this.cfg.localPlayer) return `나 · ${c.basedOn}`
     if (this.cfg.mode === 'solo') return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
     const ally = this.cfg.teams && this.cfg.teams[i] === this.cfg.teams[this.cfg.localPlayer]

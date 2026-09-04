@@ -1,6 +1,6 @@
-import { CHARACTERS } from './characters'
+import { CHARACTERS, CHARACTER_LIST } from './characters'
 import { atan2A, cosA, sinA, len } from './fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, Input } from './input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
 import { GameMap, isWallAt, rayBlocked } from './map'
 import { circlesOverlap, moveCircle, segmentHitsCircle } from './physics'
 import { makeRng, rand, randInt } from './rng'
@@ -17,6 +17,7 @@ import {
   PlayerState,
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
+  SWAP_GRACE_TICKS,
   isEnemy,
   teamKills,
 } from './state'
@@ -88,6 +89,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     moving: false,
     aliveTicks: 0,
     left: false,
+    choosing: false,
   }
 }
 
@@ -154,17 +156,42 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   const w = WEAPONS[p.weapon]
   p.moving = false
   if (p.left) return
-  if (!input) input = { mx: 0, my: 0, aim: p.aim, buttons: 0 }
+  if (!input) input = { mx: 0, my: 0, aim: p.aim, buttons: 0, char: 0 }
+  const playing = state.phase === 'playing'
+  const swap = (input.buttons & BTN_SWAP) !== 0 && playing
 
   if (!p.alive) {
-    if (state.phase !== 'over') {
-      p.respawnTimer--
-      if (p.respawnTimer <= 0) respawn(state, map, p)
+    if (state.phase === 'over') return
+    if (p.respawnTimer > 0) p.respawnTimer--
+    if (swap && !p.choosing) {
+      p.choosing = true
+      state.events.push({ type: 'choose', p: p.id })
     }
+    if (p.choosing) {
+      if (input.char <= 0) return // 고르는 동안은 소환하지 않는다
+      const def = CHARACTER_LIST[input.char - 1]
+      if (def && def.id !== p.char) {
+        p.char = def.id
+        p.weapon = def.weapon
+        state.events.push({ type: 'swap', p: p.id, char: def.id })
+      }
+      p.choosing = false
+    }
+    if (p.respawnTimer <= 0) respawn(state, map, p)
     return
   }
 
-  p.aliveTicks++
+  if (playing) p.aliveTicks++ // 카운트다운은 세지 않는다 → 시작 직후 3초도 교체 가능
+  // 리스폰 직후(3초 안) Tab: 소환을 물리고 캐릭터를 다시 고른다
+  if (swap && p.aliveTicks <= SWAP_GRACE_TICKS && !p.choosing) {
+    p.alive = false
+    p.choosing = true
+    p.respawnTimer = RESPAWN_TICKS
+    p.ads = false
+    p.dashTimer = 0
+    state.events.push({ type: 'choose', p: p.id })
+    return
+  }
   if (p.fireCooldown > 0) p.fireCooldown--
   if (p.dashCooldown > 0) p.dashCooldown--
   if (p.invuln > 0) p.invuln--
@@ -182,7 +209,6 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   }
 
   p.aim = input.aim & 1023
-  const playing = state.phase === 'playing'
   p.ads = playing && (input.buttons & BTN_ADS) !== 0 && p.dashTimer === 0
 
   // 이동

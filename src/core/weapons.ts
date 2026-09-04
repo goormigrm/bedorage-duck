@@ -10,7 +10,7 @@ export interface WeaponDef {
   pellets: number
   /** 발사 간격 (틱) */
   fireInterval: number
-  /** 자동 연사 여부 */
+  /** 자동 연사 여부. 모든 무기가 꾹 누르면 발사 간격마다 계속 쏜다 (탄이 떨어지면 자동 재장전) */
   auto: boolean
   magSize: number
   /** 재장전 틱 */
@@ -49,7 +49,7 @@ const deg = (d: number) => Math.round((d / 360) * 1024)
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   pistol: {
-    id: 'pistol', name: '권총', damage: 22, pellets: 1, fireInterval: 12, auto: false,
+    id: 'pistol', name: '권총', damage: 22, pellets: 1, fireInterval: 12, auto: true,
     magSize: 12, reloadTicks: 72, spreadHip: deg(6), spreadAds: deg(2), recoil: deg(1.2),
     recoilRecover: deg(0.2), speed: 15, life: 60, moveMul: 1.0, length: 14, color: 0x9aa0a6,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,
@@ -68,13 +68,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   // 철면덕 전용 느낌: 근접에서 압도적, 멀어지면 급감
   shotgun: {
-    id: 'shotgun', name: '산탄총', damage: 15, pellets: 7, fireInterval: 45, auto: false,
+    id: 'shotgun', name: '산탄총', damage: 15, pellets: 7, fireInterval: 45, auto: true,
     magSize: 6, reloadTicks: 150, spreadHip: deg(12), spreadAds: deg(8), recoil: deg(4),
     recoilRecover: deg(0.4), speed: 12, life: 30, moveMul: 0.9, length: 26, color: 0x8b5a2b,
     falloffStart: 140, falloffEnd: 440, falloffMin: 0.28,
   },
   sniper: {
-    id: 'sniper', name: '저격총', damage: 80, pellets: 1, fireInterval: 75, auto: false,
+    id: 'sniper', name: '저격총', damage: 80, pellets: 1, fireInterval: 75, auto: true,
     magSize: 5, reloadTicks: 180, spreadHip: deg(10), spreadAds: deg(0.3), recoil: deg(6),
     recoilRecover: deg(0.3), speed: 28, life: 80, moveMul: 0.8, length: 32, color: 0x3d4a5c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,

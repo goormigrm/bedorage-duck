@@ -77,6 +77,8 @@ export class Renderer3D {
   private rigChars: string[] = []
   private vis: DuckVis[] = []
   private aimSmooth: number[] = []
+  /** 피격 후 체력 바를 보여 줄 남은 시간(초). 상대는 맞았을 때만 보인다 */
+  private hitShow: number[] = []
   private bulletPool: THREE.Mesh[] = []
   private particles: Particle[] = []
   private particlePool: THREE.Mesh[] = []
@@ -151,15 +153,26 @@ export class Renderer3D {
 
   private ensureRigs(state: GameState): void {
     const chars = state.players.map((p) => p.char)
-    let same = chars.length === this.rigChars.length
-    if (same) for (let i = 0; i < chars.length; i++) if (chars[i] !== this.rigChars[i]) same = false
-    if (same) return
-    for (const r of this.rigs) this.scene.remove(r.root)
-    this.rigs = chars.map((c) => buildCharacter(CHARACTERS[c]))
-    this.rigChars = chars
-    for (const r of this.rigs) this.scene.add(r.root)
-    this.vis = chars.map(() => newVis())
-    this.aimSmooth = chars.map(() => 0)
+    if (chars.length !== this.rigChars.length) {
+      for (const r of this.rigs) this.scene.remove(r.root)
+      this.rigs = chars.map((c) => buildCharacter(CHARACTERS[c]))
+      this.rigChars = [...chars]
+      for (const r of this.rigs) this.scene.add(r.root)
+      this.vis = chars.map(() => newVis())
+      this.aimSmooth = chars.map(() => 0)
+      this.hitShow = chars.map(() => 0)
+      return
+    }
+    // 캐릭터 교체: 바뀐 사람만 다시 만든다
+    for (let i = 0; i < chars.length; i++) {
+      if (chars[i] === this.rigChars[i]) continue
+      this.scene.remove(this.rigs[i].root)
+      const rig = buildCharacter(CHARACTERS[chars[i]])
+      this.scene.add(rig.root)
+      this.rigs[i] = rig
+      this.rigChars[i] = chars[i]
+      this.vis[i] = newVis()
+    }
   }
 
   // ---------- 이벤트 → 이펙트 ----------
@@ -191,6 +204,7 @@ export class Renderer3D {
         }
         case 'hit': {
           const v = this.vis[e.p]
+          this.hitShow[e.p] = 2.5
           v.flash = 0.12
           v.vsx += 0.3
           v.vsy -= 0.25
@@ -231,6 +245,12 @@ export class Renderer3D {
           const v = this.vis[e.p]
           v.vsx += 0.35
           v.vsy -= 0.3
+          break
+        }
+        case 'choose': {
+          // 소환 해제: 바로 사라진다
+          this.vis[e.p].deadT = -1
+          this.hitShow[e.p] = 0
           break
         }
         case 'over':
@@ -308,6 +328,7 @@ export class Renderer3D {
     const ctx = this.hud.ctx
     const teams = isTeamMatch(curr)
     const lp = opts.localPlayer
+    const spectator = lp === -1
     const myTeam = lp >= 0 ? curr.players[lp].team : -1
     for (let i = 0; i < curr.players.length; i++) {
       const p = curr.players[i]
@@ -315,19 +336,36 @@ export class Renderer3D {
       const c = CHARACTERS[p.char]
       const s = this.worldToScreen(pos[i].x, 2.15 + (c.look.headScale - 1) * 0.4, pos[i].z)
       const name = opts.names[i] ?? c.name
-      ctx.font = '600 12px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+      const mine = i === lp
+      const ally = teams && !spectator && !mine && p.team === myTeam
+      // 상대 정보는 숨긴다. 체력 바는 나·아군·관전, 그리고 상대는 맞은 직후 몇 초만
+      const showHp = spectator || mine || ally || this.hitShow[i] > 0
+      ctx.font = `600 ${mine ? 13 : 12}px "IBM Plex Sans KR", "Malgun Gothic", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'alphabetic'
       ctx.lineWidth = 3
       ctx.strokeStyle = 'rgba(0,0,0,0.6)'
       ctx.strokeText(name, s.x, s.y)
-      ctx.fillStyle = i === lp ? '#ffe680' : teams ? (p.team === myTeam ? '#9fd6ff' : (TEAM_COLORS[p.team] ?? '#fff')) : '#ffffff'
+      ctx.fillStyle = mine ? '#ffe680' : ally ? '#9fd6ff' : teams ? (TEAM_COLORS[p.team] ?? '#fff') : '#ffffff'
       ctx.fillText(name, s.x, s.y)
+      if (!showHp) continue
+      const w = mine ? 48 : 36
       const hpK = Math.max(0, p.hp / c.maxHp)
+      const fade = mine || ally || spectator ? 1 : Math.min(1, this.hitShow[i] * 2)
+      ctx.globalAlpha = fade
       ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.fillRect(s.x - 18, s.y + 4, 36, 5)
+      ctx.fillRect(s.x - w / 2, s.y + 4, w, mine ? 6 : 5)
       ctx.fillStyle = hpK > 0.5 ? '#6fd66a' : hpK > 0.25 ? '#f2c94c' : '#f25c4c'
-      ctx.fillRect(s.x - 17, s.y + 5, 34 * hpK, 3)
+      ctx.fillRect(s.x - w / 2 + 1, s.y + 5, (w - 2) * hpK, mine ? 4 : 3)
+      if (mine) {
+        // 기력(대시) 바
+        const dk = p.dashCooldown > 0 ? 1 - p.dashCooldown / c.dashCooldown : 1
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(s.x - w / 2, s.y + 11, w, 4)
+        ctx.fillStyle = dk >= 1 ? '#9fe0ff' : '#5b7c8a'
+        ctx.fillRect(s.x - w / 2 + 1, s.y + 12, (w - 2) * dk, 2)
+      }
+      ctx.globalAlpha = 1
     }
   }
 
@@ -487,6 +525,7 @@ export class Renderer3D {
       ;(r.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.9
     }
     for (const v of this.vis) if (v.deadT >= 0) v.deadT += dt
+    for (let i = 0; i < this.hitShow.length; i++) this.hitShow[i] = Math.max(0, this.hitShow[i] - dt)
     this.shake = Math.max(0, this.shake - dt * 1.4)
   }
 
