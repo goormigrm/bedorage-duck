@@ -124,6 +124,7 @@ docs/img/                공지용 스크린샷 4장 (전투·조준경·캐릭�
 - 커밋 메시지 끝에 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 - Bash heredoc 은 8191자 제한에 걸린다 → 큰 파일은 Write 도구, 여러 곳 수정은 scratchpad 에 python 스크립트를 쓰고 실행. heredoc 안에서는 역슬래시 이스케이프가 한 겹 벗겨지므로 \n 이나 경로의 \ 는 chr(10)·chr(92) 로 만든다.
 - 주석과 문서는 **한국어**로, '무엇을' 이 아니라 '왜' 를 적는다. 커밋 메시지도 한국어.
+- **확인이 끝나면 열어 둔 것을 반드시 닫는다** (사용자 요청, 2026-09-06). `preview_start` 로 띄운 개발 서버(`preview_stop`)와 브라우저 탭(`tabs_close`) 둘 다. 게임 탭이 열려 있으면 배경음이 계속 나서 사용자를 방해한다. 백그라운드로 돌린 계측 도구도 끝났는지 확인한다.
 
 ### 사용자(goormigrm) 진행 방식
 
