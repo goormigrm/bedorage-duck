@@ -246,7 +246,9 @@ function runSheet(): void {
   const slot = (i: number) => {
     const col = twoRows ? Math.floor(i / 2) : i
     const row = twoRows ? i % 2 : 0
-    return { x: map.w / 2 - (col - (cols - 1) / 2) * 1.75, z: cz - row * 1.7 }
+    // 카메라가 -z 쪽에 있으므로 뒷줄은 +z (맵 안쪽)
+    // 뒷줄은 반 칸 어긋나게 세워 앞줄 사이로 보이게
+    return { x: map.w / 2 - (col - (cols - 1) / 2) * 1.75 + row * 0.875, z: cz + row * 1.9 }
   }
   const rigs = list.map((c, i) => {
     const rig = buildCharacter(c)
@@ -257,7 +259,7 @@ function runSheet(): void {
   })
   const cam = renderer.threeCamera
   const cx = map.w / 2
-  const dist = focus ? 3.2 : 4.2 + cols * 0.78
+  const dist = focus ? 3.2 : 4.6 + cols * 0.8
   let t = 0
   let lastT = performance.now()
   const loop = (now: number) => {
@@ -281,7 +283,7 @@ function runSheet(): void {
     list.forEach((c, i) => {
       const p = slot(i)
       const back = twoRows && i % 2 === 1
-      const v = new THREE.Vector3(p.x, back ? 2.4 : -0.15, p.z).project(cam)
+      const v = new THREE.Vector3(p.x, back ? rigs[i].height + 0.1 : -0.15, p.z).project(cam)
       const sx = ((v.x + 1) / 2) * VIEW_W
       const sy = ((1 - v.y) / 2) * VIEW_H
       ctx.font = `400 ${focus ? 40 : twoRows ? 20 : 26}px "Black Han Sans", "IBM Plex Sans KR", sans-serif`
