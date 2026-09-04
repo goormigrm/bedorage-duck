@@ -1,5 +1,6 @@
-// 2D 캐리커처(render/character.ts)의 이목구비만 정면으로 그려 둥근 3D 머리(구)에 감을 텍스처를 만든다.
-// 피부·귀·머리카락·모자는 3D 메쉬가 맡는다.
+// 달걀형 몸통(구 기반) 한 장짜리 텍스처: 위쪽은 피부 + 이목구비, 아래쪽은 셔츠/겉옷/넥타이/바지.
+// 구의 등장방형 UV 를 그대로 쓴다: u=0.25 가 정면(+z), v=0 이 정수리.
+// 이목구비는 2D 캐리커처(render/character.ts drawHead, featuresOnly)를 정면 영역에 그린다.
 
 import * as THREE from 'three'
 import { CharacterDef } from '../core/characters'
@@ -7,33 +8,161 @@ import { drawHead } from '../render/character'
 
 const cache = new Map<string, THREE.CanvasTexture>()
 
-/** 텍스처가 덮는 범위: 머리 반지름 R 의 ±FACE_SPAN 배 (턱살·수염까지 들어간다) */
-export const FACE_SPAN = 1.35
-/** 구 표면에서 텍스처가 감기는 각도 (가로·세로 모두). 텍스처 가장자리 = 중심에서 ±FACE_ARC/2 */
-export const FACE_ARC = (150 / 180) * Math.PI
+const W = 1024
+const H = 512
+/** 정면 중심 u */
+const FRONT_U = 0.25
+/** 얼굴 중심 v (정수리 0 → 바닥 1) */
+const FACE_V = 0.34
+/** 옷깃: 앞은 이 v 까지 내려오고 뒤는 조금 높다 */
+const COLLAR_FRONT_V = 0.7
+const COLLAR_BACK_V = 0.58
+/** 바지 띠 시작 v */
+const PANTS_V = 0.88
+const OUTLINE = '#2b2412'
 
-/** 이목구비 텍스처 (투명 배경). */
-export function faceTexture(def: CharacterDef, size = 512): THREE.CanvasTexture {
-  const key = `${def.id}:${size}`
+function hex(c: number): string {
+  return '#' + c.toString(16).padStart(6, '0')
+}
+
+function collarY(u: number): number {
+  const k = (1 + Math.cos((u - FRONT_U) * Math.PI * 2)) / 2 // 정면 1, 뒤 0
+  return H * (COLLAR_BACK_V + (COLLAR_FRONT_V - COLLAR_BACK_V) * k)
+}
+
+/** 옷깃 아래 영역 경로 (u 0..1 전체, 아래는 바닥까지) */
+function clothPath(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath()
+  ctx.moveTo(0, collarY(0))
+  for (let x = 1; x <= W; x += 8) ctx.lineTo(x, collarY(x / W))
+  ctx.lineTo(W, H)
+  ctx.lineTo(0, H)
+  ctx.closePath()
+}
+
+export function bodyTexture(def: CharacterDef): THREE.CanvasTexture {
+  const key = `body:${def.id}`
   const hit = cache.get(key)
   if (hit) return hit
+  const L = def.look
   const c = document.createElement('canvas')
-  c.width = size
-  c.height = size
+  c.width = W
+  c.height = H
   const ctx = c.getContext('2d')!
-  ctx.clearRect(0, 0, size, size)
-  const R = 12.5 * def.look.headScale
-  const span = R * FACE_SPAN
-  const scale = size / (span * 2)
-  const hy = -8 - R // drawHead 의 머리 중심 y (원점은 발 아래)
+
+  // 피부
+  ctx.fillStyle = hex(L.skin)
+  ctx.fillRect(0, 0, W, H)
+
+  // 옷 (셔츠 또는 겉옷)
+  const clothColor = L.coat !== undefined ? L.coat : L.shirt
+  ctx.fillStyle = hex(clothColor)
+  clothPath(ctx)
+  ctx.fill()
+  if (L.coat !== undefined) {
+    // 겉옷 물방울
+    if (L.coatDots !== undefined) {
+      ctx.save()
+      clothPath(ctx)
+      ctx.clip()
+      ctx.fillStyle = hex(L.coatDots)
+      const step = 34
+      for (let y = H * 0.5; y < H; y += step) {
+        const off = Math.round((y - H * 0.5) / step) % 2 === 1 ? step / 2 : 0
+        for (let x = 0; x < W; x += step) {
+          ctx.beginPath()
+          ctx.arc(x + off, y, 6, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      ctx.restore()
+    }
+    // 앞섶: 셔츠 색 띠 + 깃
+    const cx = W * FRONT_U
+    const top = collarY(FRONT_U)
+    ctx.fillStyle = hex(L.shirt)
+    ctx.beginPath()
+    ctx.moveTo(cx - 34, top - 4)
+    ctx.lineTo(cx + 34, top - 4)
+    ctx.lineTo(cx + 26, H)
+    ctx.lineTo(cx - 26, H)
+    ctx.closePath()
+    ctx.fill()
+    ctx.strokeStyle = OUTLINE
+    ctx.lineWidth = 3
+    ctx.stroke()
+    // 깃 (양쪽 삼각)
+    ctx.fillStyle = hex(clothColor)
+    for (const d of [-1, 1]) {
+      ctx.beginPath()
+      ctx.moveTo(cx + d * 34, top - 6)
+      ctx.lineTo(cx + d * 70, top + 26)
+      ctx.lineTo(cx + d * 30, top + 58)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
+  }
+  // 옷깃 선
+  ctx.strokeStyle = OUTLINE
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(0, collarY(0))
+  for (let x = 1; x <= W; x += 8) ctx.lineTo(x, collarY(x / W))
+  ctx.stroke()
+  // 바지 띠
+  ctx.fillStyle = '#34405a'
+  ctx.fillRect(0, H * PANTS_V, W, H * (1 - PANTS_V))
+  ctx.beginPath()
+  ctx.moveTo(0, H * PANTS_V)
+  ctx.lineTo(W, H * PANTS_V)
+  ctx.stroke()
+  // 넥타이 / 나비넥타이
+  const cx = W * FRONT_U
+  const top = collarY(FRONT_U)
+  if (L.tie !== undefined) {
+    ctx.fillStyle = hex(L.tie)
+    ctx.beginPath()
+    ctx.moveTo(cx - 12, top - 2)
+    ctx.lineTo(cx + 12, top - 2)
+    ctx.lineTo(cx + 9, top + 70)
+    ctx.lineTo(cx, top + 84)
+    ctx.lineTo(cx - 9, top + 70)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  }
+  if (L.bowTie !== undefined) {
+    ctx.fillStyle = hex(L.bowTie)
+    for (const d of [-1, 1]) {
+      ctx.beginPath()
+      ctx.moveTo(cx + d * 34, top - 18)
+      ctx.lineTo(cx, top + 2)
+      ctx.lineTo(cx + d * 34, top + 22)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#333333'
+    ctx.beginPath()
+    ctx.arc(cx, top + 2, 8, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // 이목구비 (정면 중심). 2D 머리 반지름 R 이 텍스처에서 FACE_R px 가 되도록
+  const R = 12.5 * L.headScale
+  const FACE_R = 150
+  const s = FACE_R / R
+  const hy = -8 - R
   ctx.save()
-  ctx.translate(size / 2, size / 2 - hy * scale)
-  ctx.scale(scale, scale)
+  ctx.translate(W * FRONT_U, H * FACE_V - hy * s)
+  ctx.scale(s, s)
   drawHead(ctx, def, { facing: 0, frontal: true, featuresOnly: true, sx: 1, sy: 1, walk: 0, moving: false, flash: 0, t: 0 })
   ctx.restore()
+
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = 4
+  tex.anisotropy = 8
   tex.minFilter = THREE.LinearMipmapLinearFilter
   tex.magFilter = THREE.LinearFilter
   tex.generateMipmaps = true
@@ -41,31 +170,27 @@ export function faceTexture(def: CharacterDef, size = 512): THREE.CanvasTexture 
   return tex
 }
 
-/** 물방울 무늬 등 옷 텍스처 */
-export function dotsTexture(base: number, dot: number, size = 128): THREE.CanvasTexture {
-  const key = `dots:${base}:${dot}`
+/** 모자 라벨 같은 짧은 글자 텍스처 (투명 배경 없이 바탕색) */
+export function labelTexture(text: string, bg: number, fg: number): THREE.CanvasTexture {
+  const key = `label:${text}:${bg}:${fg}`
   const hit = cache.get(key)
   if (hit) return hit
   const c = document.createElement('canvas')
-  c.width = size
-  c.height = size
+  c.width = 256
+  c.height = 128
   const ctx = c.getContext('2d')!
-  ctx.fillStyle = '#' + base.toString(16).padStart(6, '0')
-  ctx.fillRect(0, 0, size, size)
-  ctx.fillStyle = '#' + dot.toString(16).padStart(6, '0')
-  const step = size / 6
-  for (let y = 0; y < 6; y++) {
-    for (let x = 0; x < 6; x++) {
-      const off = y % 2 === 1 ? step / 2 : 0
-      ctx.beginPath()
-      ctx.arc(x * step + off + step / 2, y * step + step / 2, size * 0.035, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
+  ctx.fillStyle = hex(bg)
+  ctx.fillRect(0, 0, 256, 128)
+  ctx.fillStyle = hex(fg)
+  ctx.font = '700 84px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, 128, 70)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(3, 2)
   cache.set(key, tex)
   return tex
 }
+
+/** 텍스처 안에서 얼굴 중심 v (몸통 세로 위치 계산용) */
+export const BODY_FACE_V = FACE_V

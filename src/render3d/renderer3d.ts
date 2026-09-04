@@ -368,7 +368,7 @@ export class Renderer3D {
       const p = curr.players[i]
       if (!p.alive || !this.rigs[i]?.root.visible) continue
       const c = CHARACTERS[p.char]
-      const s = this.worldToScreen(pos[i].x, 2.15 + (c.look.headScale - 1) * 0.4, pos[i].z)
+      const s = this.worldToScreen(pos[i].x, this.rigs[i].height + 0.2, pos[i].z)
       const name = opts.names[i] ?? c.name
       const mine = i === lp
       const ally = teams && !spectator && !mine && p.team === myTeam

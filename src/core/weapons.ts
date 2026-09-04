@@ -66,12 +66,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     recoilRecover: deg(0.22), speed: 18, life: 70, moveMul: 0.92, length: 24, color: 0x5f6b48,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,
   },
-  // 철면덕 전용 느낌: 근접에서 압도적, 멀어지면 급감
+  // 철면덕 전용 느낌: 근접에서 압도적(탄당 22×7 = 최대 154), 멀어지면 급감
   shotgun: {
-    id: 'shotgun', name: '산탄총', damage: 15, pellets: 7, fireInterval: 45, auto: true,
-    magSize: 6, reloadTicks: 150, spreadHip: deg(12), spreadAds: deg(8), recoil: deg(4),
-    recoilRecover: deg(0.4), speed: 12, life: 30, moveMul: 0.9, length: 26, color: 0x8b5a2b,
-    falloffStart: 140, falloffEnd: 440, falloffMin: 0.28,
+    id: 'shotgun', name: '산탄총', damage: 22, pellets: 7, fireInterval: 42, auto: true,
+    magSize: 6, reloadTicks: 150, spreadHip: deg(10), spreadAds: deg(6), recoil: deg(4),
+    recoilRecover: deg(0.4), speed: 13, life: 32, moveMul: 0.9, length: 26, color: 0x8b5a2b,
+    falloffStart: 170, falloffEnd: 470, falloffMin: 0.35,
   },
   sniper: {
     id: 'sniper', name: '저격총', damage: 80, pellets: 1, fireInterval: 75, auto: true,
