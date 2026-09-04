@@ -36,7 +36,7 @@ function killAndDrop(s: GameState, victim = 1): { x: number; y: number } {
   s.bullets.push({
     id: s.nextBulletId++, owner: shooter.id, x: x + 18, y, px: x + 18, py: y,
     vx: -8, vy: 0, life: 10, damage: 500, ads: false, ox: x + 18, oy: y,
-    weapon: 'rifle', hitSomeone: false, over: true,
+    weapon: 'rifle', hitSomeone: false, over: true, overR: 0,
   })
   step(s, map, [IDLE, IDLE])
   return { x, y }

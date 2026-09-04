@@ -43,7 +43,7 @@ function runBots(o: RunOpts): { hashes: number[]; state: GameState; ticks: numbe
 function shoot(state: GameState, owner: number, x: number, y: number, vx: number, vy: number, damage: number, over = false): Bullet {
   const b: Bullet = {
     id: state.nextBulletId++, owner, x, y, px: x, py: y, vx, vy,
-    life: 60, damage, ads: false, ox: x, oy: y, weapon: 'rifle', hitSomeone: false, over,
+    life: 60, damage, ads: false, ox: x, oy: y, weapon: 'rifle', hitSomeone: false, over, overR: 0,
   }
   state.bullets.push(b)
   return b

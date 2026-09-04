@@ -1,9 +1,13 @@
 // 모래주머니 엄폐 규칙 검증.
 //
 // 규칙(DESIGN 3.5): 탄은 모래주머니에 막힌다. 단 두 경우에만 넘어간다.
-//   1) 쏘는 사람이 모래주머니에 붙어 있을 때(COVER_DIST 이내) — 그 사람의 **모든** 탄이 넘어간다
-//   2) 그 탄이 상대의 머리를 정확히 겨눈 탄일 때 — 붙어 있지 않아도 넘어간다
+//   1) 쏘는 사람이 모래주머니에 붙어 있을 때(COVER_DIST 이내) — **기대고 있는 그 자루만** 넘어간다
+//   2) 그 탄이 상대의 머리를 정확히 겨눈 탄일 때 — 붙어 있지 않아도, 거리에 상관없이 넘어간다
 // 그래서 "붙어 있는 쪽은 마음대로 때리고, 밖에 있는 쪽은 정확한 헤드샷으로만 반격할 수 있다".
+//
+// 2026-09-06 제보로 두 가지를 좁혔다.
+//   - COVER_DIST 가 46 이던 때는 **두 칸 떨어진 대각선**도 붙은 것으로 쳤다 → 방향에 따라 탄이 그냥 넘어갔다.
+//   - 엄폐 중이면 맵의 **모든** 모래주머니를 통과했다 → 멀리 있는 자루도 뚫렸다.
 
 import { describe, expect, it } from 'vitest'
 import { ANGLE_STEPS, radToAngle } from '../src/core/fixedmath'
@@ -46,6 +50,47 @@ function scene(gapA: number, gapB: number) {
   a.aliveTicks = 999
   b.aliveTicks = 999
   return { map, state, a, b, wallX, y }
+}
+
+/**
+ * 모래주머니 한 칸만 두고, 쏘는 사람을 그 칸에서 dist 만큼(각도 ang) 떨어뜨린다.
+ * "몇 칸 떨어졌을 때 붙은 것으로 치는가" 를 방향별로 보기 위한 장면.
+ */
+function lone(dist: number, ang: number) {
+  const map = buildMap('yard', 1, 7)
+  for (let ty = 1; ty < map.h - 1; ty++) for (let tx = 1; tx < map.w - 1; tx++) map.tiles[ty * map.w + tx] = TILE_FLOOR
+  const stx = 20
+  const sty = 12
+  map.tiles[sty * map.w + stx] = TILE_SANDBAG
+  map.sandbagIdx.length = 0
+  for (let i = 0; i < map.tiles.length; i++) if (map.tiles[i] === TILE_SANDBAG) map.sandbagIdx.push(i)
+  const state = createState({ seed: 3, targetKills: 5, chars: ['chim', 'uwon'] }, map)
+  state.phase = 'playing'
+  state.phaseTimer = 0
+  const cx = stx * TILE + TILE / 2
+  const cy = sty * TILE + TILE / 2
+  const [a, b] = state.players
+  a.x = cx + Math.cos(ang) * dist
+  a.y = cy + Math.sin(ang) * dist
+  a.alive = true
+  a.invuln = 0
+  a.aliveTicks = 999
+  // 상대는 멀리 치워 둔다 (머리 조준 규칙이 끼어들지 않게)
+  b.x = 60
+  b.y = 60
+  b.alive = true
+  return { map, state, a, cx, cy, idx: sty * map.w + stx }
+}
+
+/** 모래주머니를 향해 40틱 쏘고, 그 자루가 받은 피해를 돌려준다 */
+function shootBag(scene: ReturnType<typeof lone>): number {
+  const { map, state, a, cx, cy, idx } = scene
+  const aim = radToAngle(Math.atan2(cy - a.y, cx - a.x)) & (ANGLE_STEPS - 1)
+  const before = state.sandbags[idx] ?? 0
+  for (let t = 0; t < 40; t++) {
+    step(state, map, [{ mx: 0, my: 0, aim, buttons: BTN_FIRE, char: 0 }, IDLE])
+  }
+  return before - (state.sandbags[idx] ?? 0)
 }
 
 /** n 틱 동안 shooter 만 주어진 각도로 쏜다. 상대가 잃은 체력을 돌려준다 */
@@ -96,6 +141,35 @@ describe('모래주머니 엄폐', () => {
     expect(blocked).toBe(0)
   })
 
+  it('두 칸 떨어지면 **어느 방향에서 쏴도** 막힌다', () => {
+    // 예전에는 대각선일 때만 붙은 것으로 쳐서, 같은 거리인데 방향에 따라 탄이 넘어갔다
+    for (let d = 0; d < 16; d++) {
+      const ang = (d / 16) * Math.PI * 2
+      const scene = lone(TILE * 2, ang)
+      expect(nearSandbag(scene.map, scene.a.x, scene.a.y)).toBe(false)
+      expect(shootBag(scene)).toBeGreaterThan(0)
+    }
+  })
+
+  it('한 칸이면 어느 방향에서도 붙은 것으로 친다', () => {
+    for (let d = 0; d < 16; d++) {
+      const ang = (d / 16) * Math.PI * 2
+      const scene = lone(TILE, ang)
+      expect(nearSandbag(scene.map, scene.a.x, scene.a.y)).toBe(true)
+      expect(shootBag(scene)).toBe(0) // 기댄 자루라 넘어간다
+    }
+  })
+
+  it('엄폐 중이어도 멀리 있는 모래주머니는 막는다', () => {
+    // 기댄 자루(w1)는 넘기고, 그 너머 다른 줄(w2)은 막아야 한다.
+    // 예전에는 엄폐 중이면 맵의 모든 자루를 통과해서 먼 줄에 흠집도 안 났다.
+    const t = twoWalls()
+    expect(nearSandbag(t.map, t.a.x, t.a.y)).toBe(true)
+    const dmg = shootWalls(t)
+    expect(dmg.near).toBe(0) // 기댄 자루는 넘어간다
+    expect(dmg.far).toBeGreaterThan(0) // 먼 자루는 막는다
+  })
+
   it('붙는 기준은 COVER_DIST 다 — 조금만 떨어져도 막힌다', () => {
     const near = scene(COVER_DIST - 10, 260)
     const far = scene(COVER_DIST + 30, 260)
@@ -105,6 +179,51 @@ describe('모래주머니 엄폐', () => {
     expect(shoot(far.state, far.map, 0, bodyAim(far.a.x, far.a.y, far.b.x, far.b.y), 200)).toBe(0)
   })
 })
+
+/**
+ * 복도에 모래주머니 줄을 둘 세운다(20칸·26칸). A 는 앞 줄에 붙어 서서 뒷 줄 쪽으로 쏜다.
+ * 상대는 사선 밖으로 치워 둔다 — 머리 조준 규칙(거리 무관 관통)이 끼어들면 판정이 흐려진다.
+ */
+function twoWalls() {
+  const map = buildMap('yard', 1, 7)
+  const ty = 12
+  for (let tx = 1; tx < map.w - 1; tx++) for (let dy = -2; dy <= 2; dy++) map.tiles[(ty + dy) * map.w + tx] = TILE_FLOOR
+  const w1 = 20
+  const w2 = 26
+  for (let dy = -2; dy <= 2; dy++) {
+    map.tiles[(ty + dy) * map.w + w1] = TILE_SANDBAG
+    map.tiles[(ty + dy) * map.w + w2] = TILE_SANDBAG
+  }
+  map.sandbagIdx.length = 0
+  for (let i = 0; i < map.tiles.length; i++) if (map.tiles[i] === TILE_SANDBAG) map.sandbagIdx.push(i)
+  const state = createState({ seed: 3, targetKills: 5, chars: ['chim', 'uwon'] }, map)
+  state.phase = 'playing'
+  state.phaseTimer = 0
+  const y = ty * TILE + TILE / 2
+  const [a, b] = state.players
+  a.x = w1 * TILE + TILE / 2 - 20
+  a.y = y
+  a.alive = true
+  a.invuln = 0
+  a.aliveTicks = 999
+  b.x = 60
+  b.y = 60
+  b.alive = true
+  return { map, state, a, nearIdx: ty * map.w + w1, farIdx: ty * map.w + w2 }
+}
+
+/** 앞·뒤 두 줄이 각각 받은 피해 */
+function shootWalls(t: ReturnType<typeof twoWalls>): { near: number; far: number } {
+  const n0 = t.state.sandbags[t.nearIdx] ?? 0
+  const f0 = t.state.sandbags[t.farIdx] ?? 0
+  for (let i = 0; i < 60; i++) {
+    step(t.state, t.map, [{ mx: 0, my: 0, aim: 0, buttons: BTN_FIRE | BTN_ADS, char: 0 }, IDLE])
+  }
+  return {
+    near: n0 - (t.state.sandbags[t.nearIdx] ?? 0),
+    far: f0 - (t.state.sandbags[t.farIdx] ?? 0),
+  }
+}
 
 /**
  * 상대 몸통을 겨누는 각도. 조준선이 중심에서 머리 판정 범위(0.28r)보다는 멀고

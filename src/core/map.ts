@@ -16,7 +16,13 @@ export const TILE_SANDBAG = 3
 /** 모래주머니 내구도 */
 export const SANDBAG_HP = 240
 /** 이 거리 안에 모래주머니가 있으면 '엄폐 중'으로 보고 내 탄이 모래주머니를 넘어간다 */
-export const COVER_DIST = 46
+/**
+ * 모래주머니에 "붙어 있다" 고 보는 거리 (타일 사각형까지의 거리).
+ * 몸 반지름이 14 라 충돌 때문에 14 보다 가까이는 못 간다 → 28 이면 반 칸 안쪽이 붙은 것.
+ * 46 이던 시절에는 **두 칸 떨어진 대각선**도 붙은 것으로 쳐서, 눈에는 멀리 있는데
+ * 탄이 모래주머니를 넘어가 버렸다(2026-09-06 제보).
+ */
+export const COVER_DIST = 28
 
 export interface GameMap {
   id: MapId

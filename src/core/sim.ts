@@ -1,7 +1,7 @@
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
-import { GameMap, SANDBAG_HP, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
+import { COVER_DIST, GameMap, SANDBAG_HP, TILE, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
 import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
 import { makeRng, rand, randInt } from './rng'
 import {
@@ -380,6 +380,12 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
 }
 
 /** 총구에서 나간 이 각도의 탄이 적의 머리(중심)를 정확히 겨누는가 → 모래주머니를 넘어간다 */
+/**
+ * 엄폐 사격이 모래주머니를 넘기는 거리. 붙은 자루 한 줄(최대 3칸 두께)까지만 넘긴다.
+ * 이걸 넘어선 자루는 엄폐 중이어도 막는다.
+ */
+const COVER_REACH = COVER_DIST + TILE * 3
+
 function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: number, my: number, a: number): boolean {
   const dx = cosA(a)
   const dy = sinA(a)
@@ -427,8 +433,9 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
     meleeSwing(state, map, p)
     return
   }
-  // 모래주머니에 붙어 쏘면(엄폐) 내 탄은 넘어간다
+  // 모래주머니에 붙어 쏘면(엄폐) **내가 기댄 자루만** 넘어간다
   const inCover = nearSandbag(map, p.x, p.y)
+  const overR = inCover ? COVER_REACH : 0
   for (let i = 0; i < w.pellets; i++) {
     const off = spread > 0 ? randInt(state.rng, -spread, spread + 1) : 0
     const a = (p.aim + off) & 1023
@@ -448,7 +455,8 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
       oy: p.y,
       weapon: p.weapon,
       hitSomeone: false,
-      over: inCover || aimsAtHead(state, map, p, mx, my, a),
+      over: aimsAtHead(state, map, p, mx, my, a),
+      overR,
     }
     state.bullets.push(b)
   }
@@ -475,7 +483,9 @@ function stepBullets(state: GameState, map: GameMap): void {
     b.life--
     let dead = false
 
-    const tileHit = rayCast(map, b.px, b.py, b.x, b.y, 'bullet', b.over)
+    // 엄폐 관통은 총구 근처에서만 (기대고 있는 자루를 넘기려는 것이다)
+    const near = b.overR > 0 && (b.px - b.ox) ** 2 + (b.py - b.oy) ** 2 <= b.overR * b.overR
+    const tileHit = rayCast(map, b.px, b.py, b.x, b.y, 'bullet', b.over || near)
     if (tileHit.blocked) {
       const aim = state.players[b.owner].aim
       if (tileHit.tile === TILE_SANDBAG) damageSandbag(state, map, tileHit.tx, tileHit.ty, b.damage)

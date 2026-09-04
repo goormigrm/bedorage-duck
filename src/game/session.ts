@@ -119,7 +119,17 @@ export class Session {
       this.state = cfg.resumeState as GameState
       this.state.events = []
       syncSandbags(this.state, this.map)
+      // 아무도 없는 자리(나갔거나 아직 안 온 자리)는 입력을 기다리면 안 된다.
+      // 이걸 빠뜨려 난입한 사람이 빈 자리 입력을 기다리다 멈추고, 그 사람이 멈추니
+      // 락스텝 특성상 방 전체가 함께 멈췄다(2026-09-06 제보).
+      this.state.players.forEach((p, i) => {
+        if (p.left && i !== cfg.localPlayer) this.dropped.add(i)
+      })
     }
+    // 아직 아무도 없는 자리도 같은 취급 (다시 하기로 판을 새로 짜도 유지된다)
+    cfg.absent?.forEach((a, i) => {
+      if (a && i !== cfg.localPlayer) this.dropped.add(i)
+    })
     this.prev = snapshot(this.state)
     this.makeBots(cfg.seed)
 
@@ -162,7 +172,9 @@ export class Session {
 
     if (cfg.mode === 'p2p' && cfg.link) {
       const ids = cfg.peerIds ?? []
-      ids.forEach((id, i) => this.peerIndex.set(id, i))
+      ids.forEach((id, i) => {
+        if (id) this.peerIndex.set(id, i)
+      })
       this.lockstep = this.newLockstep()
       cfg.link.onCtl((m, from) => this.onCtl(m, from))
       cfg.link.onPeerLeave((id) => this.onPeerGone(id))
@@ -223,13 +235,11 @@ export class Session {
       this.cfg.chars.length,
       start,
     )
-    for (const d of this.dropped) ls.drop(d)
-    // 아직 아무도 없는 자리는 입력을 기다리지 않는다
-    this.cfg.absent?.forEach((a, i) => {
-      if (a) ls.drop(i)
-    })
-    // 이어서 시작하는 경우, 지나간 틱은 모두 빈 입력으로 메워 둔다
+    // 이어서 시작하는 경우(난입), 지나간 틱은 빈 입력으로 메워 둔다.
+    // **먼저** 해야 한다 — rejoin 은 기다림을 되살리므로 drop 뒤에 부르면 빈 자리를 다시 기다린다.
     if (start > 0) for (let i = 0; i < this.cfg.chars.length; i++) ls.rejoin(i, start)
+    // 나간 자리 · 아직 아무도 없는 자리는 입력을 기다리지 않는다 (둘 다 dropped 에 들어 있다)
+    for (const d of this.dropped) ls.drop(d)
     return ls
   }
 
@@ -491,6 +501,11 @@ export class Session {
         break
       }
       case 'joinAt': {
+        // 난입자의 피어 id 를 모두가 기록한다 (없으면 그 사람 입력을 버려 방 전체가 멈춘다)
+        if (m.id) {
+          this.peerIndex.set(m.id, m.p)
+          if (this.cfg.peerIds) this.cfg.peerIds[m.p] = m.id
+        }
         this.pendingJoins.push({ p: m.p, tick: m.tick, char: m.char as CharacterId, team: m.team, name: m.name })
         break
       }
@@ -754,7 +769,9 @@ export class Session {
     }
     const tick = this.state.tick + 120
     this.peerIndex.set(peerId, slot)
-    this.cfg.link?.sendCtl({ t: 'joinAt', p: slot, tick, char, team, name })
+    // 다음에 난입하는 사람에게 넘겨줄 목록에도 넣는다 (빠지면 그 사람이 이 사람 입력을 못 받는다)
+    if (this.cfg.peerIds) this.cfg.peerIds[slot] = peerId
+    this.cfg.link?.sendCtl({ t: 'joinAt', p: slot, tick, char, team, name, id: peerId })
     this.pendingJoins.push({ p: slot, tick, char, team, name })
     this.pendingRejoin = { peerId, p: slot, tick }
     this.lockstep?.rejoin(slot, tick)
@@ -773,6 +790,7 @@ export class Session {
         if (this.cfg.teams) this.cfg.teams[j.p] = j.team
         this.names = this.computeNames()
         this.makeBotFor(j.p)
+        this.dropped.delete(j.p)
         this.lockstep?.rejoin(j.p, j.tick)
       } else keep.push(j)
     }

@@ -111,8 +111,14 @@ export interface Bullet {
   weapon: WeaponId
   /** 누군가를 맞혔는가 (빗나감 판정용) */
   hitSomeone: boolean
-  /** 모래주머니를 넘어가는 탄 (엄폐 중 사격 또는 머리 조준) */
+  /** 모래주머니를 끝까지 넘어가는 탄 (머리를 정확히 겨눈 탄) */
   over: boolean
+  /**
+   * 엄폐 사격이 모래주머니를 넘기는 거리(총구 기준, 0 이면 없음).
+   * 기대 못 넘게 하는 것은 **내가 기대고 있는 그 자루**뿐이다.
+   * 전에는 엄폐 중이면 맵의 모든 모래주머니를 통과해서, 멀리 있는 자루도 뚫렸다.
+   */
+  overR: number
 }
 
 export type SimEvent =

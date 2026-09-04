@@ -146,14 +146,14 @@ export type CtlMessage =
   | { t: 'drop'; p: number; tick: number }
   /** 팀 신호: 같은 편에게 "여기" 를 찍는다. sim 밖(렌더 전용)이라 결정론과 무관하다 */
   | { t: 'mark'; p: number; x: number; y: number }
-  /** 끊겼던 사람이 방에 다시 들어와 자기 자리를 찾는다 (게스트 → 호스트) */
-  | { t: 'rejoinAsk'; key: string }
   /** 진행 중인 방에 새로 들어가겠다 (게스트 → 호스트) */
   | { t: 'joinAsk'; char: string; name: string }
-  /** 호스트 → 모두: 빈 자리 p 에 tick 부터 사람이 들어온다 */
-  | { t: 'joinAt'; p: number; tick: number; char: string; team: number; name: string }
-  /** 호스트 → 모두: 플레이어 p 가 tick 부터 다시 참여한다 */
-  | { t: 'rejoinAt'; p: number; tick: number }
+  /**
+   * 호스트 → 모두: 빈 자리 p 에 tick 부터 사람이 들어온다.
+   * **id 는 난입자의 피어 id 다.** 이게 없으면 호스트가 아닌 사람은 난입자의 입력이 누구 것인지
+   * 몰라서 통째로 버리고, 그 자리 입력을 영원히 기다리다 모두가 멈춘다(2026-09-06 제보).
+   */
+  | { t: 'joinAt'; p: number; tick: number; char: string; team: number; name: string; id: string }
   /** 호스트 → 돌아온 사람에게만: 그 시점의 판 전체 (이걸로 이어서 시작한다) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | { t: 'resume'; p: number; tick: number; state: any; cfg: any }
