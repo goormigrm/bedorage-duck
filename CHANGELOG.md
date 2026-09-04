@@ -4,6 +4,9 @@
 
 ## 2026-09-04 (2차)
 
+### 비용 원칙 확정 (문서)
+- 사용자 결정: **카드 등록이 필요한 서비스는 무료 티어라도 전부 배제**. TURN(metered.ca·Cloudflare Realtime) 제외, NAT 실패는 핫스팟 안내가 최종. 허용: GitHub Pages, Google Fonts, 공개 Nostr 릴레이, 무료 STUN, Cloudflare Workers 무료 플랜(카드 없음, 한도 초과 시 차단·시그널링 용도). `docs/PREP.md` C, `docs/DESIGN.md`, `HANDOVER.md`, `README.md` 에 반영.
+
 ### 로비 닉네임
 - 캐릭터 구분선 오른쪽에 닉네임 입력(선택, 8자, localStorage 기억). 방 슬롯은 닉네임을 크게, 캐릭터 이름을 작게 보여 주고, `hello`/`room`/`start` 에 `name` 이 실려 HUD 이름표·점수판·킬 배너에 쓰인다. 비어 있으면 캐릭터 이름(중복 시 번호). 봇은 캐릭터 이름.
 - 방 목록 핑 표시는 연결 전에는 RTT 를 알 수 없어 보류(연결 후 방 화면에 ms 표시는 있음). 게임 종료 후 로비로 돌아오면 로비 방에 자동 재접속된다(기존 동작).

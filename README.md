@@ -79,3 +79,4 @@ WASD 이동(화면 기준) · 마우스 조준 · 좌클릭 사격(꾹 누르면
 ## 고지
 
 비공식 팬 프로젝트이며 배도라지 크루, Escape from Duckov(Team Soda)와 무관하다. 수익화하지 않는다. 문제가 되면 즉시 내린다.
+운영 비용 원칙: 카드 등록이 필요한 서비스는 무료 티어라도 쓰지 않는다(TURN 배제). GitHub Pages·공개 릴레이·무료 STUN·Cloudflare Workers 무료 플랜만 허용.

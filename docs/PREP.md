@@ -23,12 +23,19 @@
 - [ ] **효과음·음악 소스 결정**. 무료 후보: Kenney.nl (CC0 사운드 팩), freesound.org (라이선스 확인), OpenGameArt (CC0 BGM). 다운로드해서 `public/sfx/` 에 넣어 주면 연결한다. 파일명은 알려 주기만 하면 된다.
 - [ ] **폰트 라이선스 확인**. Black Han Sans, IBM Plex Sans KR, IBM Plex Mono 는 모두 OFL (자유 사용). Google Fonts 에서 로드하므로 별도 준비 불필요.
 
-## C. P2P 연결 품질을 올리고 싶을 때 (선택)
+## C. P2P 연결 품질 — 비용 원칙 (2026-09-04 사용자 결정)
 
-- [ ] **TURN 서버**. STUN 만으로 연결 실패(대칭 NAT, 회사망, LTE)가 잦으면 필요.
-  - 가장 쉬운 것: [metered.ca Open Relay](https://www.metered.ca/tools/openrelay/) 무료 계정 → 자격증명(username/credential)을 받아 이 세션에 전달. 정적 사이트에 넣어도 되는 공개용 자격증명이다.
-  - Cloudflare Realtime TURN 은 토큰 발급 서버가 필요해 "서버 없음" 원칙과 충돌. 후순위.
-- [ ] **시그널링 릴레이 상태 확인**. Trystero 는 공개 Nostr 릴레이를 쓴다. 회사/학교망에서 WebSocket 이 막히면 시그널링부터 실패한다. 이 경우 `#room=` 링크 대신 수동 복붙 모드를 쓴다(구현 예정).
+**카드 등록이 필요한 서비스는 전부 배제한다.** 무료 티어라도 사용량 초과 시 과금 가능성이 있으면 쓰지 않는다. 팬게임이므로 품질이 조금 떨어져도 돈이 나갈 가능성 자체를 없앤다.
+
+| 항목 | 결정 |
+|---|---|
+| TURN 서버 (metered.ca Open Relay, Cloudflare Realtime TURN, Twilio 등) | **배제.** 무료 티어도 카드 등록·사용량 과금 구조. 대칭 NAT·회사망에서 연결이 안 되면 "폰 핫스팟으로 재시도" 안내로 끝낸다 |
+| STUN (Google 공개) | 허용 (무료, 등록 없음) |
+| 시그널링: Trystero 공개 Nostr 릴레이 | 허용 (무료, 등록 없음). 릴레이가 불안정하면 아래 Workers 로 대체 검토 |
+| **Cloudflare Workers 무료 플랜** | 허용. 카드 등록 없이 계정만 만들면 되고, 무료 한도(요청 10만/일)를 넘으면 과금이 아니라 **차단**된다. 시그널링(방 목록·SDP 교환) 정도에 쓸 수 있다. 단, 데이터 중계(TURN 역할)는 Workers 로 할 수 없다 |
+| GitHub Pages, Google Fonts | 허용 (무료, 등록 없음) |
+
+- [ ] (필요해지면) Cloudflare 계정 생성(카드 없이) → Workers 로 시그널링 릴레이. 지금은 Nostr 공개 릴레이로 충분히 동작하므로 보류.
 
 ## D. 공개 전에 결정할 것
 
