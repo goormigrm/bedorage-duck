@@ -364,7 +364,8 @@ describe('맵 생성', () => {
         const ty = (i / m.w) | 0
         if (Math.abs(tx - m.w / 2) <= 4 && Math.abs(ty - m.h / 2) <= 3) nearCenter++
       }
-      expect(nearCenter).toBeGreaterThanOrEqual(6)
+      // 진지는 8칸이지만 벽 자리에는 놓이지 않으므로 몇 칸은 빠질 수 있다
+      expect(nearCenter).toBeGreaterThanOrEqual(4)
       expect(m.tiles.every((t) => t !== TILE_SANDBAG || true)).toBe(true)
     }
   })

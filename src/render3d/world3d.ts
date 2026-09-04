@@ -130,7 +130,8 @@ export function buildWorld(map: GameMap): World3D {
   for (let ty = 0; ty < map.h; ty++) {
     for (let tx = 0; tx < map.w; tx++) {
       if (map.tiles[ty * map.w + tx] !== TILE_SANDBAG) continue
-      m4.makeTranslation(tx + 0.5, SANDBAG_H / 2, ty + 0.5)
+      // 지오메트리가 y=0 에서 시작하므로 바닥 높이 그대로 놓는다 (올리면 떠 보인다)
+      m4.makeTranslation(tx + 0.5, 0, ty + 0.5)
       bags.setMatrixAt(bi, m4)
       bagIndex.set(ty * map.w + tx, bi)
       bi++
@@ -218,15 +219,22 @@ function sandbagStackGeometry(): THREE.BufferGeometry {
     g.translate(x, y, z)
     parts.push(g)
   }
+  // 실제 모래주머니 방벽처럼 3 - 2 - 3 세 단. 가운데 단은 이음매가 어긋나도록 반 자루씩 밀어 쌓는다.
+  // 지오메트리 바닥이 y = 0 이어야 바닥에 딱 붙는다 (instance 는 y=0 에 놓는다).
   const h = SANDBAG_H
-  // 아래 줄 — 네 자루
-  bag(-0.235, h * 0.29, -0.23, 0.54, h * 0.58, 0.48, 0.07)
-  bag(0.235, h * 0.29, -0.23, 0.54, h * 0.58, 0.48, -0.05)
-  bag(-0.235, h * 0.29, 0.24, 0.54, h * 0.58, 0.48, -0.06)
-  bag(0.235, h * 0.29, 0.24, 0.54, h * 0.58, 0.48, 0.05)
-  // 위 줄 — 반 칸 어긋나게 두 자루
-  bag(0, h * 0.78, -0.15, 0.6, h * 0.5, 0.52, 0.1)
-  bag(0, h * 0.78, 0.19, 0.6, h * 0.5, 0.52, -0.09)
+  const tier = h / 3
+  const sy = tier * 1.16 // 살짝 겹쳐 단 사이가 벌어져 보이지 않게
+  // 1단 (바닥) — 세 자루
+  bag(0, tier * 0.5, -0.3, 0.9, sy, 0.31, 0.05)
+  bag(0, tier * 0.5, 0.0, 0.9, sy, 0.31, -0.04)
+  bag(0, tier * 0.5, 0.3, 0.9, sy, 0.31, 0.06)
+  // 2단 — 두 자루, 이음매를 어긋나게 (조금 넓게 눕힌다)
+  bag(0.02, tier * 1.5, -0.16, 0.86, sy, 0.34, -0.07)
+  bag(-0.02, tier * 1.5, 0.16, 0.86, sy, 0.34, 0.08)
+  // 3단 (위) — 세 자루, 조금 좁게 쌓여 위로 갈수록 살짝 좁아진다
+  bag(0, tier * 2.5, -0.27, 0.78, sy, 0.29, -0.06)
+  bag(0, tier * 2.5, 0.0, 0.78, sy, 0.29, 0.07)
+  bag(0, tier * 2.5, 0.27, 0.78, sy, 0.29, -0.05)
   return mergeGeometries(parts, false) ?? parts[0]
 }
 

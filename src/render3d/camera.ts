@@ -32,18 +32,6 @@ export function moveDirFromScreen(sx: number, sy: number): { mx: number; my: num
   return { mx: ca > 0.3 ? 1 : ca < -0.3 ? -1 : 0, my: sa > 0.3 ? 1 : sa < -0.3 ? -1 : 0 }
 }
 
-/** 화면 기준 방향 → 월드 각도(0..1023). 터치 조준 스틱용 */
-export function screenDirToWorldAngle(sx: number, sy: number): number {
-  const f = cameraForward()
-  const r = cameraRight()
-  const wx = sx * r.x + -sy * f.x
-  const wy = sx * r.y + -sy * f.y
-  const a = Math.atan2(wy, wx)
-  let q = Math.round((a / (Math.PI * 2)) * 1024) % 1024
-  if (q < 0) q += 1024
-  return q
-}
-
 /** 월드 방향 → 화면 기준 방향 (조준선 표시용) */
 export function worldDirToScreen(wx: number, wy: number): { x: number; y: number } {
   const f = cameraForward()

@@ -65,7 +65,7 @@ export const MAPS: Record<MapId, MapDef> = {
     name: '스튜디오',
     desc: '실내. 방과 복도로 갈려 있어 문 앞 싸움이 잦다.',
     rows: frame(40, 30),
-    gen: { style: 'rooms', density: 4, crates: 8, sandbags: 3, maxLen: 6 },
+    gen: { style: 'rooms', density: 4, crates: 8, sandbags: 1, maxLen: 6 },
     theme: {
       floor: 0xd8d3bf, floorAlt: 0xd1cbb6, floorLine: 0xc4bda6,
       wall: 0x5c6347, wallTop: 0x7a8360, crate: 0x8c6a3e, outside: 0x1c1f17,
@@ -77,7 +77,7 @@ export const MAPS: Record<MapId, MapDef> = {
     name: '마당',
     desc: '야외. 벽이 적고 상자·모래주머니로 엄폐한다. 시야가 트여 저격이 강하다.',
     rows: frame(40, 30),
-    gen: { style: 'scatter', density: 7, crates: 14, sandbags: 6, maxLen: 5 },
+    gen: { style: 'scatter', density: 7, crates: 14, sandbags: 2, maxLen: 5 },
     theme: {
       floor: 0x9fb26a, floorAlt: 0x93a660, floorLine: 0x86985a,
       wall: 0x6e6a60, wallTop: 0x8d887b, crate: 0xa87b45, outside: 0x1b2418,
@@ -89,7 +89,7 @@ export const MAPS: Record<MapId, MapDef> = {
     name: '주차장',
     desc: '지하 주차장. 기둥이 줄지어 서 있어 숨었다 나오는 싸움이 된다.',
     rows: frame(44, 28),
-    gen: { style: 'pillars', density: 5, crates: 10, sandbags: 5, maxLen: 4 },
+    gen: { style: 'pillars', density: 5, crates: 10, sandbags: 2, maxLen: 4 },
     theme: {
       floor: 0x8f9298, floorAlt: 0x86898f, floorLine: 0x74777d,
       wall: 0x4a4d54, wallTop: 0x63666d, crate: 0x8a6a3c, outside: 0x14161a,

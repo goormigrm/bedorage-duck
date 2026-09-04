@@ -87,13 +87,12 @@ function generate(map: GameMap, def: MapDef, seed: number): void {
   }
   // 2) 상자 군집
   for (let i = 0; i < Math.round(g.crates * k); i++) placeCluster(map, rng, TILE_CRATE, randInt(rng, 1, 5))
-  // 3) 모래주머니 진지: 중앙 + (넓은 맵이면) 사분면
+  // 3) 모래주머니 진지: 중앙에 하나. 넓은 맵이면 하나 더 (많으면 지저분하고 엄폐가 흔해진다)
   const forts: [number, number][] = [[map.w / 2, map.h / 2]]
-  if (map.scale >= 2) forts.push([map.w * 0.25, map.h * 0.5], [map.w * 0.75, map.h * 0.5])
-  if (map.scale === 4) forts.push([map.w * 0.5, map.h * 0.25], [map.w * 0.5, map.h * 0.75])
+  if (map.scale === 4) forts.push([map.w * 0.25, map.h * 0.25])
   for (const [fx, fy] of forts) placeFort(map, Math.round(fx), Math.round(fy))
-  // 4) 흩어진 모래주머니 줄
-  for (let i = 0; i < Math.round(g.sandbags * k); i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 7))
+  // 4) 흩어진 모래주머니 줄 — 드물게, 짧게
+  for (let i = 0; i < Math.round(g.sandbags * k); i++) placeLine(map, rng, TILE_SANDBAG, randInt(rng, 3, 6))
   // 5) 갇힌 곳이 생겼으면 뚫는다
   ensureConnected(map)
 }
@@ -281,14 +280,13 @@ function placeFort(map: GameMap, cx: number, cy: number): void {
     if (x < 1 || y < 1 || x >= map.w - 1 || y >= map.h - 1) return
     if (map.tiles[y * map.w + x] === TILE_FLOOR) map.tiles[y * map.w + x] = TILE_SANDBAG
   }
-  for (const dx of [-2, -1, 1, 2]) {
+  // 위·아래 세 칸씩, 좌·우 한 칸씩. 모서리는 비워 사방에서 드나들 수 있다 (8칸)
+  for (const dx of [-1, 0, 1]) {
     put(cx + dx, cy - 2)
     put(cx + dx, cy + 2)
   }
-  for (const dy of [-1, 1]) {
-    put(cx - 3, cy + dy)
-    put(cx + 3, cy + dy)
-  }
+  put(cx - 2, cy)
+  put(cx + 2, cy)
 }
 
 /** 사방이 트인 칸 중 서로 멀리 떨어진 곳을 스폰으로 (결정론) */
