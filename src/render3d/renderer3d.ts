@@ -521,6 +521,13 @@ export class Renderer3D {
     if (this.seenT.length !== n) this.seenT = curr.players.map(() => 0)
     for (let i = 0; i < n; i++) {
       const p = curr.players[i]
+      if (!p.alive || p.left) {
+        // 죽어 있는 동안은 '보였다' 는 기억을 지운다.
+        // 안 그러면 죽기 직전의 기억(0.22초)이 남아, **리스폰하는 순간 새 자리가 미니맵에 잠깐 드러난다.**
+        this.seenT[i] = 0
+        this.hidden[i] = true
+        continue
+      }
       const visible = p.team === me.team || canSee(this.map, viewers, p.x, p.y, radius * 32)
       // 경계에서 깜빡이지 않도록 잠깐 남긴다
       if (visible) this.seenT[i] = 0.22

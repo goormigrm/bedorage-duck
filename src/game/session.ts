@@ -233,9 +233,10 @@ export class Session {
       this.syncMute()
       return
     }
-    // 관전 중 좌우로 대상 바꾸기
-    if (this.spectate >= 0 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) {
-      const next = this.nextAlive(e.key === 'ArrowLeft' || e.key === 'a' ? this.spectate - 2 : this.spectate)
+    // 관전 중 대상 바꾸기 (A/D 와 좌우 화살표 둘 다)
+    const k = e.key.toLowerCase()
+    if (this.spectate >= 0 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || k === 'a' || k === 'd')) {
+      const next = this.nextAlive(e.key === 'ArrowLeft' || k === 'a' ? this.spectate - 2 : this.spectate)
       if (next >= 0) this.spectate = next
       e.preventDefault()
       return
@@ -539,7 +540,9 @@ export class Session {
         if (e.type === 'over') this.onOver()
         // 내가 죽으면 나를 죽인 사람을 본다 (자살·이탈이면 살아 있는 아무나)
         else if (e.type === 'death' && e.p === this.cfg.localPlayer) {
-          this.spectate = e.by !== e.p ? e.by : this.nextAlive(-1)
+          // 개인전이면 나를 죽인 사람, 팀전이면 아군만 (상대 시점은 적 위치를 그대로 알려 준다)
+          const teams = isTeamMatch(this.state)
+          this.spectate = !teams && e.by !== e.p ? e.by : this.nextAlive(-1)
         } else if (e.type === 'respawn' && e.p === this.cfg.localPlayer) {
           this.spectate = -1
         }
@@ -567,13 +570,25 @@ export class Session {
     const sub = this.cfg.chars.map((_, i) => this.subLabel(i))
     // 죽어서 기다리는 동안만 남의 시점. 살아 있으면 언제나 내 시점
     const me = this.state.players[lp]
+    // 팀전에서 상대는 못 본다. 보던 사람이 죽었으면 다음 아군으로 넘긴다
+    if (this.spectate >= 0) {
+      const t = this.state.players[this.spectate]
+      const teams = isTeamMatch(this.state)
+      const okTeam = !teams || t.team === this.state.players[lp].team
+      if (!t || !t.alive || t.left || !okTeam) this.spectate = this.nextAlive(this.spectate)
+    }
     const spec = !me.alive && !me.choosing && this.spectate >= 0 && this.state.players[this.spectate]?.alive ? this.spectate : -1
     if (spec < 0 && this.spectate >= 0 && me.alive) this.spectate = -1
     this.renderer.draw(this.prev, this.state, alpha, dt, {
       showHud: true,
       localPlayer: lp,
       viewer: spec >= 0 ? spec : undefined,
-      spectateLabel: spec >= 0 ? `${this.names[spec]} 시점 · ←/→ 로 바꾸기` : undefined,
+      spectateLabel:
+        spec >= 0
+          ? this.spectateCandidates() > 1
+            ? `${this.names[spec]} 시점 · ◀ A · D ▶ 로 바꾸기`
+            : `${this.names[spec]} 시점`
+          : undefined,
       cameraMode: 'follow',
       names: this.names,
       subLabels: sub,
@@ -702,15 +717,36 @@ export class Session {
     )
   }
 
-  /** 관전 대상 후보: 나를 뺀 살아 있는 사람 중 from 다음 사람 */
+  /**
+   * 관전 대상 후보: 나를 뺀 살아 있는 사람 중 from 다음 사람.
+   * **팀전에서는 아군만** 본다 — 상대 시점을 보면 적 위치가 그대로 드러나 팀전이 성립하지 않는다.
+   * 개인전은 누구든 볼 수 있다(어차피 곧 리스폰하고, 배우는 재미가 있다).
+   */
   private nextAlive(from: number): number {
     const n = this.state.players.length
+    const teams = isTeamMatch(this.state)
+    const myTeam = this.state.players[this.cfg.localPlayer].team
     for (let k = 1; k <= n; k++) {
       const i = (from + k + n) % n
       const p = this.state.players[i]
-      if (i !== this.cfg.localPlayer && p.alive && !p.left) return i
+      if (i === this.cfg.localPlayer || !p.alive || p.left) continue
+      if (teams && p.team !== myTeam) continue
+      return i
     }
     return -1
+  }
+
+  /** 지금 볼 수 있는 사람 수 (안내 문구에 "바꾸기" 를 넣을지 정한다) */
+  private spectateCandidates(): number {
+    const teams = isTeamMatch(this.state)
+    const myTeam = this.state.players[this.cfg.localPlayer].team
+    let c = 0
+    for (const p of this.state.players) {
+      if (p.id === this.cfg.localPlayer || !p.alive || p.left) continue
+      if (teams && p.team !== myTeam) continue
+      c++
+    }
+    return c
   }
 
   private onOver(): void {
