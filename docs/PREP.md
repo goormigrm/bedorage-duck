@@ -9,8 +9,8 @@
 - [x] **GitHub 저장소** `goormigrm/bedorage-duck` 생성 — 완료.
 - [x] **gh CLI 로그인** (`gh auth status` 에서 goormigrm 확인) — 완료. 커밋·푸시·Pages 설정에 사용.
 - [x] **GitHub Pages 활성화** — API 로 `build_type=workflow` 설정 완료. 확인: 저장소 Settings → Pages → Source 가 "GitHub Actions" 인지.
-- [ ] **첫 배포 확인** — Actions 탭의 `deploy` 워크플로가 초록색이면 https://goormigrm.github.io/bedorage-duck/ 접속. 실패하면 로그를 이 세션에 붙여넣기.
-- [ ] **두 번째 테스트 환경** — P2P 대전 검증용. 다음 중 하나:
+- [x] **첫 배포 확인** — 2026-09-03 성공 (Actions 초록, Pages 200). 이후 커밋마다 자동 배포.
+- [ ] **다른 네트워크 대전 검증** — 2026-09-04 기준 같은 PC 탭 3개로 3인 대전은 확인. 다른 네트워크의 PC 2~4대로 실제 대전은 아직. 다음 중 하나:
   - 다른 PC 또는 노트북 (같은 Wi-Fi 말고 **다른 네트워크**가 이상적)
   - 폰 핫스팟에 연결한 PC (NAT 통과 실패 케이스 재현)
   - 최소한: 같은 PC 에서 브라우저 두 개 (Chrome + Edge, 또는 시크릿 창). 같은 PC 면 항상 연결되므로 NAT 문제는 못 잡는다.
@@ -47,13 +47,23 @@
 | gh CLI | 2.97.0, goormigrm 로그인 ✅ |
 | 작업 폴더 | `C:\Users\tkdrm\OneDrive\Desktop\철FPS` — OneDrive 동기화 폴더. `.git` 충돌 방지를 위해 커밋 직후 푸시 습관 |
 
+## E-2. 노트북 (BOOK-K87ADP9N6K, 2026-09-04 설정 완료)
+
+| 항목 | 상태 |
+|---|---|
+| Node.js | v24.19.0 ✅ (winget, Claude 가 설치) |
+| npm | 11.17.0 ✅ — PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| git | 2.42.0 ✅ (저장소 로컬 작성자 설정 완료) |
+| gh CLI | 2.100.0 ✅ goormigrm 로그인 완료 |
+| 작업 폴더 | `C:\Users\tkdrm\OneDrive\바탕 화면\철FPS\bedorage-duck` (하위 폴더). 자세한 것은 `docs/노트북-설정.md` |
+
 ## F-1. 다른 PC(노트북)에서 작업할 때 준비할 것
 
-- [ ] Node.js 20 이상 설치 (https://nodejs.org, LTS 또는 24)
-- [ ] git 설치, `git config --global user.name` 은 굳이 안 해도 됨 (저장소 안에서 로컬 설정)
-- [ ] GitHub CLI 설치 후 `gh auth login` (푸시·배포 상태 확인용). 없으면 git push 시 브라우저 로그인 창으로도 가능
-- [ ] `git clone https://github.com/goormigrm/bedorage-duck.git` → `npm install` → `npm run dev` 로 로컬 실행 확인
-- [ ] Claude Code 설치·로그인. 프로젝트 폴더에서 열고 "HANDOVER.md 읽고 이어서 진행해줘"
+- [x] Node.js 20 이상 설치 — 노트북 완료 (24.19.0)
+- [x] git 설치, 저장소 로컬 작성자 설정 — 완료
+- [x] GitHub CLI 설치 후 `gh auth login` — 완료
+- [x] `git clone` → `npm install` → `npm run dev` 로 로컬 실행 확인 — 완료
+- [x] Claude Code 설치·로그인. 프로젝트 폴더에서 열고 "HANDOVER.md 읽고 이어서 진행해줘" — 완료
 - [ ] 두 PC 를 오갈 때 규칙: 시작은 `git pull`, 끝은 커밋·푸시. 메인 PC(OneDrive) 는 돌아온 뒤 `git pull` 먼저.
 
 ## F. 세션이 끊겼을 때 이어가는 법
