@@ -63,6 +63,12 @@ export interface Look {
   furColor?: number
   /** 가로 폭 배율 (기본 1). 낮을수록 마른 몸 */
   slim?: number
+  /**
+   * 키 배율 (기본 1). 달걀 몸통과 다리를 세로로만 늘린다.
+   * 실제 키 순서: 주우재 > 기열 > 침착 > 우원 > 매직 > (철면=승빠=주펄=옥냥) > 통닭 > (단군=풍월)
+   * 몸 크기(headScale·bodyScale)가 제각각이라, 결과 키가 이 순서가 되도록 값을 맞춰 두었다.
+   */
+  tall?: number
   headScale: number
   bodyScale: number
   extra: 'none' | 'cap' | 'headband' | 'mic'
@@ -103,7 +109,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xd6432b, hair: 'spiky', hairColor: 0x161413, sideColor: 0x9c9c9c, crown: 'star',
       glasses: 'none', beard: 'none', eyes: 'lidded', brows: 'arched', mouth: 'pout', earScale: 1.9,
       faceShape: 'jowl', nose: 'wide', lipColor: 0xb8342a,
-      shirt: 0x1e1e1e, headScale: 1.2, bodyScale: 1.35, extra: 'none',
+      shirt: 0x1e1e1e, headScale: 1.2, bodyScale: 1.35, tall: 0.84, extra: 'none',
     },
   },
   chim: {
@@ -116,7 +122,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       // 침착맨 유튜브 배너/아바타 캐릭터: 노란 얼굴, 자주색 야구모자 + 흰 챙 + "침착" 라벨, 굵은 눈썹, 콧수염 + 점박이 수염, 빨간 입술, 흰 티
       skin: 0xf2a41e, hair: 'short', hairColor: 0x161413, glasses: 'none', beard: 'mustache',
       eyes: 'sharp', brows: 'thick', mouth: 'thick', lipColor: 0xc0392b, shirt: 0xe9e9e2,
-      headScale: 1.0, bodyScale: 1.0, extra: 'cap', capBand: 0xf4f4f0, capText: '침착', earScale: 1.2,
+      headScale: 1.0, bodyScale: 1.0, tall: 1.18, extra: 'cap', capBand: 0xf4f4f0, capText: '침착', earScale: 1.2,
     },
   },
   dangun: {
@@ -128,7 +134,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     look: {
       skin: 0xf1c8a4, hair: 'bowl', hairColor: 0x161413, glasses: 'sunglasses', lensColor: 0x2d5bd6, beard: 'none',
       eyes: 'normal', brows: 'normal', mouth: 'sing', shirt: 0xf6f6f2, coat: 0x2f56b8, coatDots: 0xffffff, bowTie: 0xf6f6f2,
-      headScale: 1.0, bodyScale: 0.85, extra: 'mic',
+      headScale: 1.0, bodyScale: 0.85, tall: 0.99, extra: 'mic',
     },
   },
   magic: {
@@ -142,7 +148,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       // 남색 V넥 스크럽(안에 검은 티) + 노란 명찰. 둥글고 넉넉한 얼굴
       skin: 0xf1caa6, hair: 'fringe', hairColor: 0x161413, glasses: 'rect', beard: 'stubble',
       eyes: 'happy', brows: 'normal', mouth: 'grin', shirt: 0x2b3c86, neck: 'v', undershirt: 0x1c1c1c, badge: 0xf2d16b,
-      headScale: 1.45, bodyScale: 1.3, extra: 'none', earScale: 1.1,
+      headScale: 1.45, bodyScale: 1.3, tall: 0.81, extra: 'none', earScale: 1.1,
     },
   },
   jupeol: {
@@ -154,7 +160,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     look: {
       skin: 0xf0c49c, hair: 'none', hairColor: 0x2a2320, glasses: 'none', beard: 'goatee',
       eyes: 'squint', brows: 'normal', mouth: 'thick', shirt: 0x243a5e,
-      headScale: 1.05, bodyScale: 1.1, extra: 'none',
+      headScale: 1.05, bodyScale: 1.1, tall: 0.97, extra: 'none',
     },
   },
   // ---- 2차 멤버 (참고 사진 반영, 2026-09-04) ----
@@ -169,7 +175,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf9dfc9, hair: 'fringe', hairColor: 0x120f0e, glasses: 'none', beard: 'none',
       eyes: 'calm', brows: 'normal', mouth: 'smile',
       shirt: 0xf4f4f0, coat: 0x1b2438, tie: 0x2f4a7d,
-      pants: 0x1b2438, headScale: 0.95, bodyScale: 0.95, slim: 0.9, extra: 'none',
+      pants: 0x1b2438, headScale: 0.95, bodyScale: 0.95, slim: 0.9, tall: 1.18, extra: 'none',
     },
   },
   giyeol: {
@@ -183,7 +189,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf6cfae, hair: 'short', hairColor: 0x4a3524, glasses: 'none', beard: 'none',
       eyes: 'happy', brows: 'thick', mouth: 'shout',
       shirt: 0xf4f4f0, coat: 0x17171a, tie: 0xd42b2b,
-      pants: 0x17171a, headScale: 1.05, bodyScale: 1.05, extra: 'none',
+      pants: 0x17171a, headScale: 1.05, bodyScale: 1.05, tall: 1.17, extra: 'none',
     },
   },
   pungwol: {
@@ -197,7 +203,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf6d6ba, hair: 'bowl', hairColor: 0xe6c568, glasses: 'none', beard: 'none',
       eyes: 'squint', brows: 'normal', mouth: 'smile',
       shirt: 0x8fb4d9, hood: 0x7fa4c9,
-      pants: 0x3b4a63, headScale: 1.15, bodyScale: 1.1, extra: 'none',
+      pants: 0x3b4a63, headScale: 1.15, bodyScale: 1.1, tall: 0.84, extra: 'none',
     },
   },
   oknyang: {
@@ -211,7 +217,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf5854a, animal: 'cat', furColor: 0xdd6428, hair: 'none', hairColor: 0xdd6428,
       glasses: 'none', beard: 'none', eyes: 'happy', brows: 'none', mouth: 'grin',
       shirt: 0xf0a83c, hood: 0xe09526,
-      pants: 0xc07a1e, headScale: 1.12, bodyScale: 1.0, earScale: 1, extra: 'none',
+      pants: 0xc07a1e, headScale: 1.12, bodyScale: 1.0, tall: 0.98, earScale: 1, extra: 'none',
     },
   },
   tongdak: {
@@ -225,7 +231,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf9e2ce, hair: 'bob', hairColor: 0x14100e, glasses: 'none', beard: 'none',
       eyes: 'happy', brows: 'normal', mouth: 'smile',
       shirt: 0xd83c4a, stripe: 0x8fc7e8,
-      pants: 0x22242c, headScale: 1.0, bodyScale: 1.0, extra: 'none',
+      pants: 0x22242c, headScale: 1.0, bodyScale: 1.0, tall: 0.98, extra: 'none',
     },
   },
   juwoojae: {
@@ -239,7 +245,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf7dcc4, hair: 'fringe', hairColor: 0x14100e, glasses: 'none', beard: 'none',
       eyes: 'sharp', brows: 'normal', mouth: 'flat',
       shirt: 0xefe7d6, coat: 0x1c1c1f,
-      pants: 0x27354f, headScale: 0.9, bodyScale: 0.8, slim: 0.68, extra: 'none',
+      pants: 0x27354f, headScale: 0.9, bodyScale: 0.8, slim: 0.72, tall: 1.48, extra: 'none',
     },
   },
   seungwoo: {
@@ -253,7 +259,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       skin: 0xf2cdae, hair: 'buzz', hairColor: 0x171412, glasses: 'none', beard: 'stubble',
       eyes: 'calm', brows: 'normal', mouth: 'flat',
       shirt: 0x1a1a1c, apron: 0x2f5c99,
-      pants: 0x2a2a30, headScale: 1.05, bodyScale: 1.12,
+      pants: 0x2a2a30, headScale: 1.05, bodyScale: 1.12, tall: 0.96,
       extra: 'cap', capBand: 0x16161a, capPin: 0xd63a3a,
     },
   },

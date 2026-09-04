@@ -113,6 +113,9 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
   }
 
   const R = eggRadius(L)
+  // 가로(마름)·세로(키) 배율. 몸통 그룹에 걸어 두면 구르기 회전에도 같이 따라 돈다
+  const wide = L.slim ?? 1
+  const tall = L.tall ?? 1
   const centerY = LEG_H + R * EGG_Y
 
   // ---- 다리 (작은 캡슐) + 신발 ----
@@ -177,7 +180,8 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
   gun.group.position.set(0.02, -0.02, armLen * 0.55)
   arms.add(gun.group)
 
-  const height = LEG_H + R * EGG_Y * 2 + R * 0.35
+  body.scale.set(wide, tall, wide)
+  const height = (LEG_H + R * EGG_Y * 2 + R * 0.35) * tall
   const rig: CharacterRig = {
     root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, centerY, flashMats,
     setFlash(k: number) {
@@ -273,6 +277,14 @@ function buildHair(
     }
     case 'buzz': {
       head.add(eggCap(R, 1.02, Math.PI * 0.3, hairM))
+      break
+    }
+    case 'bob': {
+      // 단발(통닭덕): 정수리 캡 + 볼 옆·뒤로 턱까지 내려오는 커튼 + 일자 앞머리.
+      // 얼굴은 +Z 쪽(phi = pi/2)이라 커튼은 그 앞을 비워 둔다.
+      head.add(eggCap(R, 1.05, Math.PI * 0.32, hairM))
+      head.add(eggCap(R, 1.05, Math.PI * 0.64, hairM, Math.PI * 0.82, Math.PI * 1.36))
+      head.add(eggCap(R, 1.058, Math.PI * 0.36, hairM, Math.PI * 0.27, Math.PI * 0.46))
       break
     }
     case 'none':

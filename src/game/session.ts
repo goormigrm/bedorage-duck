@@ -18,6 +18,7 @@ import { worldDirToScreen } from '../render3d/camera'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
+import { saveRecord } from './records'
 import { TouchControls, enterLandscape, isTouchDevice } from './touch'
 import { Ticker } from './ticker'
 
@@ -462,6 +463,24 @@ export class Session {
     const iWon = this.state.players[lp].team === w
     const title = iWon ? '승리!' : '패배'
     const teams = isTeamMatch(this.state)
+    // 결정적 시뮬이라 방에 있던 모두가 똑같은 내용을 각자 브라우저에 남긴다 (서버·DB 없음)
+    saveRecord({
+      at: Date.now(),
+      mode: this.cfg.mode,
+      teams,
+      map: this.cfg.mapId ?? DEFAULT_MAP,
+      target: this.cfg.targetKills,
+      winner: w,
+      me: lp,
+      players: this.state.players.map((p, i) => ({
+        nick: this.names[i],
+        char: p.char,
+        kills: p.kills,
+        deaths: p.deaths,
+        team: p.team,
+        left: p.left,
+      })),
+    })
     const desc = teams
       ? `${TEAM_NAMES[w] ?? '?'} 승리 · ` + this.state.players.map((p, i) => `${this.names[i]} ${p.kills}`).join(' · ')
       : this.state.players.length === 2

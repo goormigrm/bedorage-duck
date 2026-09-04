@@ -141,6 +141,45 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .pill { font: 700 10px "IBM Plex Mono", monospace; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--ink-3); margin-right: 4px; background: var(--panel-3); }
 .pill.ok { color: #7ee787; border-color: #2ea04355; background: #2ea04322; }
 
+/* ---- 최근 전적 (브라우저에만 남는 기록) ---- */
+.section-t .lnk { margin-left: auto; }
+.lnk {
+  background: none; border: 0; color: var(--ink-3); font: 600 11.5px "IBM Plex Sans KR", sans-serif;
+  cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.lnk:hover { color: var(--duck); background: #ffd84a12; }
+.recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.rec {
+  position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel) 60%);
+  border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px 8px; overflow: hidden;
+}
+.rec::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ink-3); }
+.rec.win::before { background: var(--ok); }
+.rec.lose::before { background: var(--risk); }
+.rec .rh { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.rec .rh b { font: 800 12.5px "IBM Plex Sans KR", sans-serif; }
+.rec.win .rh b { color: #7ee787; }
+.rec.lose .rh b { color: #ff8b82; }
+.rec .rh span { color: var(--ink-3); font-size: 11.5px; }
+.rec .rh time { margin-left: auto; color: var(--ink-3); font: 500 11px "IBM Plex Mono", monospace; }
+.rec .rw { color: var(--gold); font-size: 12px; margin: 4px 0 6px; }
+.rec ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.rec li { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; padding: 3px 6px; border-radius: 6px; background: #0d111755; }
+.rec li.me { background: #ffd84a14; box-shadow: 0 0 0 1px #ffd84a33 inset; }
+.rec li b { font-weight: 700; }
+.rec li small { color: var(--ink-3); font-size: 11px; }
+.rec li span { margin-left: auto; font: 600 12px "IBM Plex Mono", monospace; color: var(--ink-2); white-space: nowrap; }
+.rec li em { font-style: normal; font-size: 10px; color: var(--ink-3); margin-left: 1px; }
+.rec .tm { font-style: normal; font: 700 9.5px "IBM Plex Mono", monospace; border-radius: 4px; padding: 1px 4px; }
+.rec .tm.t0 { color: var(--team-a); background: #5aa9ff1f; }
+.rec .tm.t1 { color: var(--team-b); background: #ff6a5a1f; }
+.rec li small.out { color: var(--risk); border: 1px solid #f8514933; border-radius: 4px; padding: 0 4px; }
+.recbox {
+  width: 100%; box-sizing: border-box; margin-top: 8px; resize: vertical;
+  background: var(--bg); color: var(--ink-2); border: 1px solid var(--line); border-radius: 8px;
+  font: 500 11.5px/1.5 "IBM Plex Mono", monospace; padding: 8px;
+}
+
 /* ---- 대기실 (방 화면) ---- */
 .status {
   position: relative; overflow: hidden; background: linear-gradient(180deg, #131922, #0d1117 46%); border: 1px solid #2c3644; border-radius: 16px; padding: 20px 22px; margin-top: 18px; display: none;

@@ -421,7 +421,10 @@ export class Renderer3D {
     this.drawPings()
     this.drawNameTags(curr, pos, opts)
     this.hud.drawVignette()
-    if (this.scoped && opts.cursor) this.drawScope(opts.cursor)
+    if (this.scoped && opts.cursor) {
+      const me = pos[opts.localPlayer]
+      this.drawScope(opts.cursor, this.worldToScreen(me.x, 0.6, me.z))
+    }
     this.hud.drawMain(curr, opts)
     if (opts.showHud) this.drawMinimap(curr, opts)
   }
@@ -470,23 +473,33 @@ export class Renderer3D {
   }
 
   /** 저격 조준경: 커서 둘레만 남기고 어둡게 + 십자선 */
-  private drawScope(cur: { x: number; y: number }): void {
+  private drawScope(cur: { x: number; y: number }, self: { x: number; y: number }): void {
     const ctx = this.hud.ctx
     const r = 210
+    // 내 주변에도 구멍을 낸다 — 조준경을 켠 채로도 붙는 적을 볼 수 있게
+    const rs = 132
+    const DARK = 'rgba(4,6,4,0.85)'
     ctx.save()
     ctx.beginPath()
     ctx.rect(0, 0, VIEW_W, VIEW_H)
     ctx.arc(cur.x, cur.y, r, 0, Math.PI * 2, true)
-    ctx.fillStyle = 'rgba(4,6,4,0.93)'
+    ctx.moveTo(self.x + rs, self.y)
+    ctx.arc(self.x, self.y, rs, 0, Math.PI * 2, true)
+    ctx.fillStyle = DARK
     ctx.fill('evenodd')
     ctx.restore()
-    const g = ctx.createRadialGradient(cur.x, cur.y, r * 0.55, cur.x, cur.y, r)
-    g.addColorStop(0, 'rgba(0,0,0,0)')
-    g.addColorStop(1, 'rgba(4,6,4,0.85)')
-    ctx.fillStyle = g
-    ctx.beginPath()
-    ctx.arc(cur.x, cur.y, r, 0, Math.PI * 2)
-    ctx.fill()
+    for (const [cx, cy, rad, inner] of [
+      [cur.x, cur.y, r, 0.6],
+      [self.x, self.y, rs, 0.45],
+    ] as const) {
+      const g = ctx.createRadialGradient(cx, cy, rad * inner, cx, cy, rad)
+      g.addColorStop(0, 'rgba(0,0,0,0)')
+      g.addColorStop(1, DARK)
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.arc(cx, cy, rad, 0, Math.PI * 2)
+      ctx.fill()
+    }
     ctx.strokeStyle = 'rgba(20,24,18,0.95)'
     ctx.lineWidth = 6
     ctx.beginPath()
@@ -900,11 +913,12 @@ export class Renderer3D {
       tz = pos[lp].z
       if (me.alive && me.ads) {
         const r = angleToRad(me.aim)
-        const reach = this.scoped ? 8 : 3
+        // 조준경은 앞을 더 보여 주되, 너무 멀리 밀면 조준선이 화면에서 빨리 움직여 맞히기 어렵다
+        const reach = this.scoped ? 5 : 3
         tx += Math.cos(r) * reach
         tz += Math.sin(r) * reach
       }
-      dist = FOLLOW_DIST * (this.scoped ? 1.75 : 1)
+      dist = FOLLOW_DIST * (this.scoped ? 1.45 : 1)
     }
     // 맵 밖이 덜 보이도록 클램프 (요 45° 라 두 축 같은 여유)
     const margin = dist * 0.3
@@ -915,7 +929,8 @@ export class Renderer3D {
       this.camDist = dist
       this.camInit = true
     } else {
-      const s = 1 - Math.pow(0.002, dt)
+      // 조준경일 때는 더 천천히 따라가서 손떨림이 화면을 흔들지 않게 한다
+      const s = 1 - Math.pow(this.scoped ? 0.06 : 0.002, dt)
       this.camTarget.x += (tx - this.camTarget.x) * s
       this.camTarget.z += (tz - this.camTarget.z) * s
       this.camDist += (dist - this.camDist) * s * 0.7

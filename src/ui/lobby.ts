@@ -15,6 +15,7 @@ import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
 import { TEAM_NAMES } from '../render/hud'
 import { SessionConfig } from '../game/session'
+import { MatchRecord, clearRecords, formatRecord, loadRecords, ranked, recordDate, winnerLabel } from '../game/records'
 
 export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
@@ -24,6 +25,11 @@ export interface LobbyHandlers {
 const KILL_OPTIONS = Array.from({ length: 10 }, (_, i) => (i + 1) * 5)
 /** 로비 미리보기용 고정 시드 (실제 판은 매번 다른 시드로 생성된다) */
 const PREVIEW_SEED = 20260904
+
+/** 닉네임 등 사용자 입력을 HTML 에 넣기 전에 */
+function esc(t: string): string {
+  return t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] ?? ch)
+}
 
 export class Lobby {
   private char: CharacterId = 'cheolmyeon'
@@ -138,6 +144,9 @@ export class Lobby {
           </div>
         </div>
 
+        <div class="section-t" id="rec-t" hidden>최근 전적 <small>이 브라우저에만 남습니다 · 서버에 올라가지 않습니다</small><button class="lnk" id="rec-clear">전체 지우기</button></div>
+        <div class="recs" id="recs" hidden></div>
+
         <div class="status" id="status"></div>
 
         <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
@@ -210,10 +219,98 @@ export class Lobby {
     ;(h.querySelector('#join-code') as HTMLInputElement).addEventListener('keydown', (e) => {
       if (e.key === 'Enter') (h.querySelector('#btn-join') as HTMLButtonElement).click()
     })
+    ;(h.querySelector('#rec-clear') as HTMLButtonElement).onclick = () => {
+      clearRecords()
+      this.renderRecords()
+    }
+    this.renderRecords()
     requestAnimationFrame(() => this.drawPreview())
   }
 
-  /** 맵 미리보기 (실제 판은 다른 시드로 생성되므로 '대략적인 구성') */
+  /**
+   * 최근 전적. 서버도 DB도 없이, 끝난 판의 결과를 각자 브라우저에 적어 둔 것을 읽어 온다.
+   * 같은 방에 있던 사람들은 (결정적 시뮬이라) 완전히 같은 내용을 갖고 있다.
+   */
+  private renderRecords(): void {
+    const wrap = this.host.querySelector('#recs') as HTMLElement | null
+    const title = this.host.querySelector('#rec-t') as HTMLElement | null
+    if (!wrap || !title) return
+    const list = loadRecords().slice(0, 8)
+    title.hidden = list.length === 0
+    wrap.hidden = list.length === 0
+    if (list.length === 0) return
+    wrap.innerHTML = list
+      .map((r, idx) => {
+        const won = r.teams ? r.players[r.me]?.team === r.winner : r.me === r.winner
+        const rows = ranked(r)
+          .map((p) => {
+            const me = p === r.players[r.me] ? ' me' : ''
+            const team = r.teams ? `<i class="tm t${p.team}">${TEAM_NAMES[p.team] ?? ''}</i>` : ''
+            const name = CHARACTERS[p.char]?.name ?? ''
+            const out = p.left ? '<small class="out">나감</small>' : ''
+            return `<li class="${me.trim()}">${team}<b>${esc(p.nick)}</b><small>${name}</small>${out}<span>${p.kills}<em>킬</em> ${p.deaths}<em>데스</em></span></li>`
+          })
+          .join('')
+        return `<div class="rec ${won ? 'win' : 'lose'}">
+          <div class="rh">
+            <b>${won ? '승리' : '패배'}</b>
+            <span>${r.mode === 'solo' ? '혼자 하기' : '방 대전'} · ${r.teams ? '2v2' : '개인전'} · ${MAPS[r.map]?.name ?? r.map} · 목표 ${r.target}킬</span>
+            <time>${recordDate(r.at)}</time>
+            <button class="lnk" data-copy="${idx}">복사</button>
+          </div>
+          <div class="rw">${winnerLabel(r)}</div>
+          <ul>${rows}</ul>
+        </div>`
+      })
+      .join('')
+    for (const btn of Array.from(wrap.querySelectorAll<HTMLButtonElement>('button[data-copy]'))) {
+      btn.onclick = () => this.copyRecord(list[Number(btn.dataset.copy)], btn)
+    }
+  }
+
+  private copyRecord(r: MatchRecord, btn: HTMLButtonElement): void {
+    const text = formatRecord(r)
+    const done = () => {
+      btn.textContent = '복사됨'
+      setTimeout(() => (btn.textContent = '복사'), 1400)
+    }
+    // 창이 뒤에 있거나 권한이 없으면 clipboard API 가 거절한다 → 옛 방식, 그것도 막히면 직접 고르게
+    const manual = () => {
+      const card = btn.closest('.rec')
+      if (!card) return
+      card.querySelector('textarea')?.remove()
+      const ta = document.createElement('textarea')
+      ta.className = 'recbox'
+      ta.readOnly = true
+      ta.rows = 7
+      ta.value = text
+      card.appendChild(ta)
+      ta.focus()
+      ta.select()
+      btn.textContent = 'Ctrl+C'
+    }
+    const legacy = () => {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0'
+      document.body.appendChild(ta)
+      ta.select()
+      let ok = false
+      try {
+        ok = document.execCommand('copy')
+      } catch {
+        ok = false
+      }
+      ta.remove()
+      if (ok) done()
+      else manual()
+    }
+    const p = navigator.clipboard?.writeText(text)
+    if (p) p.then(done, legacy)
+    else legacy()
+  }
+
   private drawPreview(): void {
     const cv = this.host.querySelector('#map-preview') as HTMLCanvasElement | null
     if (!cv) return
@@ -614,7 +711,6 @@ export class Lobby {
       const who = (i === 0 ? '호스트' : `${i + 1}`) + (mine ? ' · 나' : '')
       const badge = teams ? `<span class="team ${m.team === 0 ? 'team-a' : 'team-b'}">${TEAM_NAMES[m.team]}</span>` : ''
       const nick = (m.name ?? '').trim()
-      const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] ?? ch)
       slots.push(`<div class="slot ${m.ready ? 'ready' : ''} ${mine ? 'mine' : ''}">
         <div class="who">${who}${badge}</div>
         <div class="cname">${nick ? esc(nick) : c ? c.name : m.char}</div>
