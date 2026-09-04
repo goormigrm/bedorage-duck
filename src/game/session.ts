@@ -14,6 +14,7 @@ import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
 import { TEAM_NAMES, VIEW_H, VIEW_W } from '../render/hud'
 import { Renderer3D } from '../render3d/renderer3d'
+import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
 import { Ticker } from './ticker'
 
@@ -48,6 +49,7 @@ export class Session {
   private prev: GameState
   private renderer: Renderer3D
   private input = new LocalInput()
+  private sfx = new Sfx()
   private bots: BotMemory[] = []
   private lockstep: Lockstep | null = null
   private peerIndex = new Map<string, number>()
@@ -66,6 +68,7 @@ export class Session {
   private hashes = new Map<number, number>()
   private names: string[]
   private pickerOpen = false
+  private syncMute: () => void = () => {}
   private ticker: Ticker
   private lastTick = performance.now()
 
@@ -82,8 +85,8 @@ export class Session {
       <div class="game-root">
         <div class="game-stage" id="stage">
           <div class="game-ui">
-            <div class="top-right"><button class="btn secondary" id="btn-lobby">로비로</button></div>
-            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·직후 3초) · <b>Esc</b> 메뉴</div>
+            <div class="top-right"><button class="btn secondary" id="btn-mute">소리</button><button class="btn secondary" id="btn-lobby">로비로</button></div>
+            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·직후 3초) · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
         </div>
@@ -97,6 +100,15 @@ export class Session {
     this.stage.appendChild(ui)
     this.input.attach(this.stage)
     ;(host.querySelector('#btn-lobby') as HTMLButtonElement).onclick = () => this.exit()
+    const muteBtn = host.querySelector('#btn-mute') as HTMLButtonElement
+    const syncMute = () => (muteBtn.textContent = this.sfx.muted ? '소리 꺼짐' : '소리 켜짐')
+    muteBtn.onclick = () => {
+      this.sfx.toggle()
+      syncMute()
+    }
+    syncMute()
+    this.syncMute = syncMute
+    this.sfx.startBgm()
 
     this.names = displayNames(cfg.chars)
 
@@ -138,6 +150,11 @@ export class Session {
   }
 
   private onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'n' || e.key === 'N') {
+      this.sfx.toggle()
+      this.syncMute()
+      return
+    }
     if (e.key === 'Escape') {
       if (this.state.phase === 'over') return
       if (this.pickerOpen) {
@@ -347,6 +364,7 @@ export class Session {
       this.applyDrops()
       for (const e of this.state.events) if (e.type === 'swap') this.names = displayNames(this.state.players.map((p) => p.char))
       this.renderer.onEvents(this.state.events, this.state, lp, this.names)
+      this.sfx.onEvents(this.state.events, this.state, lp)
       if (this.lockstep && this.state.tick % 60 === 0) {
         const h = hashState(this.state)
         this.hashes.set(this.state.tick, h)
@@ -445,6 +463,7 @@ export class Session {
     cancelAnimationFrame(this.raf)
     this.ticker.stop()
     this.input.dispose()
+    this.sfx.dispose()
     window.removeEventListener('keydown', this.onKey)
     window.removeEventListener('resize', this.fit)
     this.renderer.dispose()

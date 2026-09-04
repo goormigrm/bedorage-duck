@@ -14,6 +14,7 @@ import { WEAPONS } from './core/weapons'
 import { VIEW_H, VIEW_W, roundRect } from './render/hud'
 import { buildCharacter } from './render3d/character3d'
 import { Renderer3D } from './render3d/renderer3d'
+import { Sfx } from './audio/sfx'
 
 const stage = document.getElementById('stage') as HTMLDivElement
 const hint = document.getElementById('hint') as HTMLDivElement
@@ -25,6 +26,8 @@ const scaleParam = Number(q.get('scale') ?? 0)
 const mapScale: MapScale = isMapScale(scaleParam) ? scaleParam : scaleForPlayers(playerCount)
 let map = buildMap(mapId, mapScale)
 let renderer = new Renderer3D(stage, map)
+const sfx = new Sfx()
+sfx.startBgm()
 
 const teamMode = q.has('teams') && playerCount === 4
 let diffs: Difficulty[] = ['hard', 'normal', 'normal', 'hard']
@@ -141,6 +144,7 @@ function frame(now: number): void {
       match.prev = snapshot(match.state)
       step(match.state, map, botInputs(match))
       renderer.onEvents(match.state.events, match.state, -1, match.names)
+      sfx.onEvents(match.state.events, match.state, -1)
       for (const e of match.state.events) {
         if (e.type === 'death') slowmoLeft = 0.9
         if (e.type === 'over') restartAt = titleT + 6
@@ -301,6 +305,9 @@ window.addEventListener('keydown', (e) => {
       break
     case 'p':
       paused = !paused
+      break
+    case 'n':
+      sfx.toggle()
       break
     case 'r':
       titleT = 100
