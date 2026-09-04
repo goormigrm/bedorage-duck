@@ -252,7 +252,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'seungwoo', name: '승빠덕', basedOn: '승우아빠', tagline: '검은 모자에 파란 앞치마. 후라이팬으로 총알을 막고 후려친다.',
     prominence: 12,
     maxHp: 260, speed: 3.7, weapon: 'pan', dashCooldown: 34,
-    passiveName: '방패', passiveDesc: '앞에서 오는 총알을 기력으로 막는다(피해 1당 기력 0.55). 기력 회복 1.8배, 짧은 쿨다운으로 굴러서 붙는다.',
+    passiveName: '방패', passiveDesc: '앞에서 오는 총알을 절반 확률로 막는다(피해 1당 기력 0.55). 기력 회복 1.8배, 짧은 쿨다운으로 굴러서 붙는다.',
     bodyColor: 0x5aa9ff, accentColor: 0x16161a,
     look: {
       // 사진: 검은 볼캡(작은 빨간 핀), 검은 티, 파란 앞치마, 짧은 머리, 옅은 수염

@@ -11,7 +11,7 @@ import { radToAngle } from '../src/core/fixedmath'
 import { BTN_ADS, BTN_FIRE, Input } from '../src/core/input'
 import { TILE_FLOOR, buildMap } from '../src/core/map'
 import { createState, step } from '../src/core/sim'
-import { BLOCK_COST, BLOCK_LOCK_TICKS, COUNTDOWN_TICKS, STAMINA_MAX, STAMINA_REGEN } from '../src/core/state'
+import { BLOCK_CHANCE, BLOCK_COST, BLOCK_LOCK_TICKS, COUNTDOWN_TICKS, STAMINA_MAX, STAMINA_REGEN } from '../src/core/state'
 
 const IDLE: Input = { mx: 0, my: 0, aim: 0, buttons: 0, char: 0 }
 
@@ -73,8 +73,38 @@ describe('후라이팬 방어', () => {
     const s = scene(300)
     const hp0 = s.pan.hp
     fireAt(s, 600) // 10초
-    expect(s.pan.stamina).toBeLessThan(1)
+    // 절반만 막으므로 기력이 바닥나기 전에 체력이 먼저 깎여 죽는다
     expect(s.pan.hp).toBeLessThan(hp0)
+    expect(s.pan.alive).toBe(false)
+  })
+
+  it('앞에서 온 탄도 절반쯤만 막는다 (BLOCK_CHANCE)', () => {
+    // 기력을 계속 채워 "막을 수 있는데도 안 막히는" 비율만 본다
+    let hits = 0
+    let blocks = 0
+    for (let seed = 1; seed <= 6; seed++) {
+      const s = scene(300)
+      s.state.rng.s = seed >>> 0
+      for (let i = 0; i < 300; i++) {
+        s.pan.stamina = STAMINA_MAX // 기력 고갈 요인 제거
+        const inputs: Input[] = [
+          { ...IDLE, aim: s.aimAtGun },
+          { mx: 0, my: 0, aim: s.aimAtPan, buttons: BTN_FIRE | BTN_ADS, char: 0 },
+        ]
+        step(s.state, s.map, inputs)
+        for (const e of s.state.events) {
+          if (e.type === 'hit' && e.p === 0) hits++
+          if (e.type === 'block' && e.p === 0) blocks++
+        }
+        if (!s.pan.alive) break
+      }
+    }
+    // 완전히 막힌 탄은 피해가 0 이라 hit 이벤트가 없다 → 총 명중 = 막은 것 + 아픈 것
+    const total = hits + blocks
+    expect(total).toBeGreaterThan(60)
+    const ratio = blocks / total
+    expect(ratio).toBeGreaterThan(0.35)
+    expect(ratio).toBeLessThan(0.65)
   })
 
   it('막기는 기력을 쓰므로 무한하지 않다 — 기력이 0 이면 그대로 맞는다', () => {
@@ -104,6 +134,8 @@ describe('후라이팬 방어', () => {
   it('상수가 뒤집히지 않았는지 — 잠금이 실제로 걸리고 막을 수 있는 양에 한계가 있다', () => {
     expect(BLOCK_LOCK_TICKS).toBeGreaterThan(0)
     expect(BLOCK_COST).toBeGreaterThan(0)
+    expect(BLOCK_CHANCE).toBeGreaterThan(0)
+    expect(BLOCK_CHANCE).toBeLessThanOrEqual(1)
     // 기력 한 통으로 막을 수 있는 몸통 피해량 (너무 크면 다시 무적이 된다)
     expect(STAMINA_MAX / BLOCK_COST).toBeLessThan(200)
   })

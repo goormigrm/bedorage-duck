@@ -3,8 +3,9 @@ import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
 import { GameMap, SANDBAG_HP, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
 import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
-import { makeRng, randInt } from './rng'
+import { makeRng, rand, randInt } from './rng'
 import {
+  BLOCK_CHANCE,
   BLOCK_COST,
   BLOCK_LOCK_TICKS,
   Bullet,
@@ -479,9 +480,11 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   // 근접 무기(후라이팬)를 든 사람은 앞에서 오는 탄을 기력으로 막는다.
   // 기력 한 통(=피해 181)까지만 막을 수 있고, **막는 동안에는 기력이 차지 않는다**.
   // 예전에는 맞으면서도 기력이 차서, 서서 막기만 해도 총알을 무한히 튕겨 냈다.
+  // 그래도 정면 대치에서 너무 세서, 앞에서 온 탄이라도 **BLOCK_CHANCE(50%) 확률로만** 막는다.
+  // 추첨은 sim 의 rng 라 양쪽 브라우저에서 같은 결과가 난다.
   if (WEAPONS[victim.weapon].melee && victim.stamina > 0) {
     const from = atan2A(b.oy - victim.y, b.ox - victim.x)
-    if (Math.abs(angleDiff(from, victim.aim)) < 213) {
+    if (Math.abs(angleDiff(from, victim.aim)) < 213 && rand(state.rng) < BLOCK_CHANCE) {
       const absorbed = Math.min(dmg, Math.floor(victim.stamina / BLOCK_COST))
       victim.stamina = Math.max(0, victim.stamina - absorbed * BLOCK_COST)
       dmg -= absorbed

@@ -19,6 +19,8 @@ export const DASH_COST = 34
 export const BLOCK_COST = 0.55
 /** 막은 뒤 기력이 다시 차기까지 (계속 맞으면 방어가 뚫리도록) */
 export const BLOCK_LOCK_TICKS = 30
+/** 앞에서 오는 탄을 후라이팬으로 막을 확률. 나머지는 그대로 맞는다 (2026-09-06: 승빠덕이 여전히 너무 세서 50%) */
+export const BLOCK_CHANCE = 0.5
 /** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
 export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
