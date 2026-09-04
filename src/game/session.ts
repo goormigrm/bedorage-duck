@@ -1,11 +1,12 @@
 // 게임 세션: 혼자 하기(봇) 와 대전(락스텝) 을 같은 루프로 돌린다. 렌더는 Three.js. 인원 2~4명.
+// 대전: 플레이어 0 = 호스트. 호스트가 해시 비교·리싱크·이탈자 드롭 틱을 정한다.
 
 import { BotMemory, Difficulty, DIFFICULTY_LABEL, botInput, makeBot } from '../core/bot'
 import { CHARACTERS, CharacterId, displayNames } from '../core/characters'
 import { Input } from '../core/input'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId } from '../core/maps'
-import { createState, hashState, snapshot, step } from '../core/sim'
+import { createState, dropPlayer, hashState, snapshot, step } from '../core/sim'
 import { GameState, TICK_MS, isTeamMatch } from '../core/state'
 import { Lockstep } from '../net/lockstep'
 import { CtlMessage, RoomLink } from '../net/room'
@@ -27,7 +28,14 @@ export interface SessionConfig {
   difficulty?: Difficulty
   link?: RoomLink
   delay?: number
+  /** 대전: 플레이어 인덱스 순 피어 id (내 것 포함) */
+  peerIds?: string[]
   onExit: () => void
+}
+
+interface PendingDrop {
+  p: number
+  tick: number
 }
 
 export class Session {
@@ -38,6 +46,9 @@ export class Session {
   private input = new LocalInput()
   private bots: BotMemory[] = []
   private lockstep: Lockstep | null = null
+  private peerIndex = new Map<string, number>()
+  private pendingDrops: PendingDrop[] = []
+  private dropped = new Set<number>()
   private acc = 0
   private last = performance.now()
   private raf = 0
@@ -85,13 +96,11 @@ export class Session {
     this.names = displayNames(cfg.chars)
 
     if (cfg.mode === 'p2p' && cfg.link) {
-      this.lockstep = new Lockstep(cfg.link, cfg.delay ?? 3)
-      cfg.link.onCtl((m) => this.onCtl(m))
-      cfg.link.onPeerLeave(() => {
-        if (this.disposed) return
-        this.showOverlay('상대가 나갔습니다', '연결이 끊겼습니다.', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
-        this.paused = true
-      })
+      const ids = cfg.peerIds ?? []
+      ids.forEach((id, i) => this.peerIndex.set(id, i))
+      this.lockstep = this.newLockstep()
+      cfg.link.onCtl((m, from) => this.onCtl(m, from))
+      cfg.link.onPeerLeave((id) => this.onPeerGone(id))
     }
 
     window.addEventListener('keydown', this.onKey)
@@ -103,8 +112,18 @@ export class Session {
     ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase, state: () => this.state }
   }
 
+  private newLockstep(): Lockstep {
+    const ls = new Lockstep(this.cfg.link!, this.cfg.delay ?? 3, this.cfg.localPlayer, this.peerIndex, this.cfg.chars.length)
+    for (const d of this.dropped) ls.drop(d)
+    return ls
+  }
+
   private makeBots(seed: number): void {
     this.bots = this.cfg.chars.map((_, i) => makeBot((seed ^ 0x9e37) + i * 7919))
+  }
+
+  private get isHost(): boolean {
+    return this.cfg.mode === 'p2p' && this.cfg.link?.role === 'host'
   }
 
   private fit = (): void => {
@@ -154,38 +173,83 @@ export class Session {
     if (this.cfg.mode === 'solo' && this.state.phase !== 'over') this.paused = false
   }
 
-  private onCtl(m: CtlMessage): void {
+  // ---------- 대전: 피어 ----------
+
+  /** 피어가 나갔다 (연결 끊김 또는 leave 메시지) */
+  private onPeerGone(id: string): void {
+    if (this.disposed) return
+    const idx = this.peerIndex.get(id)
+    if (idx === undefined || this.dropped.has(idx)) return
+    this.dropped.add(idx)
+    this.lockstep?.drop(idx)
+    if (idx === 0) {
+      // 호스트가 나가면 방은 끝
+      this.showOverlay('호스트가 나갔습니다', '방이 닫혔습니다.', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
+      this.paused = true
+      return
+    }
+    if (this.isHost) {
+      // 모두가 같은 틱에 제거하도록 앞선 틱을 정해 알린다
+      const tick = this.state.tick + (this.cfg.delay ?? 3) + 30
+      this.pendingDrops.push({ p: idx, tick })
+      this.cfg.link?.sendCtl({ t: 'drop', p: idx, tick })
+    }
+  }
+
+  /** step 직후 호출: 정해진 틱에 도달한 이탈을 상태에 반영 */
+  private applyDrops(): void {
+    if (this.pendingDrops.length === 0) return
+    const t = this.state.tick
+    const keep: PendingDrop[] = []
+    for (const d of this.pendingDrops) {
+      if (d.tick <= t) dropPlayer(this.state, d.p)
+      else keep.push(d)
+    }
+    this.pendingDrops = keep
+    const remaining = this.state.players.filter((p) => !p.left).length
+    if (remaining < 2 && this.state.phase !== 'over' && this.overlay.hidden) {
+      this.showOverlay('상대가 모두 나갔습니다', '', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
+      this.paused = true
+    }
+  }
+
+  private onCtl(m: CtlMessage, from: string): void {
     if (this.disposed) return
     switch (m.t) {
       case 'hash': {
+        if (!this.isHost) return
         const mine = this.hashes.get(m.tick)
         if (mine === undefined) return
-        if (mine !== m.h && this.cfg.link?.role === 'host') {
-          this.cfg.link.sendCtl({ t: 'resync', tick: this.state.tick, state: snapshot(this.state) })
-        }
+        if (mine !== m.h) this.cfg.link?.sendCtl({ t: 'resync', tick: this.state.tick, state: snapshot(this.state) }, from)
         break
       }
       case 'resync': {
-        if (this.cfg.link?.role !== 'guest' || !this.lockstep) return
+        if (this.isHost || !this.lockstep || this.peerIndex.get(from) !== 0) return
         const target = this.state.tick
         const snap = m.state as GameState
         this.state = snap
         this.state.events = []
-        while (this.state.tick < target && this.lockstep.hasBoth(this.state.tick)) {
-          const [l, r] = this.lockstep.get(this.state.tick)
-          step(this.state, this.map, this.cfg.localPlayer === 0 ? [l, r] : [r, l])
+        while (this.state.tick < target && this.lockstep.hasAll(this.state.tick)) {
+          step(this.state, this.map, this.lockstep.get(this.state.tick))
+          this.applyDrops()
         }
         this.prev = snapshot(this.state)
         this.message = '동기화됨'
         setTimeout(() => (this.message = ''), 1200)
         break
       }
+      case 'drop': {
+        if (this.peerIndex.get(from) !== 0) return
+        this.dropped.add(m.p)
+        this.lockstep?.drop(m.p)
+        this.pendingDrops.push({ p: m.p, tick: m.tick })
+        break
+      }
       case 'rematch':
-        this.restart(m.seed)
+        if (this.peerIndex.get(from) === 0) this.restart(m.seed)
         break
       case 'leave':
-        this.showOverlay('상대가 나갔습니다', '', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
-        this.paused = true
+        this.onPeerGone(from)
         break
       default:
         break
@@ -194,13 +258,17 @@ export class Session {
 
   private restart(seed: number): void {
     this.state = createState({ seed, targetKills: this.cfg.targetKills, chars: this.cfg.chars, teams: this.cfg.teams }, this.map)
+    // 이미 나간 사람은 처음부터 빠진 채로
+    for (const d of this.dropped) dropPlayer(this.state, d)
+    this.state.events = []
     this.prev = snapshot(this.state)
     this.makeBots(seed)
     this.hashes.clear()
+    this.pendingDrops = []
     this.acc = 0
     this.paused = false
     this.hideOverlay()
-    if (this.cfg.link) this.lockstep = new Lockstep(this.cfg.link, this.cfg.delay ?? 3)
+    if (this.cfg.link) this.lockstep = this.newLockstep()
   }
 
   /** 시뮬레이션 진행 (워커 타이머가 16ms 마다 호출, 탭이 뒤에 있어도 돈다) */
@@ -218,30 +286,30 @@ export class Session {
     while (this.acc >= TICK_MS && steps < 8) {
       const t = this.state.tick
       const localIn = this.input.sample(this.renderer, me.x, me.y)
-      const inputs: Input[] = new Array(n)
+      let inputs: Input[]
       if (this.lockstep) {
         this.lockstep.pushLocal(t, localIn)
-        if (!this.lockstep.hasBoth(t)) {
+        if (!this.lockstep.hasAll(t)) {
           if (this.stallSince < 0) this.stallSince = now
           break
         }
         this.stallSince = -1
-        const [l, r] = this.lockstep.get(t)
-        inputs[lp] = l
-        inputs[1 - lp] = r
+        inputs = this.lockstep.get(t)
       } else {
+        inputs = new Array(n)
         for (let i = 0; i < n; i++) {
           inputs[i] = i === lp ? localIn : botInput(this.state, this.map, i, this.bots[i], this.cfg.difficulty ?? 'normal')
         }
       }
       this.prev = snapshot(this.state)
       step(this.state, this.map, inputs)
+      this.applyDrops()
       this.renderer.onEvents(this.state.events, this.state, lp, this.names)
       if (this.lockstep && this.state.tick % 60 === 0) {
         const h = hashState(this.state)
         this.hashes.set(this.state.tick, h)
         if (this.hashes.size > 10) this.hashes.delete(Math.min(...this.hashes.keys()))
-        this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h })
+        if (!this.isHost) this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h }, this.cfg.peerIds?.[0])
         this.lockstep.prune(this.state.tick)
       }
       for (const e of this.state.events) if (e.type === 'over') this.onOver()
@@ -277,7 +345,8 @@ export class Session {
     const c = CHARACTERS[this.cfg.chars[i]]
     if (i === this.cfg.localPlayer) return `나 · ${c.basedOn}`
     if (this.cfg.mode === 'solo') return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
-    return `상대 · ${c.basedOn}`
+    const ally = this.cfg.teams && this.cfg.teams[i] === this.cfg.teams[this.cfg.localPlayer]
+    return `${ally ? '아군' : '상대'} · ${c.basedOn}`
   }
 
   private onOver(): void {
@@ -298,7 +367,7 @@ export class Session {
           { label: '다시 하기', primary: true, onClick: () => this.restart((Math.random() * 0xffffffff) >>> 0) },
           { label: '로비로', primary: false, onClick: () => this.exit() },
         ])
-      } else if (this.cfg.link?.role === 'host') {
+      } else if (this.isHost) {
         this.showOverlay(title, desc, [
           {
             label: '다시 하기',

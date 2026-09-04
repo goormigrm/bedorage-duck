@@ -1,13 +1,17 @@
 // 로비: 캐릭터 선택 · 맵 선택 · 혼자 하기 · 방 만들기 · 방 목록/참가 · 준비 → 자동 시작
+// 방은 정원 4명(호스트 + 게스트 3). 멤버 순서·준비·팀은 호스트가 'room' 메시지로 방송하는 것이 정본.
 
 import { Difficulty } from '../core/bot'
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../core/characters'
 import { DEFAULT_MAP, MAPS, MAP_LIST, MapId, isMapId } from '../core/maps'
+import { MAX_PLAYERS, MIN_PLAYERS } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import {
-  LobbyLink, RoomInfo, RoomLink, makeRoomCode, normalizeCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
+  CtlMessage, LobbyLink, Member, ROOM_MODE_LABEL, RoomInfo, RoomLink, RoomMode,
+  makeRoomCode, normalizeCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
 } from '../net/room'
 import { drawPortrait } from '../render/character'
+import { TEAM_NAMES } from '../render/hud'
 import { SessionConfig } from '../game/session'
 
 export interface LobbyHandlers {
@@ -26,12 +30,15 @@ export class Lobby {
   private bots = 1
   /** 혼자 하기 모드: 개인전 / 2v2 팀전 (봇 3) */
   private soloMode: 'ffa' | 'teams' = 'ffa'
+  private roomMode: RoomMode = 'ffa'
   private lobbyLink: LobbyLink | null = null
   private link: RoomLink | null = null
   private role: 'host' | 'guest' | null = null
-  private peerChar: CharacterId | null = null
-  private peerReady = false
+  /** 방 멤버 (순서 = 플레이어 인덱스, 호스트가 0) */
+  private members: Member[] = []
+  private hostId: string | null = null
   private myReady = false
+  private myTeam = 0
   private waitTimer = 0
   private rooms: RoomInfo[] = []
   private starting = false
@@ -53,7 +60,7 @@ export class Lobby {
     h.innerHTML = `
       <div class="lobby">
         <h1>배도라지 <span>덕</span></h1>
-        <p class="tag"><b>1:1 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html" style="color:var(--ink-2)">프리뷰 보기</a></p>
+        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임 · <a href="./preview.html" style="color:var(--ink-2)">프리뷰 보기</a></p>
 
         <div class="section-t">캐릭터</div>
         <div class="chars" id="chars"></div>
@@ -83,7 +90,10 @@ export class Lobby {
 
           <div class="mode">
             <h2>방 만들기 <span class="k">HOST</span></h2>
-            <p>방을 열면 아래 방 목록에 바로 보입니다. 둘 다 준비를 누르면 자동으로 시작합니다.</p>
+            <p>정원 ${MAX_PLAYERS}명. 방을 열면 아래 방 목록에 바로 보이고, 둘 이상이 모두 준비를 누르면 자동으로 시작합니다.</p>
+            <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
+              <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2 팀전</button>
+            </div></div>
             <div class="row"><label>목표 킬</label><div class="seg" id="seg-kills-room">
               ${KILL_OPTIONS.map((k) => `<button data-v="${k}" class="${k === 5 ? 'on' : ''}">${k}</button>`).join('')}
             </div></div>
@@ -123,7 +133,7 @@ export class Lobby {
     this.seg('#seg-map', (v) => {
       if (isMapId(v)) this.mapId = v
       ;(h.querySelector('#map-desc') as HTMLElement).textContent = MAPS[this.mapId].desc
-      this.announce()
+      this.hostChanged()
     })
     this.seg('#seg-diff', (v) => (this.difficulty = v as Difficulty))
     this.seg('#seg-bots', (v) => {
@@ -137,8 +147,13 @@ export class Lobby {
     this.seg('#seg-kills-solo', (v) => (this.killsSolo = Number(v)))
     this.seg('#seg-kills-room', (v) => {
       this.killsRoom = Number(v)
-      this.announce()
-      if (this.role === 'host') this.renderRoom()
+      this.hostChanged()
+    })
+    this.seg('#seg-room-mode', (v) => {
+      this.roomMode = v as RoomMode
+      if (this.role === 'host') this.members.forEach((m, i) => (m.team = this.roomMode === 'teams' ? i % 2 : 0))
+      this.myTeam = this.roomMode === 'teams' ? 0 : 0
+      this.hostChanged()
     })
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
@@ -152,13 +167,21 @@ export class Lobby {
     })
   }
 
+  /** 호스트 설정(맵·목표·모드)이 바뀌면 방송·목록 갱신 */
+  private hostChanged(): void {
+    if (this.role !== 'host') return
+    this.members.forEach((m) => (m.ready = false))
+    this.myReady = false
+    this.broadcastRoom()
+    this.announce()
+    this.renderRoom()
+  }
+
   private selectChar(id: CharacterId): void {
     this.char = id
     this.host.querySelectorAll('.char').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.id === id))
-    if (this.myReady) this.myReady = false
-    this.sendHello()
-    this.announce()
-    if (this.role) this.renderRoom()
+    this.myReady = false
+    this.pushSelf()
   }
 
   private seg(sel: string, cb: (v: string) => void): void {
@@ -216,8 +239,8 @@ export class Lobby {
       .map((r) => {
         const c = (CHARACTERS as Record<string, { name: string } | undefined>)[r.hostChar]
         const m = isMapId(r.map) ? MAPS[r.map].name : r.map
-        const st = r.state === 'open' ? '<span class="pill ok">참가 가능</span>' : r.state === 'full' ? '<span class="pill">대기 중</span>' : '<span class="pill">게임 중</span>'
-        return `<div class="room"><div><b>${c ? c.name : r.hostChar}</b>의 방 <span class="code-sm">${r.code}</span><br><small>${m} · 목표 ${r.targetKills}킬</small></div>
+        const st = r.state === 'open' ? '<span class="pill ok">참가 가능</span>' : r.state === 'full' ? '<span class="pill">정원 참</span>' : '<span class="pill">게임 중</span>'
+        return `<div class="room"><div><b>${c ? c.name : r.hostChar}</b>의 방 <span class="code-sm">${r.code}</span><br><small>${m} · ${ROOM_MODE_LABEL[r.mode] ?? r.mode} · 목표 ${r.targetKills}킬 · ${r.count}/${r.max}명</small></div>
           <div>${st} <button class="btn" data-code="${r.code}" ${r.state === 'open' ? '' : 'disabled'}>참가</button></div></div>`
       })
       .join('')
@@ -226,14 +249,17 @@ export class Lobby {
     })
   }
 
-  private announce(): void {
+  private announce(state?: RoomInfo['state']): void {
     if (!this.lobbyLink || this.role !== 'host' || !this.link) return
     this.lobbyLink.announce({
       code: this.link.code,
       hostChar: this.char,
       map: this.mapId,
       targetKills: this.killsRoom,
-      state: this.link.peerId ? 'full' : 'open',
+      mode: this.roomMode,
+      count: this.members.length,
+      max: MAX_PLAYERS,
+      state: state ?? (this.members.length >= MAX_PLAYERS ? 'full' : 'open'),
     })
   }
 
@@ -266,6 +292,10 @@ export class Lobby {
     const code = makeRoomCode()
     this.role = 'host'
     this.link = openRoom(code, 'host')
+    this.hostId = this.link.selfId
+    this.myReady = false
+    this.myTeam = 0
+    this.members = [{ id: this.link.selfId, char: this.char, ready: false, team: 0 }]
     history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
     this.announce()
@@ -277,11 +307,15 @@ export class Lobby {
     this.closeLink()
     this.role = 'guest'
     this.link = openRoom(code, 'guest')
+    this.hostId = null
+    this.members = []
+    this.myReady = false
+    this.myTeam = 0
     history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
     this.renderRoom()
     this.waitTimer = window.setTimeout(() => {
-      if (this.link && !this.link.peerId) {
+      if (this.link && !this.hostId) {
         this.status(
           '연결되지 않았습니다. 방이 아직 열려 있는지 확인하세요. 회사·학교망이면 폰 핫스팟으로 시도해 보세요.',
           'bad',
@@ -296,134 +330,247 @@ export class Lobby {
   private wireLink(): void {
     const link = this.link!
     link.onPeerJoin((id) => {
-      if (link.peerId) return // 1:1 — 세 번째 이후는 무시
-      link.peerId = id
-      clearTimeout(this.waitTimer)
-      this.peerReady = false
-      this.sendHello()
-      this.announce()
-      this.renderRoom()
+      if (this.link !== link) return
+      // 새로 들어온 피어에게 내 상태를 알린다 (호스트는 hello 를 받고 멤버로 넣는다)
+      this.sendHello(id)
     })
     link.onPeerLeave((id) => {
-      if (link.peerId !== id) return
-      link.peerId = null
-      this.peerChar = null
-      this.peerReady = false
-      this.myReady = false
-      this.announce()
-      this.renderRoom()
+      if (this.link !== link) return
+      this.peerGone(id)
     })
-    link.onCtl((m) => {
-      if (m.t === 'hello') {
-        this.peerChar = m.char as CharacterId
-        this.peerReady = m.ready
+    link.onCtl((m, from) => {
+      if (this.link !== link) return
+      this.onCtl(m, from)
+    })
+  }
+
+  private peerGone(id: string): void {
+    if (this.role === 'host') {
+      const before = this.members.length
+      this.members = this.members.filter((m) => m.id !== id)
+      if (this.members.length !== before) {
+        this.broadcastRoom()
+        this.announce()
         this.renderRoom()
-        this.maybeStart()
-      } else if (m.t === 'ready') {
-        this.peerChar = m.char as CharacterId
-        this.peerReady = m.v
-        this.renderRoom()
-        this.maybeStart()
-      } else if (m.t === 'start' && this.role === 'guest') {
-        const chars = m.chars as [CharacterId, CharacterId]
-        this.launch({
-          mode: 'p2p',
-          chars,
-          targetKills: m.targetKills,
-          seed: m.seed,
-          localPlayer: 1,
-          mapId: isMapId(m.map) ? m.map : DEFAULT_MAP,
-          link,
-          delay: m.delay,
-        })
-      } else if (m.t === 'full') {
-        this.status('방이 가득 찼습니다.', 'bad')
-        this.closeLink()
       }
-    })
+    } else if (id === this.hostId) {
+      this.status('호스트가 방을 닫았습니다.', 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
+      this.bindCancel()
+      this.closeLink()
+    }
   }
 
-  private sendHello(): void {
-    if (!this.link || !this.link.peerId) return
-    this.link.sendCtl({ t: 'hello', role: this.role ?? 'guest', char: this.char, ready: this.myReady })
+  private onCtl(m: CtlMessage, from: string): void {
+    switch (m.t) {
+      case 'hello':
+        this.onHello(m, from)
+        break
+      case 'room': {
+        if (this.role !== 'guest') return
+        clearTimeout(this.waitTimer)
+        this.hostId = from
+        this.members = m.members
+        this.roomMode = m.mode
+        this.killsRoom = m.targetKills
+        if (isMapId(m.map)) this.mapId = m.map
+        const me = this.members.find((x) => x.id === this.link?.selfId)
+        if (me) {
+          this.myReady = me.ready
+          this.myTeam = me.team
+        }
+        this.renderRoom()
+        break
+      }
+      case 'full':
+        this.status('방이 가득 찼습니다.', 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
+        this.bindCancel()
+        this.closeLink()
+        break
+      case 'start':
+        if (this.role === 'guest' && from === this.hostId) this.launchFrom(m.players, m.seed, m.delay, m.mode, m.map, m.targetKills)
+        break
+      case 'leave':
+        this.peerGone(from)
+        break
+      default:
+        break
+    }
   }
 
-  private toggleReady(): void {
-    if (!this.link || !this.link.peerId) return
-    this.myReady = !this.myReady
-    this.link.sendCtl({ t: 'ready', v: this.myReady, char: this.char })
+  /** 호스트: 멤버 추가/갱신 */
+  private onHello(m: Extract<CtlMessage, { t: 'hello' }>, from: string): void {
+    if (this.role !== 'host' || !this.link) return
+    const existing = this.members.find((x) => x.id === from)
+    if (existing) {
+      existing.char = m.char
+      existing.ready = m.ready
+      if (this.roomMode === 'teams') existing.team = m.team === 1 ? 1 : 0
+    } else {
+      if (this.members.length >= MAX_PLAYERS || this.starting) {
+        this.link.sendCtl({ t: 'full' }, from)
+        return
+      }
+      this.members.push({ id: from, char: m.char, ready: false, team: this.autoTeam() })
+    }
+    this.broadcastRoom()
+    this.announce()
     this.renderRoom()
     this.maybeStart()
   }
 
-  /** 호스트: 둘 다 준비면 시작 */
+  /** 인원이 적은 팀 */
+  private autoTeam(): number {
+    if (this.roomMode !== 'teams') return 0
+    const a = this.members.filter((m) => m.team === 0).length
+    const b = this.members.filter((m) => m.team === 1).length
+    return a <= b ? 0 : 1
+  }
+
+  private broadcastRoom(): void {
+    if (this.role !== 'host' || !this.link) return
+    this.link.sendCtl({ t: 'room', mode: this.roomMode, targetKills: this.killsRoom, map: this.mapId, members: this.members })
+  }
+
+  private sendHello(to?: string): void {
+    if (!this.link) return
+    this.link.sendCtl({ t: 'hello', char: this.char, ready: this.myReady, team: this.myTeam }, to)
+  }
+
+  /** 내 캐릭터·준비·팀이 바뀌었다: 호스트면 정본 갱신 후 방송, 게스트면 hello */
+  private pushSelf(): void {
+    if (!this.link) return
+    if (this.role === 'host') {
+      const me = this.members[0]
+      if (me) {
+        me.char = this.char
+        me.ready = this.myReady
+        me.team = this.roomMode === 'teams' ? this.myTeam : 0
+      }
+      this.broadcastRoom()
+      this.announce()
+      this.renderRoom()
+      this.maybeStart()
+    } else {
+      this.sendHello()
+      this.renderRoom()
+    }
+  }
+
+  private toggleReady(): void {
+    if (!this.link || !this.hostId) return
+    this.myReady = !this.myReady
+    this.pushSelf()
+  }
+
+  private changeTeam(): void {
+    if (!this.link || this.roomMode !== 'teams') return
+    this.myTeam = this.myTeam === 0 ? 1 : 0
+    this.myReady = false
+    this.pushSelf()
+  }
+
+  /** 호스트: 둘 이상 모두 준비면 시작 */
   private maybeStart(): void {
-    if (this.role !== 'host' || this.starting) return
+    if (this.role !== 'host' || this.starting || !this.link) return
     const link = this.link
-    if (!link || !link.peerId || !this.peerChar || !this.myReady || !this.peerReady) return
+    if (this.members.length < MIN_PLAYERS) return
+    if (!this.members.every((m) => m.ready)) return
+    if (this.roomMode === 'teams' && (!this.members.some((m) => m.team === 0) || !this.members.some((m) => m.team === 1))) return
     this.starting = true
     const seed = (Math.random() * 0xffffffff) >>> 0
     const delay = Math.max(2, Math.min(6, Math.ceil(link.rtt / 2 / 16.7) + 1))
-    const chars: [CharacterId, CharacterId] = [this.char, this.peerChar]
-    link.sendCtl({ t: 'start', seed, targetKills: this.killsRoom, chars, delay, map: this.mapId })
-    if (this.lobbyLink) this.lobbyLink.announce({ code: link.code, hostChar: this.char, map: this.mapId, targetKills: this.killsRoom, state: 'playing' })
-    setTimeout(() => {
-      this.launch({ mode: 'p2p', chars, targetKills: this.killsRoom, seed, localPlayer: 0, mapId: this.mapId, link, delay })
-    }, 150)
+    const players: Member[] = this.members.map((m, i) => ({ ...m, team: this.roomMode === 'teams' ? m.team : i }))
+    const map = this.mapId
+    const kills = this.killsRoom
+    const mode = this.roomMode
+    link.sendCtl({ t: 'start', seed, targetKills: kills, delay, map, mode, players })
+    this.announce('playing')
+    setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills), 150)
+  }
+
+  private launchFrom(players: Member[], seed: number, delay: number, mode: RoomMode, map: string, targetKills: number): void {
+    const link = this.link
+    if (!link) return
+    const idx = players.findIndex((p) => p.id === link.selfId)
+    if (idx < 0) return
+    const chars = players.map((p) => (p.char in CHARACTERS ? (p.char as CharacterId) : 'cheolmyeon'))
+    const teams = mode === 'teams' ? players.map((p) => p.team) : undefined
+    this.launch({
+      mode: 'p2p',
+      chars,
+      teams,
+      targetKills,
+      seed,
+      localPlayer: idx,
+      mapId: isMapId(map) ? map : DEFAULT_MAP,
+      link,
+      delay,
+      peerIds: players.map((p) => p.id),
+    })
   }
 
   private launch(cfg: Omit<SessionConfig, 'onExit'>): void {
-    const link = this.link
     this.link = null // 세션이 링크를 가져간다
     if (this.lobbyLink) {
       this.lobbyLink.leave()
       this.lobbyLink = null
     }
-    void link
     this.handlers.onStart(cfg)
   }
 
   private renderRoom(): void {
     const link = this.link
     if (!link) return
-    const me = CHARACTERS[this.char]
-    const pc = this.peerChar ? CHARACTERS[this.peerChar] : null
     const url = roomLinkUrl(link.code)
-    const connected = !!link.peerId
+    const connected = this.role === 'host' || !!this.hostId
     const title = this.role === 'host' ? `내 방 <span class="code-sm">${link.code}</span>` : `방 <span class="code-sm">${link.code}</span>`
-    const slot = (name: string, c: { name: string } | null, ready: boolean, mine: boolean) => `
-      <div class="slot ${ready ? 'ready' : ''}">
-        <div class="who">${name}</div>
-        <div class="cname">${c ? c.name : mine ? me.name : connected ? '선택 중…' : '기다리는 중…'}</div>
-        <div class="rd">${c || mine ? (ready ? '준비 완료' : '준비 안 됨') : ''}</div>
-      </div>`
+    const teams = this.roomMode === 'teams'
+    const slots: string[] = []
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const m = this.members[i]
+      if (!m) {
+        slots.push(`<div class="slot empty"><div class="who">${i + 1}</div><div class="cname">비어 있음</div><div class="rd"></div></div>`)
+        continue
+      }
+      const mine = m.id === link.selfId
+      const c = (CHARACTERS as Record<string, { name: string } | undefined>)[m.char]
+      const who = (i === 0 ? '호스트' : `${i + 1}`) + (mine ? ' · 나' : '')
+      const badge = teams ? `<span class="team ${m.team === 0 ? 'team-a' : 'team-b'}">${TEAM_NAMES[m.team]}</span>` : ''
+      slots.push(`<div class="slot ${m.ready ? 'ready' : ''} ${mine ? 'mine' : ''}">
+        <div class="who">${who}${badge}</div>
+        <div class="cname">${c ? c.name : m.char}</div>
+        <div class="rd">${m.ready ? '준비 완료' : '준비 안 됨'}</div>
+      </div>`)
+    }
     const html = `
       <div class="room-head"><div class="section-t" style="margin:0">${title}</div>
         <div class="row"><button class="btn secondary" id="btn-copy">링크 복사</button><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
       <div class="link">${url}</div>
-      <div class="slots">
-        ${slot(this.role === 'host' ? '나 (호스트)' : '나', me, this.myReady, true)}
-        <div class="vs">VS</div>
-        ${slot(this.role === 'host' ? '상대' : '호스트', pc, this.peerReady, false)}
-      </div>
+      <div class="slots">${slots.join('')}</div>
       <div class="row" style="margin-top:12px">
         <button class="btn" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
-        <span class="hintline">${MAPS[this.mapId].name} · 목표 ${this.killsRoom}킬 · ${connected ? `${link.rtt} ms` : '상대 기다리는 중'} · 둘 다 준비되면 자동 시작</span>
+        ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
+        <span class="hintline">${MAPS[this.mapId].name} · ${ROOM_MODE_LABEL[this.roomMode]} · 목표 ${this.killsRoom}킬 · ${this.members.length}/${MAX_PLAYERS}명${connected && link.peers.size > 0 ? ` · ${link.rtt} ms` : ''} · 둘 이상 모두 준비되면 자동 시작</span>
       </div>`
+    const readyCount = this.members.filter((m) => m.ready).length
     const st = !connected
-      ? this.role === 'host'
-        ? '방 목록에 올라갔습니다. 상대가 들어오길 기다리는 중…'
-        : '연결 중… (최대 20초)'
-      : this.myReady && this.peerReady
-        ? '둘 다 준비. 시작합니다…'
-        : this.myReady
-          ? '상대 준비를 기다리는 중…'
-          : '준비를 누르세요.'
+      ? '연결 중… (최대 20초)'
+      : this.members.length < MIN_PLAYERS
+        ? this.role === 'host'
+          ? '방 목록에 올라갔습니다. 상대가 들어오길 기다리는 중…'
+          : '다른 사람이 들어오길 기다리는 중…'
+        : readyCount === this.members.length
+          ? '모두 준비. 시작합니다…'
+          : this.myReady
+            ? `준비 ${readyCount}/${this.members.length} · 나머지를 기다리는 중…`
+            : '준비를 누르세요.'
     this.status(st, connected ? 'ok' : '', html)
     const copy = this.host.querySelector('#btn-copy') as HTMLButtonElement
     copy.onclick = () => void navigator.clipboard.writeText(url).then(() => (copy.textContent = '복사됨'))
     this.bindCancel()
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
+    const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
+    if (teamBtn) teamBtn.onclick = () => this.changeTeam()
   }
 
   private bindCancel(): void {
@@ -446,9 +593,10 @@ export class Lobby {
       this.link.leave()
       this.link = null
     }
-    this.peerChar = null
-    this.peerReady = false
+    this.members = []
+    this.hostId = null
     this.myReady = false
+    this.myTeam = 0
     this.role = null
     this.starting = false
   }
