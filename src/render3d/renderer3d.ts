@@ -9,7 +9,7 @@ import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEven
 import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
-import { PITCH, YAW } from './camera'
+import { PITCH, YAW, worldDirToScreen } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
 import { VIEW_RADIUS_TILES, Viewer, Vision, canSee } from './vision'
 import { U, World3D, buildWorld } from './world3d'
@@ -115,6 +115,8 @@ export class Renderer3D {
   private flashes: Flash[] = []
   private rings: Ring[] = []
   private pings: Ping[] = []
+  /** 팀 신호 (같은 편이 찍은 "여기"). 지면 마커 + 화면 밖이면 가장자리 화살표 */
+  private marks: { x: number; z: number; life: number; max: number; mesh: THREE.Mesh }[] = []
   private shake = 0
   private camTarget = new THREE.Vector3()
   private camDist = FOLLOW_DIST
@@ -167,6 +169,22 @@ export class Renderer3D {
     this.vision = new Vision(map)
     this.scene.add(this.vision.group)
     this.resize()
+  }
+
+  /** 팀 신호를 찍는다 (sim 밖이라 결정론과 무관하다) */
+  addMark(x: number, y: number): void {
+    const geo = new THREE.RingGeometry(0.5, 0.72, 24)
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7ee0a0, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false, depthTest: false })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.rotation.x = -Math.PI / 2
+    mesh.position.set(x * U, 0.06, y * U)
+    mesh.renderOrder = 5
+    this.scene.add(mesh)
+    this.marks.push({ x: x * U, z: y * U, life: 6, max: 6, mesh })
+    if (this.marks.length > 4) {
+      const old = this.marks.shift()!
+      this.scene.remove(old.mesh)
+    }
   }
 
   /** 새 판(새 맵)으로 교체 */
@@ -299,7 +317,16 @@ export class Renderer3D {
             const sp = 0.03 + Math.random() * 0.07
             this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.08 + Math.random() * 0.06, Math.sin(a) * sp, 0.45, 0xe04a3a, 0.8)
           }
-          if (e.p === localPlayer) this.shake = Math.max(this.shake, 0.18)
+          if (e.p === localPlayer) {
+            this.shake = Math.max(this.shake, 0.18)
+            // 쏜 사람 쪽을 화면 기준 각도로 바꿔 가장자리에 호로 표시한다
+            const from = state.players[e.by]
+            const me = state.players[e.p]
+            if (from && me && from.id !== me.id) {
+              const sd = worldDirToScreen(from.x - me.x, from.y - me.y)
+              if (sd.x !== 0 || sd.y !== 0) this.hud.addHitDir(Math.atan2(sd.y, sd.x), e.dmg >= 40)
+            }
+          }
           break
         }
         case 'death': {
@@ -414,11 +441,12 @@ export class Renderer3D {
     this.ensureRigs(curr)
     const ts = opts.timeScale ?? 1
     this.lastDt = dt
+    const viewer = opts.viewer ?? opts.localPlayer
     this.scoped =
-      opts.localPlayer >= 0 &&
-      curr.players[opts.localPlayer].alive &&
-      curr.players[opts.localPlayer].ads &&
-      WEAPONS[curr.players[opts.localPlayer].weapon].scope === true
+      viewer >= 0 &&
+      curr.players[viewer].alive &&
+      curr.players[viewer].ads &&
+      WEAPONS[curr.players[viewer].weapon].scope === true
     this.t += dt
     const sdt = dt * ts
     this.updateEffects(sdt)
@@ -471,7 +499,7 @@ export class Renderer3D {
 
   /** 시야: 나(와 아군)가 보는 곳만 밝히고, 그 밖의 적은 숨긴다. 관전(-1)이나 fog:false 면 전부 보인다 */
   private updateVision(curr: GameState, opts: RenderOptions): void {
-    const lp = opts.localPlayer
+    const lp = opts.viewer ?? opts.localPlayer
     const fog = (opts.fog ?? true) && lp >= 0
     this.vision.setVisible(fog)
     const n = curr.players.length
@@ -926,6 +954,19 @@ export class Renderer3D {
       this.pings[i].life -= dt
       if (this.pings[i].life <= 0) this.pings.splice(i, 1)
     }
+    for (let i = this.marks.length - 1; i >= 0; i--) {
+      const m = this.marks[i]
+      m.life -= dt
+      if (m.life <= 0) {
+        this.scene.remove(m.mesh)
+        this.marks.splice(i, 1)
+        continue
+      }
+      // 콩콩 뛰듯 크기를 흔들어 눈에 띄게
+      const k = 1 + Math.sin(this.t * 6) * 0.12
+      m.mesh.scale.setScalar(k)
+      ;(m.mesh.material as THREE.MeshBasicMaterial).opacity = Math.min(1, m.life / 1.2) * 0.95
+    }
     for (const v of this.vis) if (v.deadT >= 0) v.deadT += dt
     for (let i = 0; i < this.hitShow.length; i++) this.hitShow[i] = Math.max(0, this.hitShow[i] - dt)
     for (const v of this.vis) {
@@ -936,7 +977,7 @@ export class Renderer3D {
   }
 
   private updateCamera(curr: GameState, pos: { x: number; z: number }[], dt: number, opts: RenderOptions): void {
-    const lp = opts.localPlayer
+    const lp = opts.viewer ?? opts.localPlayer
     let tx: number
     let tz: number
     let dist = FOLLOW_DIST

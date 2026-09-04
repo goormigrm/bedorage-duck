@@ -39,6 +39,13 @@ export interface RenderOptions {
   showHud: boolean
   /** -1 이면 관전(시네마틱) */
   localPlayer: number
+  /**
+   * 카메라·시야의 기준이 되는 사람. 생략하면 localPlayer.
+   * 죽어서 기다리는 동안 **나를 죽인 사람 시점**을 보여 줄 때 쓴다(HUD 의 내 카드는 그대로 나를 가리킨다).
+   */
+  viewer?: number
+  /** 관전 중이라는 안내 문구 (있으면 화면 아래에 띄운다) */
+  spectateLabel?: string
   cameraMode: 'follow' | 'both'
   names: string[]
   subLabels: string[]
@@ -62,6 +69,15 @@ export interface ScreenText {
   big: boolean
 }
 
+/** 피격 방향 표시: 화면 기준 각도(라디안, 0 = 오른쪽)와 남은 시간 */
+interface HitDir {
+  angle: number
+  life: number
+  max: number
+  /** 큰 피해였나 (호가 굵어진다) */
+  big: boolean
+}
+
 interface Banner {
   text: string
   life: number
@@ -72,6 +88,7 @@ interface Banner {
 export class Hud {
   readonly ctx: CanvasRenderingContext2D
   private banner: Banner | null = null
+  private hitDirs: HitDir[] = []
   private overT = 0
   private countdownPulse = 0
   private lastCountdownSec = -1
@@ -88,6 +105,66 @@ export class Hud {
     this.dpr = Math.min(2, window.devicePixelRatio || 1)
     this.canvas.width = Math.round(VIEW_W * this.dpr)
     this.canvas.height = Math.round(VIEW_H * this.dpr)
+  }
+
+  /**
+   * 어디서 맞았는지 화면 가장자리에 호로 알린다.
+   * 시야가 좁은 게임이라 "어느 쪽에서 쐈는지" 를 모르면 대응할 수가 없다.
+   * 각도는 **화면 기준**이라 호가 가리키는 쪽을 그대로 보면 된다.
+   */
+  addHitDir(angle: number, big: boolean): void {
+    // 비슷한 방향이면 새로 만들지 말고 수명만 되살린다 (연사에 화면이 지저분해지지 않게)
+    for (const h of this.hitDirs) {
+      let d = Math.abs(h.angle - angle) % (Math.PI * 2)
+      if (d > Math.PI) d = Math.PI * 2 - d
+      if (d < 0.35) {
+        h.life = h.max
+        h.big = h.big || big
+        return
+      }
+    }
+    this.hitDirs.push({ angle, life: 1.1, max: 1.1, big })
+  }
+
+  /** 관전 중 안내 (누구 시점인지 · 바꾸는 법) */
+  private drawSpectate(label: string): void {
+    const ctx = this.ctx
+    ctx.font = '600 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const w = ctx.measureText(label).width + 34
+    const y = VIEW_H - 112
+    ctx.fillStyle = 'rgba(13,17,23,.78)'
+    roundRect(ctx, VIEW_W / 2 - w / 2, y - 17, w, 34, 8)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,216,74,.35)'
+    ctx.lineWidth = 1
+    roundRect(ctx, VIEW_W / 2 - w / 2 + 0.5, y - 16.5, w - 1, 33, 8)
+    ctx.stroke()
+    ctx.fillStyle = '#ffd84a'
+    ctx.fillText(label, VIEW_W / 2, y)
+  }
+
+  private drawHitDirs(): void {
+    if (this.hitDirs.length === 0) return
+    const ctx = this.ctx
+    const cx = VIEW_W / 2
+    const cy = VIEW_H / 2
+    const r = Math.min(VIEW_W, VIEW_H) * 0.32
+    ctx.save()
+    ctx.lineCap = 'round'
+    for (const h of this.hitDirs) {
+      const k = h.life / h.max
+      ctx.globalAlpha = Math.min(1, k * 1.6) * 0.85
+      ctx.strokeStyle = h.big ? '#ff6a5a' : '#ffb0a4'
+      ctx.lineWidth = h.big ? 9 : 6
+      const half = h.big ? 0.34 : 0.26
+      ctx.beginPath()
+      ctx.arc(cx, cy, r + (1 - k) * 22, h.angle - half, h.angle + half)
+      ctx.stroke()
+    }
+    ctx.restore()
+    ctx.globalAlpha = 1
   }
 
   showKill(state: GameState, killer: number, victim: number, names: string[]): void {
@@ -107,6 +184,10 @@ export class Hud {
     if (this.banner) {
       this.banner.life -= dt
       if (this.banner.life <= 0) this.banner = null
+    }
+    for (let i = this.hitDirs.length - 1; i >= 0; i--) {
+      this.hitDirs[i].life -= dt
+      if (this.hitDirs[i].life <= 0) this.hitDirs.splice(i, 1)
     }
     this.overT += dt
   }
@@ -138,6 +219,8 @@ export class Hud {
 
   drawMain(s: GameState, opts: RenderOptions): void {
     if (opts.showHud) this.drawPanels(s, opts)
+    this.drawHitDirs()
+    if (opts.spectateLabel) this.drawSpectate(opts.spectateLabel)
     this.drawBanner(s, opts)
     const lp = opts.localPlayer
     if (opts.cursor && lp !== -1) this.drawCursor(opts.cursor, s.players[lp])

@@ -144,6 +144,8 @@ export type CtlMessage =
   | { t: 'resync'; tick: number; state: any }
   /** 호스트 → 모두: 플레이어 p 를 tick 에 제거 (이탈) */
   | { t: 'drop'; p: number; tick: number }
+  /** 팀 신호: 같은 편에게 "여기" 를 찍는다. sim 밖(렌더 전용)이라 결정론과 무관하다 */
+  | { t: 'mark'; p: number; x: number; y: number }
   | { t: 'rematch'; seed: number }
   | { t: 'leave' }
 

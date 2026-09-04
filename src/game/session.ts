@@ -75,6 +75,8 @@ export class Session {
   private hashes = new Map<number, number>()
   private names: string[]
   private pickerOpen = false
+  /** 죽어서 기다리는 동안 보고 있는 사람. -1 = 내 시점 */
+  private spectate = -1
   private syncMute: () => void = () => {}
   private ticker: Ticker
   private lastTick = performance.now()
@@ -93,7 +95,7 @@ export class Session {
         <div class="game-stage" id="stage">
           <div class="game-ui">
             <div class="top-right"><button class="btn secondary" id="btn-mute">소리</button><button class="btn secondary" id="btn-lobby">로비로</button></div>
-            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
+            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 대시 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>V</b> 팀 신호 · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
         </div>
@@ -107,6 +109,7 @@ export class Session {
     this.stage.appendChild(ui)
     if (isTouchDevice()) {
       this.touch = new TouchControls(this.root)
+      this.touch.setMarkVisible(isTeamMatch(this.state))
       this.root.classList.add('touching')
       void enterLandscape()
     }
@@ -184,6 +187,19 @@ export class Session {
       this.syncMute()
       return
     }
+    // 관전 중 좌우로 대상 바꾸기
+    if (this.spectate >= 0 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) {
+      const next = this.nextAlive(e.key === 'ArrowLeft' || e.key === 'a' ? this.spectate - 2 : this.spectate)
+      if (next >= 0) this.spectate = next
+      e.preventDefault()
+      return
+    }
+    // 팀 신호 (팀전에서만). 커서가 가리키는 곳에 "여기" 를 찍는다
+    if ((e.key === 'v' || e.key === 'V') && isTeamMatch(this.state)) {
+      this.sendMark()
+      e.preventDefault()
+      return
+    }
     if (e.key === 'Escape') {
       if (this.state.phase === 'over') return
       if (this.pickerOpen) {
@@ -221,9 +237,14 @@ export class Session {
     )
   }
 
-  private showOverlay(title: string, desc: string, buttons: { label: string; primary: boolean; onClick: () => void }[]): void {
+  private showOverlay(
+    title: string,
+    desc: string,
+    buttons: { label: string; primary: boolean; onClick: () => void }[],
+    extraHtml = '',
+  ): void {
     const box = this.overlay.querySelector('#overlay-box') as HTMLElement
-    box.innerHTML = `<h2>${title}</h2><p>${desc}</p><div class="row"></div>`
+    box.innerHTML = `<h2>${title}</h2><p>${desc}</p>${extraHtml}<div class="row"></div>`
     const row = box.querySelector('.row') as HTMLElement
     for (const b of buttons) {
       const btn = document.createElement('button')
@@ -245,6 +266,7 @@ export class Session {
   // ---------- 캐릭터 교체 창 ----------
   /** 터치 메뉴 버튼 */
   private pollTouchMenu(): void {
+    if (this.touch?.takeMark() && isTeamMatch(this.state)) this.sendMark()
     if (this.touch?.takeMenu()) {
       if (this.overlay.hidden) this.showMenu()
       else this.hideOverlay()
@@ -355,6 +377,16 @@ export class Session {
         this.pendingDrops.push({ p: m.p, tick: m.tick })
         break
       }
+      case 'mark': {
+        // 같은 편이 찍은 것만 본다
+        const from = this.state.players[m.p]
+        const me = this.state.players[this.cfg.localPlayer]
+        if (from && me && from.team === me.team && m.p !== this.cfg.localPlayer) {
+          this.renderer.addMark(m.x, m.y)
+          this.sfx.mark()
+        }
+        break
+      }
       case 'rematch':
         if (this.peerIndex.get(from) === 0) this.restart(m.seed)
         break
@@ -433,7 +465,15 @@ export class Session {
         if (!this.isHost) this.cfg.link?.sendCtl({ t: 'hash', tick: this.state.tick, h }, this.cfg.peerIds?.[0])
         this.lockstep.prune(this.state.tick)
       }
-      for (const e of this.state.events) if (e.type === 'over') this.onOver()
+      for (const e of this.state.events) {
+        if (e.type === 'over') this.onOver()
+        // 내가 죽으면 나를 죽인 사람을 본다 (자살·이탈이면 살아 있는 아무나)
+        else if (e.type === 'death' && e.p === this.cfg.localPlayer) {
+          this.spectate = e.by !== e.p ? e.by : this.nextAlive(-1)
+        } else if (e.type === 'respawn' && e.p === this.cfg.localPlayer) {
+          this.spectate = -1
+        }
+      }
       this.acc -= TICK_MS
       steps++
     }
@@ -455,9 +495,15 @@ export class Session {
     if (choosing && !this.pickerOpen) this.showPicker()
     else if (!choosing && this.pickerOpen) this.hidePicker()
     const sub = this.cfg.chars.map((_, i) => this.subLabel(i))
+    // 죽어서 기다리는 동안만 남의 시점. 살아 있으면 언제나 내 시점
+    const me = this.state.players[lp]
+    const spec = !me.alive && !me.choosing && this.spectate >= 0 && this.state.players[this.spectate]?.alive ? this.spectate : -1
+    if (spec < 0 && this.spectate >= 0 && me.alive) this.spectate = -1
     this.renderer.draw(this.prev, this.state, alpha, dt, {
       showHud: true,
       localPlayer: lp,
+      viewer: spec >= 0 ? spec : undefined,
+      spectateLabel: spec >= 0 ? `${this.names[spec]} 시점 · ←/→ 로 바꾸기` : undefined,
       cameraMode: 'follow',
       names: this.names,
       subLabels: sub,
@@ -487,6 +533,68 @@ export class Session {
     return `${ally ? '아군' : '상대'} · ${c.basedOn}`
   }
 
+  /** 버튼이 여러 개인 분기에서 통계 표를 붙이기 쉽게 */
+  private showOverlayWithStats(
+    title: string,
+    desc: string,
+    stats: string,
+    buttons: { label: string; primary: boolean; onClick: () => void }[],
+  ): void {
+    this.showOverlay(title, desc, buttons, stats)
+  }
+
+  /**
+   * 결과 화면 통계표. 수치는 전부 sim 안에서 센 것이라 모두의 화면에서 같다.
+   * 명중률은 **탄 단위**(산탄총 한 발 = 탄 7개)라 무기가 달라도 비교가 된다.
+   */
+  private statsTable(): string {
+    const teams = isTeamMatch(this.state)
+    const rows = this.state.players
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => b.p.kills - a.p.kills || a.p.deaths - b.p.deaths)
+      .map(({ p, i }) => {
+        const acc = p.shots > 0 ? Math.round((p.hits / p.shots) * 100) : 0
+        const headPct = p.hits > 0 ? Math.round((p.heads / p.hits) * 100) : 0
+        const me = i === this.cfg.localPlayer ? ' class="me"' : ''
+        const team = teams ? `<td>${TEAM_NAMES[p.team] ?? '?'}</td>` : ''
+        return `<tr${me}><td class="nick">${this.names[i]}</td>${team}<td>${CHARACTERS[p.char].name}</td>
+          <td class="n">${p.kills}</td><td class="n">${p.deaths}</td><td class="n">${p.bestStreak}</td>
+          <td class="n">${acc}%</td><td class="n">${headPct}%</td>
+          <td class="n">${Math.round(p.dmgDealt)}</td><td class="n">${Math.round(p.dmgTaken)}</td></tr>`
+      })
+      .join('')
+    return `<div class="stats"><table>
+      <thead><tr><th>이름</th>${teams ? '<th>팀</th>' : ''}<th>캐릭터</th><th>킬</th><th>데스</th><th>연속</th><th>명중</th><th>헤드</th><th>준 피해</th><th>받은 피해</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <p class="statsnote">명중률은 탄 단위입니다 (산탄총 한 발 = 탄 7개). 연속은 죽지 않고 이어 간 최다 킬.</p></div>`
+  }
+
+  /**
+   * 팀 신호를 찍는다. 커서(=조준하는 지면)를 같은 편에게 알린다.
+   * sim 밖(컨트롤 메시지)이라 결정론에 영향이 없고, 봇전에서는 내 화면에만 남는다.
+   */
+  private sendMark(): void {
+    const lp = this.cfg.localPlayer
+    const me = this.state.players[lp]
+    if (!me || !me.alive) return
+    const c = this.input.mouse
+    const w = this.renderer.screenToWorld(c.x, c.y)
+    this.renderer.addMark(w.x, w.y)
+    this.sfx.mark()
+    this.cfg.link?.sendCtl({ t: 'mark', p: lp, x: Math.round(w.x), y: Math.round(w.y) })
+  }
+
+  /** 관전 대상 후보: 나를 뺀 살아 있는 사람 중 from 다음 사람 */
+  private nextAlive(from: number): number {
+    const n = this.state.players.length
+    for (let k = 1; k <= n; k++) {
+      const i = (from + k + n) % n
+      const p = this.state.players[i]
+      if (i !== this.cfg.localPlayer && p.alive && !p.left) return i
+    }
+    return -1
+  }
+
   private onOver(): void {
     const w = this.state.winner
     const lp = this.cfg.localPlayer
@@ -511,6 +619,7 @@ export class Session {
         left: p.left,
       })),
     })
+    const stats = this.statsTable()
     const desc = teams
       ? `${TEAM_NAMES[w] ?? '?'} 승리 · ` + this.state.players.map((p, i) => `${this.names[i]} ${p.kills}`).join(' · ')
       : this.state.players.length === 2
@@ -519,12 +628,17 @@ export class Session {
     setTimeout(() => {
       if (this.disposed) return
       if (this.cfg.mode === 'solo') {
-        this.showOverlay(title, desc, [
-          { label: '다시 하기', primary: true, onClick: () => this.restart((Math.random() * 0xffffffff) >>> 0) },
-          { label: '로비로', primary: false, onClick: () => this.exit() },
-        ])
+        this.showOverlay(
+          title,
+          desc,
+          [
+            { label: '다시 하기', primary: true, onClick: () => this.restart((Math.random() * 0xffffffff) >>> 0) },
+            { label: '로비로', primary: false, onClick: () => this.exit() },
+          ],
+          stats,
+        )
       } else if (this.isHost) {
-        this.showOverlay(title, desc, [
+        this.showOverlayWithStats(title, desc, stats, [
           {
             label: '다시 하기',
             primary: true,
@@ -537,9 +651,12 @@ export class Session {
           { label: '로비로', primary: false, onClick: () => this.exit() },
         ])
       } else {
-        this.showOverlay(title, desc + ' · 호스트가 다시 시작하길 기다리는 중', [
-          { label: '로비로', primary: false, onClick: () => this.exit() },
-        ])
+        this.showOverlay(
+          title,
+          desc + ' · 호스트가 다시 시작하길 기다리는 중',
+          [{ label: '로비로', primary: false, onClick: () => this.exit() }],
+          stats,
+        )
       }
     }, 2200)
   }

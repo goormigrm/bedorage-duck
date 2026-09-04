@@ -48,6 +48,7 @@ export class TouchControls {
   private dashEdge = false
   private swapEdge = false
   private menuEdge = false
+  private markEdge = false
   /** 사격 중인 손가락들 (영역·버튼 공용). 하나라도 있으면 발사 */
   private fire = new Set<number>()
 
@@ -68,6 +69,7 @@ export class TouchControls {
         <button class="tbtn" data-a="swap">교체</button>
         <button class="tbtn" data-a="ads">조준</button>
         <button class="tbtn" data-a="dash">구르기</button>
+        <button class="tbtn mark" data-a="mark" hidden>신호</button>
         <button class="tbtn big" data-a="fire">사격</button>
       </div>
       <button class="tbtn menu" data-a="menu">≡</button>`
@@ -157,6 +159,7 @@ export class TouchControls {
         } else if (act === 'dash') this.dashEdge = true
         else if (act === 'swap') this.swapEdge = true
         else if (act === 'menu') this.menuEdge = true
+        else if (act === 'mark') this.markEdge = true
       }
       const release = (e: PointerEvent) => {
         if (act === 'reload') {
@@ -203,6 +206,19 @@ export class TouchControls {
     const v = this.menuEdge
     this.menuEdge = false
     return v
+  }
+
+  /** 팀 신호 버튼을 눌렀는가 (한 번만) */
+  takeMark(): boolean {
+    const v = this.markEdge
+    this.markEdge = false
+    return v
+  }
+
+  /** 팀전에서만 신호 버튼을 보여 준다 */
+  setMarkVisible(v: boolean): void {
+    const b = this.root.querySelector('[data-a="mark"]') as HTMLElement | null
+    if (b) b.hidden = !v
   }
 
   /** 창(메뉴·결과·캐릭터 선택)이 떠 있는 동안은 조작을 치운다 — 창 버튼이 눌려야 하므로 */

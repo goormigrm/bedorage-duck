@@ -430,6 +430,14 @@ export class Sfx {
     this.noiseBurst(node, t0, 0.03, 'highpass', 3000, 2000, 0.35)
   }
 
+  /** 팀 신호: 짧고 맑은 두 음 (총소리와 헷갈리지 않게) */
+  mark(): void {
+    if (!this.ready()) return
+    const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.5)
+    this.tone(node, t0, 0.09, 'sine', 1180, 1180, 0.3, 0.003)
+    this.tone(node, t0 + 0.07, 0.12, 'sine', 1560, 1560, 0.26, 0.003)
+  }
+
   private blip(): void {
     const { node, t0 } = this.bus({ gain: 1, pan: 0, far: 0 }, 0.5)
     this.tone(node, t0, 0.08, 'sine', 880, 1320, 0.4, 0.005)

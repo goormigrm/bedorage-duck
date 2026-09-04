@@ -293,7 +293,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tstick i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
   background: rgba(230,237,243,.3); border: 2px solid rgba(255,255,255,.4); display: block; }
 .tbtns { position: fixed; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto;
-  grid-template-areas: "reload ads" "swap dash" "fire fire"; gap: 9px; justify-items: end; }
+  grid-template-areas: "reload ads" "swap dash" "mark mark" "fire fire"; gap: 9px; justify-items: end; }
 .tbtn { width: 62px; height: 62px; border-radius: 50%; border: 1px solid var(--line); background: rgba(22,27,34,.72);
   color: var(--ink-2); font: 600 12px "IBM Plex Sans KR", sans-serif; cursor: pointer; padding: 0; pointer-events: auto;
   -webkit-tap-highlight-color: transparent; touch-action: none; }
@@ -301,6 +301,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tbtn[data-a="swap"] { grid-area: swap; }
 .tbtn[data-a="ads"] { grid-area: ads; }
 .tbtn[data-a="dash"] { grid-area: dash; }
+.tbtn[data-a="mark"] { grid-area: mark; }
 .tbtn.big { grid-area: fire; width: 100%; height: 62px; border-radius: 34px; font-size: 15px; font-weight: 700;
   color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }
@@ -320,3 +321,15 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 /* 터치 조작 중에는 소리·로비로가 ≡ 메뉴 안으로 들어간다. 상단에는 ≡ 하나만 둔다.
    미디어 쿼리가 아니라 클래스로 판단해야 ?touch=1 로 PC 에서 시험할 때도 같게 보인다 */
 .game-root.touching .game-ui .top-right { display: none; }
+
+/* ---- 결과 화면 통계표 ---- */
+.overlay .box .stats { margin: 4px 0 14px; }
+.stats table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.stats th { font: 600 11px "IBM Plex Mono", monospace; color: var(--ink-3); letter-spacing: .04em;
+  padding: 4px 8px; border-bottom: 1px solid var(--line-2); white-space: nowrap; text-align: left; }
+.stats td { padding: 5px 8px; border-bottom: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
+.stats td.n { text-align: right; font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", monospace; }
+.stats td.nick { color: var(--ink); font-weight: 600; }
+.stats tr.me td { background: rgba(255,216,74,.07); color: var(--ink); }
+.stats tr.me td.nick { color: var(--gold); }
+.statsnote { font-size: 11.5px; color: var(--ink-3); margin: 8px 0 0; }

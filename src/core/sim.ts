@@ -110,6 +110,13 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     streak: 0,
     stamina: STAMINA_MAX,
     blockLock: 0,
+    shots: 0,
+    hits: 0,
+    heads: 0,
+    dmgDealt: 0,
+    dmgTaken: 0,
+    bestStreak: 0,
+    killStreak: 0,
   }
 }
 
@@ -377,6 +384,7 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
   }
   if (w.melee) {
     p.fireCooldown = w.fireInterval
+    p.shots++
     state.events.push({ type: 'fire', p: p.id, x: mx, y: my, aim: p.aim, weapon: p.weapon })
     meleeSwing(state, map, p)
     return
@@ -407,6 +415,7 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
     state.bullets.push(b)
   }
   if (w.magSize > 0) p.ammo--
+  p.shots += w.pellets // 명중률을 탄 단위로 재야 산탄총이 왜곡되지 않는다
   p.fireCooldown = w.fireInterval
   p.recoil = Math.min(w.recoil * MAX_RECOIL_MUL * 2, p.recoil + w.recoil)
   state.events.push({ type: 'fire', p: p.id, x: mx, y: my, aim: p.aim, weapon: p.weapon })
@@ -489,6 +498,10 @@ function dropMedkit(state: GameState, x: number, y: number): void {
 
 function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: number, part: number, hx: number, hy: number): void {
   if (dmg <= 0) return
+  shooter.hits++
+  if (part === PART_HEAD) shooter.heads++
+  shooter.dmgDealt += dmg
+  victim.dmgTaken += dmg
   victim.hp -= dmg
   victim.lastHitTick = state.tick
   if (part === PART_LEGS) victim.legInjury = 180
@@ -498,7 +511,10 @@ function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: 
     victim.alive = false
     victim.respawnTimer = victim.char === 'seungwoo' ? 120 : RESPAWN_TICKS
     victim.deaths++
+    victim.killStreak = 0
     shooter.kills++
+    shooter.killStreak++
+    if (shooter.killStreak > shooter.bestStreak) shooter.bestStreak = shooter.killStreak
     if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50)
     state.events.push({ type: 'death', p: victim.id, by: shooter.id, x: victim.x, y: victim.y })
     // 죽은 자리에 힐팩을 남긴다. 이긴 쪽이 그 자리를 차지하면 이어서 싸울 수 있다

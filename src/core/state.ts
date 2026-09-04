@@ -76,6 +76,16 @@ export interface PlayerState {
   stamina: number
   /** 총알을 막은 직후 기력이 다시 차지 않는 틱 수. 계속 맞으면 방어가 결국 뚫린다 */
   blockLock: number
+  /** 결과 화면 통계. sim 안에 두어야 리싱크·재접속에도 값이 어긋나지 않는다 */
+  shots: number
+  hits: number
+  heads: number
+  dmgDealt: number
+  dmgTaken: number
+  /** 한 판에서 죽지 않고 이어 간 최다 킬 */
+  bestStreak: number
+  /** 지금 연속 킬 (죽으면 0) */
+  killStreak: number
 }
 
 export interface Bullet {
