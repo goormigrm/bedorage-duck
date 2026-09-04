@@ -1,9 +1,11 @@
-// 재접속. 끊긴 사람의 자리를 잠시 비워 두었다가 돌아오면 이어서 하게 한다.
+// 난입: 진행 중인 판의 빈 자리에 새 사람이 들어온다.
 //
 // 핵심은 두 가지다.
-//  1) 끊긴 동안 **경기가 멈추지 않아야** 한다 — 그 사람 입력을 빈 입력으로 채운다.
-//  2) 돌아온 사람이 **같은 지점에서** 이어야 한다 — 호스트가 그 시점의 판을 통째로 보내 준다.
-//     그래서 복원한 상태로 이어서 돌려도 해시가 어긋나지 않아야 한다.
+//  1) 자리가 비어 있는 동안 **경기가 멈추지 않아야** 한다 — 그 자리 입력을 빈 입력으로 채운다.
+//  2) 들어온 사람이 **같은 지점에서** 시작해야 한다 — 호스트가 그 시점의 판을 통째로 보내 준다.
+//     그래서 받은 판으로 이어서 돌려도 해시가 어긋나지 않아야 한다.
+//
+// (2026-09-06: 자동 재접속은 걷어냈다. 끊기면 그냥 나간 것이고, 돌아오려면 난입으로 들어온다)
 
 import { describe, expect, it } from 'vitest'
 import { botInput, makeBot } from '../src/core/bot'
@@ -35,8 +37,8 @@ function fakeLink(): RoomLink {
 
 const IN = (mx: number): Input => ({ mx, my: 0, aim: 0, buttons: 0, char: 0 })
 
-describe('락스텝 재접속', () => {
-  it('끊긴 사람이 있어도 나머지는 계속 진행한다', () => {
+describe('락스텝 자리 비움·채움', () => {
+  it('빈 자리가 있어도 나머지는 계속 진행한다', () => {
     const ls = new Lockstep(fakeLink(), 3, 0, new Map(), 2)
     ls.pushLocal(0, IN(1))
     // 1번의 입력이 없으면 멈춘다
@@ -46,7 +48,7 @@ describe('락스텝 재접속', () => {
     expect(ls.get(3)[1]).toEqual(EMPTY_INPUT)
   })
 
-  it('돌아오면 그 틱부터 다시 입력을 기다린다', () => {
+  it('자리가 채워지면 그 틱부터 입력을 기다린다', () => {
     const ls = new Lockstep(fakeLink(), 3, 0, new Map(), 2)
     ls.drop(1)
     expect(ls.isDropped(1)).toBe(true)
@@ -70,7 +72,7 @@ describe('락스텝 재접속', () => {
   })
 })
 
-describe('판 이어받기', () => {
+describe('판 이어받기 (난입)', () => {
   it('받은 판으로 갈아 끼우고 이어서 돌려도 해시가 같다', () => {
     // 호스트 쪽: 600틱 진행
     const host = createState({ seed: 24, targetKills: 9, chars: ['chim', 'cheolmyeon'] }, map)

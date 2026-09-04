@@ -132,7 +132,7 @@ export type CtlMessage =
   /** 내 상태 (캐릭터·준비·팀). 모두에게 */
   | { t: 'hello'; char: string; ready: boolean; team: number; name: string }
   /** 호스트 → 모두: 방 상태 정본 */
-  | { t: 'room'; mode: RoomMode; targetKills: number; map: string; members: Member[] }
+  | { t: 'room'; mode: RoomMode; targetKills: number; map: string; members: Member[]; size: number }
   /** 호스트 → 정원 초과로 들어온 피어 */
   | { t: 'full' }
   /** 호스트 → 모두: 시작. players 순서가 플레이어 인덱스 */

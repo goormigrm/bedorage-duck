@@ -366,3 +366,9 @@ input.nick.big { font: 700 20px "IBM Plex Sans KR", sans-serif; letter-spacing: 
 input.nick.big::placeholder { color: var(--ink-3); font-weight: 500; }
 input.nick.big:focus { outline: 2px solid var(--gold); border-color: transparent; }
 input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,81,73,.25); }
+
+/* 방 목록 새로고침 */
+.card h2 .lnk.refresh { margin-left: auto; font: 600 11px "IBM Plex Sans KR", sans-serif; color: var(--ink-2);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; cursor: pointer; }
+.card h2 .lnk.refresh:hover { color: var(--ink); border-color: var(--line-2); }
+.card h2 .lnk.refresh:disabled { opacity: .5; cursor: default; }

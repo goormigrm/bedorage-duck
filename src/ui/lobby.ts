@@ -21,36 +21,6 @@ export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
 }
 
-/** 끊긴 판이 있으면 그 정보 (방 코드 · 내 자리) */
-interface SavedSeat {
-  code: string
-  p: number
-  at: number
-}
-
-/** 45초 안에 돌아와야 자리가 남아 있다. 넉넉히 2분까지는 시도해 본다 */
-const REJOIN_WINDOW_MS = 2 * 60 * 1000
-
-function loadSeat(): SavedSeat | null {
-  try {
-    const raw = localStorage.getItem('bd.rejoin')
-    if (!raw) return null
-    const v = JSON.parse(raw) as SavedSeat
-    if (!v || typeof v.code !== 'string' || Date.now() - v.at > REJOIN_WINDOW_MS) return null
-    return v
-  } catch {
-    return null
-  }
-}
-
-function clearSeat(): void {
-  try {
-    localStorage.removeItem('bd.rejoin')
-  } catch {
-    /* 저장소 없음 */
-  }
-}
-
 /** 목표 킬: 5~50, 5 단위 */
 const KILL_OPTIONS = Array.from({ length: 10 }, (_, i) => (i + 1) * 5)
 /** 로비 미리보기용 고정 시드 (실제 판은 매번 다른 시드로 생성된다) */
@@ -90,9 +60,9 @@ export class Lobby {
   private starting = false
   private disposed = false
 
-  /** 재접속 시도 중인 자리 */
-  private rejoining: SavedSeat | null = null
+  /** 난입 요청 타임아웃 */
   private rejoinTimer = 0
+  private onlineTimer = 0
 
   constructor(
     private host: HTMLElement,
@@ -105,12 +75,6 @@ export class Lobby {
     }
     this.render()
     this.openLobbyList()
-    // 하던 판이 끊겨 있으면 먼저 그 방으로 돌아가 본다
-    const seat = loadSeat()
-    if (seat) {
-      this.tryRejoin(seat)
-      return
-    }
     const code = roomCodeFromUrl()
     if (code) {
       if (this.nick.trim().length === 0) {
@@ -132,7 +96,7 @@ export class Lobby {
         <div class="season">BEDORAGE DUCK · P2P · 2~${MAX_PLAYERS} PLAYERS</div>
         <h1><span class="t1">배도라지</span> <span class="t2">덕</span></h1>
         <p class="tag"><b>최대 ${MAX_PLAYERS}인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
-        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입</span><span>끊겨도 다시 들어오기</span><span>설치 없음 · 서버 없음</span></div>
+        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입</span><span>혼자 남아도 30초 대기</span><span>설치 없음 · 서버 없음</span></div>
 
         <div class="lobby-grid">
           <aside class="side">
@@ -145,7 +109,7 @@ export class Lobby {
             <div class="status" id="status"></div>
 
             <div class="card rooms-card">
-              <h2>방 목록 <span class="k" id="online">접속 확인 중</span></h2>
+              <h2>방 목록 <span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
               <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
               <div class="row"><input class="code" id="join-code" maxlength="6" placeholder="코드 직접 입력" autocomplete="off" spellcheck="false"><button class="btn secondary" id="btn-join">참가</button></div>
               <p class="hintline dim">게임 중인 방도 자리가 있으면 <b>난입</b>할 수 있습니다.</p>
@@ -282,6 +246,7 @@ export class Lobby {
     // 치는 즉시 강조를 풀어 준다 (change 는 포커스를 잃어야 온다)
     nickEl.addEventListener('input', () => applyNick(false))
     nickEl.addEventListener('change', () => applyNick(true))
+    ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
     ;(h.querySelector('#btn-join') as HTMLButtonElement).onclick = () => {
@@ -447,11 +412,46 @@ export class Lobby {
       this.rooms = rooms
       this.renderRooms()
     })
-    setInterval(() => {
+    if (!this.onlineTimer) {
+      this.onlineTimer = window.setInterval(() => {
+        if (this.disposed) return
+        const el = this.host.querySelector('#online')
+        if (el) el.textContent = this.lobbyLink ? `접속 ${this.lobbyLink.onlineCount()}명` : '연결 중…'
+      }, 1500)
+    }
+  }
+
+  /**
+   * 방 목록을 다시 받아온다.
+   * 공용 로비 방은 **서로 연결된 사람의 방송만** 보이므로, 늦게 들어왔거나 릴레이가 흔들리면
+   * 남의 방이 안 보일 수 있다. 통로를 닫았다 다시 열어 처음부터 다시 찾는다.
+   */
+  private refreshRooms(): void {
+    const btn = this.host.querySelector('#btn-refresh') as HTMLButtonElement | null
+    if (btn) {
+      btn.disabled = true
+      btn.textContent = '찾는 중…'
+    }
+    if (this.lobbyLink) {
+      this.lobbyLink.leave()
+      this.lobbyLink = null
+    }
+    this.rooms = []
+    this.renderRooms()
+    // 이전 통로가 정리될 짬을 준 뒤 다시 연다
+    window.setTimeout(() => {
       if (this.disposed) return
-      const el = this.host.querySelector('#online')
-      if (el && this.lobbyLink) el.textContent = `접속 ${this.lobbyLink.onlineCount()}명`
-    }, 1500)
+      this.openLobbyList()
+      this.announce()
+      window.setTimeout(() => {
+        if (this.disposed) return
+        const b = this.host.querySelector('#btn-refresh') as HTMLButtonElement | null
+        if (b) {
+          b.disabled = false
+          b.textContent = '새로고침'
+        }
+      }, 2500)
+    }, 350)
   }
 
   private renderRooms(): void {
@@ -617,33 +617,11 @@ export class Lobby {
     })
   }
 
-  /**
-   * 끊겼던 판으로 돌아간다. 방에 다시 들어가 호스트에게 자리를 달라고 하고,
-   * 호스트가 판 전체(`resume`)를 보내 주면 그 지점부터 이어서 시작한다.
-   * 45초가 지나 자리가 사라졌으면 호스트가 거절하고, 그때는 평범한 로비로 돌아온다.
-   */
-  private tryRejoin(seat: SavedSeat): void {
-    this.status(`끊긴 판으로 돌아가는 중… (방 ${seat.code})`, '', `<div class="row"><button class="btn secondary" id="btn-cancel">그만두기</button></div>`)
-    this.bindCancel()
-    this.role = 'guest'
-    this.rejoining = seat
-    this.link = openRoom(seat.code, 'guest')
-    this.wireLink()
-    // 호스트를 만나면 자리를 달라고 한다
-    this.link.onPeerJoin(() => {
-      this.link?.sendCtl({ t: 'rejoinAsk', key: `${seat.code}:${seat.p}` })
-    })
-    this.rejoinTimer = window.setTimeout(() => {
-      if (this.rejoining) this.giveUpRejoin('그 판은 이미 끝났거나 자리가 사라졌습니다.')
-    }, 15000)
-  }
-
+  /** 난입에 실패했을 때 (자리가 없거나 방이 응답하지 않음) */
   private giveUpRejoin(why: string): void {
     clearTimeout(this.rejoinTimer)
-    this.rejoining = null
     this.barging = false
     this.bargeSent = false
-    clearSeat()
     this.closeLink()
     this.status(why, 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
     this.bindCancel()
@@ -668,12 +646,10 @@ export class Lobby {
   private onCtl(m: CtlMessage, from: string): void {
     switch (m.t) {
       case 'resume': {
-        // 끊겼던 판을 이어서 시작하거나(재접속), 진행 중인 방에 끼어든다(난입)
-        if (!this.rejoining && !this.barging) return
+        // 진행 중인 방에 끼어든다(난입). 호스트가 보내 준 그 시점의 판으로 시작한다
+        if (!this.barging) return
         this.barging = false
         clearTimeout(this.rejoinTimer)
-        const seat = this.rejoining
-        this.rejoining = null
         const c = m.cfg as {
           chars: CharacterId[]
           teams?: number[]
@@ -702,11 +678,10 @@ export class Lobby {
           resumeState: m.state,
           resumeTick: m.tick,
         })
-        void seat
         return
       }
       case 'rejoinNo': {
-        if (this.rejoining) this.giveUpRejoin(m.why)
+        if (this.barging) this.giveUpRejoin(m.why)
         return
       }
       case 'hello':
@@ -719,6 +694,8 @@ export class Lobby {
         this.members = m.members
         this.roomMode = m.mode
         this.killsRoom = m.targetKills
+        // 정원은 호스트가 정한다 — 안 받으면 게스트 화면에 제 기본값(4)이 보인다
+        if (typeof m.size === 'number') this.roomSize = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, m.size))
         if (isMapId(m.map)) this.mapId = m.map
         const me = this.members.find((x) => x.id === this.link?.selfId)
         if (me) {
@@ -777,7 +754,7 @@ export class Lobby {
 
   private broadcastRoom(): void {
     if (this.role !== 'host' || !this.link) return
-    this.link.sendCtl({ t: 'room', mode: this.roomMode, targetKills: this.killsRoom, map: this.mapId, members: this.members })
+    this.link.sendCtl({ t: 'room', mode: this.roomMode, targetKills: this.killsRoom, map: this.mapId, members: this.members, size: this.roomSize })
   }
 
   private sendHello(to?: string): void {
@@ -982,6 +959,7 @@ export class Lobby {
 
   dispose(): void {
     this.disposed = true
+    clearInterval(this.onlineTimer)
     this.closeLink()
     if (this.lobbyLink) {
       this.lobbyLink.leave()

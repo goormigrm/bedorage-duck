@@ -90,12 +90,12 @@ export class Session {
   private pickerOpen = false
   /** 죽어서 기다리는 동안 보고 있는 사람. -1 = 내 시점 */
   private spectate = -1
-  /** 끊긴 사람의 자리를 비워 두는 시간(틱). 이 안에 돌아오면 이어서 한다 */
-  private static readonly HOLD_TICKS = 60 * 45
-  /** 자리를 비워 둔 사람: 인덱스 → 자리를 없앨 틱 */
-  private holding = new Map<number, number>()
-  /** 호스트만: 재접속 키 → 플레이어 인덱스 */
-  private rejoinKeys = new Map<string, number>()
+  /** 나간 사람의 자리를 없애기까지 (짧게 — 자리가 비어야 남들이 난입할 수 있다) */
+  private static readonly DROP_DELAY_TICKS = 60 * 3
+  /** 혼자 남은 뒤 방을 닫기까지 기다리는 시간 */
+  private static readonly ALONE_GRACE_TICKS = 60 * 30
+  /** 혼자 남기 시작한 틱 (-1 = 혼자가 아니다) */
+  private aloneSince = -1
   /** 호스트만: 돌아오기로 한 사람 (틱이 되면 상태를 보낸다) */
   private pendingRejoin: { peerId: string; p: number; tick: number } | null = null
   /** 정해진 틱에 자리를 채울 사람들 (난입) */
@@ -159,7 +159,6 @@ export class Session {
     this.sfx.startBgm()
 
     this.names = this.computeNames()
-    this.setupRejoinKeys()
 
     if (cfg.mode === 'p2p' && cfg.link) {
       const ids = cfg.peerIds ?? []
@@ -180,25 +179,8 @@ export class Session {
   }
 
   /**
-   * 재접속 열쇠. 브라우저가 끊겼다 돌아왔을 때 "누구였는지" 를 알려면 표식이 필요하다.
-   * 방 코드 + 플레이어 번호로 만들고 각자 자기 것만 저장한다(같은 방·같은 자리에서만 통한다).
-   * 호스트는 전체를 기억해 두었다가 돌아온 사람과 맞춰 본다.
-   */
-  private setupRejoinKeys(): void {
-    if (this.cfg.mode !== 'p2p' || !this.cfg.link) return
-    const code = this.cfg.link.code
-    const n = this.cfg.chars.length
-    for (let i = 0; i < n; i++) this.rejoinKeys.set(`${code}:${i}`, i)
-    try {
-      localStorage.setItem('bd.rejoin', JSON.stringify({ code, p: this.cfg.localPlayer, at: Date.now() }))
-    } catch {
-      /* 저장소가 없으면 재접속을 포기한다 */
-    }
-  }
-
-  /**
    * 게임 중에도 방을 방송한다(호스트만). 이게 없으면 시작하는 순간 방이 목록에서 사라져
-   * 아무도 난입할 수 없다. 자리가 차면 'full', 다 나가면 방송을 멈춘다.
+   * 아무도 난입할 수 없다. 자리가 차면 'full', 세션이 끝나면 방송을 멈춘다.
    */
   private startLobbyBeacon(): void {
     const lobby = this.cfg.lobby
@@ -413,22 +395,24 @@ export class Session {
       return
     }
     if (this.isHost) {
-      // 바로 없애지 않고 45초 자리를 비워 둔다. 그 안에 돌아오면 이어서 한다.
+      // 나가면 곧 자리를 비운다. 비어야 남들이 **난입**으로 들어올 수 있다.
       // (락스텝은 이미 그 사람 입력을 빈 입력으로 채우므로 경기는 멈추지 않는다)
-      const tick = this.state.tick + Session.HOLD_TICKS
-      this.holding.set(idx, tick)
+      const tick = this.state.tick + Session.DROP_DELAY_TICKS
       this.pendingDrops.push({ p: idx, tick })
       this.cfg.link?.sendCtl({ t: 'drop', p: idx, tick })
-      this.message = `${this.names[idx]} 연결 끊김 · 45초 안에 돌아오면 이어서 합니다`
+      this.message = `${this.names[idx]} 나감 · 빈 자리는 난입으로 채워집니다`
       setTimeout(() => {
         if (this.message.startsWith(this.names[idx])) this.message = ''
       }, 4000)
     }
   }
 
-  /** step 직후 호출: 정해진 틱에 도달한 이탈을 상태에 반영 */
+  /** step 직후 호출: 정해진 틱에 도달한 이탈을 상태에 반영하고, 혼자 남았는지 본다 */
   private applyDrops(): void {
-    if (this.pendingDrops.length === 0) return
+    if (this.pendingDrops.length === 0) {
+      this.checkAlone()
+      return
+    }
     const t = this.state.tick
     const keep: PendingDrop[] = []
     for (const d of this.pendingDrops) {
@@ -436,9 +420,34 @@ export class Session {
       else keep.push(d)
     }
     this.pendingDrops = keep
+    this.checkAlone()
+  }
+
+  /**
+   * 혼자 남았을 때. 바로 끝내지 않고 **30초 기다린다** — 그동안 누가 난입하면 그대로 이어서 한다.
+   * 방은 계속 방송되고 있으므로 목록에서 "게임 중 · 난입 가능" 으로 보인다.
+   */
+  private checkAlone(): void {
+    if (this.cfg.mode !== 'p2p' || this.state.phase === 'over') return
     const remaining = this.state.players.filter((p) => !p.left).length
-    if (remaining < 2 && this.state.phase !== 'over' && this.overlay.hidden) {
-      this.showOverlay('상대가 모두 나갔습니다', '', [{ label: '로비로', primary: true, onClick: () => this.exit() }])
+    if (remaining >= 2) {
+      if (this.aloneSince >= 0) {
+        this.aloneSince = -1
+        this.message = ''
+      }
+      return
+    }
+    if (this.aloneSince < 0) this.aloneSince = this.state.tick
+    const left = Session.ALONE_GRACE_TICKS - (this.state.tick - this.aloneSince)
+    if (left > 0) {
+      this.message = `혼자 남았습니다 · ${Math.ceil(left / 60)}초 안에 아무도 안 들어오면 방이 닫힙니다`
+      return
+    }
+    if (this.overlay.hidden) {
+      this.message = ''
+      this.showOverlay('아무도 들어오지 않았습니다', '방을 닫습니다.', [
+        { label: '로비로', primary: true, onClick: () => this.exit() },
+      ])
       this.paused = true
     }
   }
@@ -476,11 +485,6 @@ export class Session {
         this.pendingDrops.push({ p: m.p, tick: m.tick })
         break
       }
-      case 'rejoinAsk': {
-        if (!this.isHost) break
-        this.onRejoinAsk(m.key, from)
-        break
-      }
       case 'joinAsk': {
         if (!this.isHost) break
         this.onJoinAsk(m.char as CharacterId, m.name, from)
@@ -488,18 +492,6 @@ export class Session {
       }
       case 'joinAt': {
         this.pendingJoins.push({ p: m.p, tick: m.tick, char: m.char as CharacterId, team: m.team, name: m.name })
-        break
-      }
-      case 'rejoinAt': {
-        // 모두: 그 사람 입력을 tick 부터 다시 기다리고, 자리 없애기를 취소한다
-        this.pendingDrops = this.pendingDrops.filter((d) => d.p !== m.p)
-        this.holding.delete(m.p)
-        this.dropped.delete(m.p)
-        this.lockstep?.rejoin(m.p, m.tick)
-        this.message = `${this.names[m.p]} 다시 들어왔습니다`
-        setTimeout(() => {
-          if (this.message.endsWith('다시 들어왔습니다')) this.message = ''
-        }, 3000)
         break
       }
       case 'mark': {
@@ -728,32 +720,6 @@ export class Session {
   }
 
   /**
-   * 끊겼던 사람이 자기 자리를 달라고 한다(호스트만 처리).
-   * 자리를 비워 둔 슬롯 중 키가 맞는 것이 있으면, **앞선 틱 T** 를 정해 모두에게 알리고
-   * T 에 도달했을 때 그 시점의 판 전체를 보내 준다. 그래야 모두의 sim 이 같은 지점에서 이어진다.
-   */
-  private onRejoinAsk(key: string, peerId: string): void {
-    const idx = this.rejoinKeys.get(key)
-    if (idx === undefined || !this.holding.has(idx)) {
-      this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '자리가 이미 사라졌습니다' }, peerId)
-      return
-    }
-    if (this.pendingRejoin) {
-      this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '다른 사람이 먼저 들어오는 중입니다' }, peerId)
-      return
-    }
-    // 상태를 만들어 보내고 상대가 준비할 시간을 넉넉히 둔다
-    const tick = this.state.tick + 120
-    this.pendingRejoin = { peerId, p: idx, tick }
-    this.peerIndex.set(peerId, idx)
-    this.cfg.link?.sendCtl({ t: 'rejoinAt', p: idx, tick })
-    this.pendingDrops = this.pendingDrops.filter((d) => d.p !== idx)
-    this.holding.delete(idx)
-    this.dropped.delete(idx)
-    this.lockstep?.rejoin(idx, tick)
-  }
-
-  /**
    * 진행 중인 방에 새로 들어오겠다는 요청(호스트만 처리).
    * 비어 있는 자리를 찾아 **앞선 틱 T** 를 정해 모두에게 알리고, T 에 그 자리를 채운다.
    * 그 사람에게는 T 시점의 판 전체를 보내 준다(재입장과 같은 길).
@@ -767,10 +733,10 @@ export class Session {
       this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '다른 사람이 먼저 들어오는 중입니다' }, peerId)
       return
     }
-    // 아무도 없는 자리 찾기 (나간 사람 자리는 비워 두는 중일 수 있으므로 holding 은 건드리지 않는다)
+    // 아무도 없는 자리 찾기
     let slot = -1
     for (let i = 0; i < this.state.players.length; i++) {
-      if (this.state.players[i].left && !this.holding.has(i)) {
+      if (this.state.players[i].left) {
         slot = i
         break
       }
@@ -951,11 +917,6 @@ export class Session {
     if (this.cfg.lobby) {
       this.cfg.lobby.announce(null)
       this.cfg.lobby.leave()
-    }
-    try {
-      localStorage.removeItem('bd.rejoin')
-    } catch {
-      /* 저장소 없음 */
     }
     cancelAnimationFrame(this.raf)
     this.ticker.stop()
