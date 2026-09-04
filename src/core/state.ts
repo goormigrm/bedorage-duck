@@ -29,6 +29,12 @@ export const MEDKIT_RADIUS = 26
 /** 리스폰 후 이 틱 안에는 Tab 으로 캐릭터를 바꿀 수 있다 (3초) */
 export const SWAP_GRACE_TICKS = 180
 /** 한 경기 최대 인원 (방 정원) */
+/**
+ * 한 방 최대 인원. 6~8명도 계산·대역폭은 여유지만(8인 기준 틱당 0.03ms · 22KB/s),
+ * **풀 메시 연결 수**가 8인이면 28쌍이라 TURN 없이 전부 뚫릴 확률이 떨어지고,
+ * 락스텝이라 한 사람의 지터가 전원에게 퍼진다. 실제로 3인 테스트에서 한 명이 무선이면 끊김이 체감됐다.
+ * 그래서 4로 둔다. (측정값은 CHANGELOG v1.4 참고)
+ */
 export const MAX_PLAYERS = 4
 export const MIN_PLAYERS = 2
 
@@ -118,6 +124,8 @@ export type SimEvent =
   | { type: 'reload'; p: number }
   | { type: 'wall'; x: number; y: number; aim: number }
   | { type: 'leave'; p: number }
+  /** 빈 자리에 사람이 들어왔다 (난입) */
+  | { type: 'join'; p: number; char: CharacterId }
   /** 모래주머니 파괴 */
   | { type: 'break'; tx: number; ty: number }
   /** 근접 무기로 총알을 막음 */
@@ -136,10 +144,16 @@ export type SimEvent =
 export interface MatchConfig {
   seed: number
   targetKills: number
-  /** 인원 수 = 길이 (2..MAX_PLAYERS) */
+  /** 자리 수 = 길이 (2..MAX_PLAYERS). 아직 아무도 안 들어온 자리도 포함한다 */
   chars: CharacterId[]
   /** 팀 배정. 생략하면 개인전(각자 자기 인덱스가 팀) */
   teams?: number[]
+  /**
+   * 아직 사람이 없는 자리. true 면 `left` 로 시작해 판에 나오지 않는다.
+   * 자리 수를 처음부터 최대로 잡아 두면 **중간에 배열을 늘리지 않아도** 난입을 받을 수 있다
+   * (배열 크기가 바뀌면 모두가 정확히 같은 틱에 같은 방식으로 늘려야 해서 어긋나기 쉽다).
+   */
+  absent?: boolean[]
 }
 /** 맵은 GameState 밖(정적)이라 MatchConfig 에 넣지 않고 세션 설정으로 따로 전달한다 */
 

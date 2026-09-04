@@ -92,6 +92,12 @@ export class Renderer3D {
   private vision: Vision
   /** 시야 밖(안 보이는) 플레이어 */
   private hidden: boolean[] = []
+  /**
+   * 화면에 그리는 위치. sim 위치를 그대로 쓰면, 상대 입력이 늦어 멈췄다가
+   * 한꺼번에 여러 틱을 처리할 때 **순간이동처럼** 보인다.
+   * 그래서 실제 이동 속도보다 조금 빠른 상한을 두고 따라가게 한다(리스폰처럼 멀면 즉시 이동).
+   */
+  private dispPos: { x: number; z: number }[] = []
   /** 마지막으로 본 뒤 남은 시간 — 경계에서 깜빡이지 않도록 (초) */
   private seenT: number[] = []
   /** 스코프(저격 정조준) 중인가 */
@@ -458,6 +464,27 @@ export class Renderer3D {
       const b = curr.players[i]
       if (!a || !b.alive || b.aliveTicks <= 1) pos.push({ x: b.x * U, z: b.y * U })
       else pos.push({ x: (a.x + (b.x - a.x) * alpha) * U, z: (a.y + (b.y - a.y) * alpha) * U })
+    }
+    // 화면 위치 스무딩: 순간이동을 없앤다
+    if (this.dispPos.length !== n) this.dispPos = pos.map((p) => ({ x: p.x, z: p.z }))
+    for (let i = 0; i < n; i++) {
+      const p = curr.players[i]
+      const d = this.dispPos[i]
+      const dx = pos[i].x - d.x
+      const dz = pos[i].z - d.z
+      const dist = Math.hypot(dx, dz)
+      // 리스폰·난입·순간이동은 그대로 붙인다 (2타일 넘게 벌어지면 따라잡을 이유가 없다)
+      if (!p.alive || p.aliveTicks <= 2 || dist > 2) {
+        d.x = pos[i].x
+        d.z = pos[i].z
+      } else if (dist > 0.0001) {
+        // 캐릭터 최고 속도(약 3.7px/tick ≈ 7타일/초)보다 넉넉히 빠른 상한
+        const maxStep = Math.max(0.02, 11 * dt)
+        const k = Math.min(1, maxStep / dist)
+        d.x += dx * k
+        d.z += dz * k
+      }
+      pos[i] = { x: d.x, z: d.z }
     }
     this.updateSandbags(curr)
     this.updateVision(curr, opts)

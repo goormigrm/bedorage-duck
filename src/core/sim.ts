@@ -1,4 +1,4 @@
-import { CHARACTERS, CHARACTER_LIST } from './characters'
+import { CHARACTERS, CHARACTER_LIST, CharacterId } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SWAP, Input } from './input'
 import { GameMap, SANDBAG_HP, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
@@ -38,7 +38,16 @@ export function createState(cfg: MatchConfig, map: GameMap): GameState {
   const rng = makeRng(cfg.seed)
   const n = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, cfg.chars.length))
   const players: PlayerState[] = []
-  for (let i = 0; i < n; i++) players.push(makePlayer(i, cfg.chars[i], cfg.teams?.[i] ?? i))
+  for (let i = 0; i < n; i++) {
+    const p = makePlayer(i, cfg.chars[i], cfg.teams?.[i] ?? i)
+    // 아직 아무도 안 들어온 자리는 판에 나오지 않는다 (난입하면 그때 채운다)
+    if (cfg.absent?.[i]) {
+      p.left = true
+      p.alive = false
+      p.hp = 0
+    }
+    players.push(p)
+  }
   const state: GameState = {
     tick: 0,
     rng,
@@ -69,6 +78,7 @@ export function createState(cfg: MatchConfig, map: GameMap): GameState {
     placeAt(players[i], s)
     used.push(s)
   }
+  // 빈 자리는 아직 아무 데도 없다 (난입할 때 살아 있는 사람들에게서 먼 곳에 넣는다)
   // 처음엔 맵 중앙을 바라본다
   for (const p of players) p.aim = atan2A(map.ph / 2 - p.y, map.pw / 2 - p.x)
   return state
@@ -197,6 +207,34 @@ function stepMedkits(state: GameState): void {
     if (!taken) state.medkits[write++] = m
   }
   state.medkits.length = write
+}
+
+/**
+ * 빈 자리에 사람을 넣는다 (난입·재입장).
+ * 호스트가 정한 틱에 **모두가 같이** 호출해야 결정론이 유지된다.
+ * 들어오자마자 맞지 않도록 스폰 보호를 준다.
+ */
+export function joinPlayer(state: GameState, map: GameMap, idx: number, char: CharacterId, team: number): void {
+  const p = state.players[idx]
+  if (!p) return
+  p.left = false
+  p.char = char
+  p.weapon = CHARACTERS[char].weapon
+  p.team = team
+  p.kills = 0
+  p.deaths = 0
+  p.streak = 0
+  p.killStreak = 0
+  p.bestStreak = 0
+  p.shots = 0
+  p.hits = 0
+  p.heads = 0
+  p.dmgDealt = 0
+  p.dmgTaken = 0
+  p.choosing = false
+  p.respawnTimer = 0
+  respawn(state, map, p)
+  state.events.push({ type: 'join', p: idx, char })
 }
 
 /** 경기 도중 나간 사람 처리 (호스트가 정한 틱에 모두가 같이 호출해야 결정론이 유지된다) */

@@ -333,3 +333,36 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .stats tr.me td { background: rgba(255,216,74,.07); color: var(--ink); }
 .stats tr.me td.nick { color: var(--gold); }
 .statsnote { font-size: 11.5px; color: var(--ink-3); margin: 8px 0 0; }
+
+/* ---- 로비 2열 배치 (PC: 방 목록·내 방이 왼쪽 / 모바일: 맨 위) ---- */
+.lobby-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; align-items: start; }
+.side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; }
+.mainpane { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+@media (max-width: 980px) {
+  /* 좁은 화면·모바일: 방 목록과 내 방이 맨 위로 온다 */
+  .lobby-grid { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; }
+}
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 13px;
+  display: flex; flex-direction: column; gap: 9px; }
+.card h2 { font-family: "Black Han Sans", sans-serif; font-weight: 400; font-size: 21px; margin: 0;
+  display: flex; align-items: center; gap: 8px; }
+.card h2 .k { font: 500 10px "IBM Plex Mono", monospace; color: var(--gold); border: 1px solid currentColor;
+  border-radius: 999px; padding: 1px 7px; letter-spacing: .06em; }
+.card .cardp { margin: 0; color: var(--ink-2); font-size: 13px; }
+.rooms-card .rooms { max-height: 260px; }
+/* 사이드가 좁으므로 대기실 자리 카드는 세로로 쌓는다 */
+.side .slots { grid-template-columns: minmax(0, 1fr); }
+.side .slots .vs { display: none; }
+.side .status { margin-top: 0; }
+
+/* ---- 닉네임 카드 (사이드 맨 위) ---- */
+.nick-card { border-color: #3a4457; }
+/* 아직 안 정했으면 눈에 띄게 — 참가를 누르고 나서야 알게 되면 늦다 */
+.nick-card.empty { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255,216,74,.25) inset, 0 8px 30px rgba(255,216,74,.07); }
+.nick-card.empty h2 .k { background: var(--gold); color: #17202b; border-color: transparent; }
+input.nick.big { font: 700 20px "IBM Plex Sans KR", sans-serif; letter-spacing: .02em; background: var(--bg);
+  color: var(--ink); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 14px; width: 100%; }
+input.nick.big::placeholder { color: var(--ink-3); font-weight: 500; }
+input.nick.big:focus { outline: 2px solid var(--gold); border-color: transparent; }
+input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,81,73,.25); }

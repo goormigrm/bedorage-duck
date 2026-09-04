@@ -73,6 +73,8 @@ export class Lobby {
   /** 혼자 하기 모드: 개인전 / 2v2 팀전 (봇 3) */
   private soloMode: 'ffa' | 'teams' = 'ffa'
   private roomMode: RoomMode = 'ffa'
+  /** 방 정원 (호스트가 방 만들 때 정한다). 2명만 모여도 시작할 수 있고, 나머지 자리는 난입으로 채운다 */
+  private roomSize = 4
   /** 닉네임 (선택, 8자, localStorage 기억) */
   private nick = ''
   private lobbyLink: LobbyLink | null = null
@@ -127,67 +129,81 @@ export class Lobby {
     const h = this.host
     h.innerHTML = `
       <div class="lobby">
-        <div class="season">BEDORAGE DUCK · P2P · 2~4 PLAYERS</div>
+        <div class="season">BEDORAGE DUCK · P2P · 2~${MAX_PLAYERS} PLAYERS</div>
         <h1><span class="t1">배도라지</span> <span class="t2">덕</span></h1>
-        <p class="tag"><b>최대 4인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
-        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 2v2 팀전</span><span>인원에 따라 맵 4배</span><span>리스폰 중 Tab 캐릭터 교체</span><span>설치 없음 · 서버 없음</span></div>
+        <p class="tag"><b>최대 ${MAX_PLAYERS}인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
+        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입</span><span>끊겨도 다시 들어오기</span><span>설치 없음 · 서버 없음</span></div>
 
-        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small><input class="nick" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false"></div>
-        <div class="chars" id="chars"></div>
-
-        <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명이면 4배</small></div>
-        <div class="maprow">
-          <div>
-            <div class="seg" id="seg-map">
-              ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+        <div class="lobby-grid">
+          <aside class="side">
+            <div class="card nick-card" id="nick-card">
+              <h2>닉네임 <span class="k">먼저 정하세요</span></h2>
+              <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
+              <p class="cardp">게임 중 캐릭터 위에 뜹니다. 방을 만들거나 참가하려면 있어야 합니다.</p>
             </div>
-            <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
-            <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
-          </div>
-          <canvas id="map-preview" class="mappv"></canvas>
+
+            <div class="status" id="status"></div>
+
+            <div class="card rooms-card">
+              <h2>방 목록 <span class="k" id="online">접속 확인 중</span></h2>
+              <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
+              <div class="row"><input class="code" id="join-code" maxlength="6" placeholder="코드 직접 입력" autocomplete="off" spellcheck="false"><button class="btn secondary" id="btn-join">참가</button></div>
+              <p class="hintline dim">게임 중인 방도 자리가 있으면 <b>난입</b>할 수 있습니다.</p>
+            </div>
+
+            <div class="card">
+              <h2>방 만들기 <span class="k">HOST</span></h2>
+              <p class="cardp">정원을 정해 방을 엽니다. <b>둘만 모여도 시작</b>할 수 있고, 남은 자리는 <b>게임 중에도 난입</b>으로 채워집니다.</p>
+              <div class="row"><label>정원</label><div class="seg" id="seg-size">
+                ${[2, 3, 4].map((n) => `<button data-v="${n}" class="${n === 4 ? 'on' : ''}">${n}명</button>`).join('')}
+              </div></div>
+              <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
+                <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
+              </div></div>
+              <div class="row"><label>목표 킬</label><select class="sel" id="kills-room">
+                ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+              </select></div>
+              <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
+            </div>
+          </aside>
+
+          <main class="mainpane">
+            <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
+            <div class="chars" id="chars"></div>
+
+            <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명 이상이면 4배</small></div>
+            <div class="maprow">
+              <div>
+                <div class="seg" id="seg-map">
+                  ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+                </div>
+                <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
+                <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
+              </div>
+              <canvas id="map-preview" class="mappv"></canvas>
+            </div>
+
+            <div class="card solo-card">
+              <h2>혼자 하기 <span class="k">VS AI</span></h2>
+              <p class="cardp">봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
+              <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
+                <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
+              </div></div>
+              <div class="row"><label>봇 수 · 모드</label><div class="seg" id="seg-bots">
+                <button data-v="1" class="on">봇 1</button><button data-v="2">봇 2</button><button data-v="3">봇 3</button>
+              </div><div class="seg" id="seg-solo-mode">
+                <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
+              </div></div>
+              <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
+                ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+              </select></div>
+              <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
+            </div>
+
+            <div class="section-t" id="rec-t" hidden>최근 전적 <small>이 브라우저에만 남습니다 · 서버에 올라가지 않습니다</small><button class="lnk" id="rec-clear">전체 지우기</button></div>
+            <div class="recs" id="recs" hidden></div>
+          </main>
         </div>
-
-        <div class="modes">
-          <div class="mode">
-            <h2>혼자 하기 <span class="k">VS AI</span></h2>
-            <p>봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
-            <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
-              <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
-            </div></div>
-            <div class="row"><label>봇 수 · 모드</label><div class="seg" id="seg-bots">
-              <button data-v="1" class="on">봇 1</button><button data-v="2">봇 2</button><button data-v="3">봇 3</button>
-            </div><div class="seg" id="seg-solo-mode">
-              <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2</button>
-            </div></div>
-            <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
-              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
-            </select></div>
-            <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
-          </div>
-
-          <div class="mode">
-            <h2>방 만들기 <span class="k">HOST</span></h2>
-            <p>정원 ${MAX_PLAYERS}명. 방을 열면 아래 방 목록에 바로 보이고, 둘 이상이 모두 준비를 누르면 자동으로 시작합니다.</p>
-            <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
-              <button data-v="ffa" class="on">개인전</button><button data-v="teams">2v2 팀전</button>
-            </div></div>
-            <div class="row"><label>목표 킬</label><select class="sel" id="kills-room">
-              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
-            </select></div>
-            <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
-          </div>
-
-          <div class="mode">
-            <h2>방 목록 <span class="k" id="online">접속 확인 중</span></h2>
-            <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
-            <div class="row"><input class="code" id="join-code" maxlength="6" placeholder="코드 직접 입력" autocomplete="off" spellcheck="false"><button class="btn secondary" id="btn-join">참가</button></div>
-          </div>
-        </div>
-
-        <div class="section-t" id="rec-t" hidden>최근 전적 <small>이 브라우저에만 남습니다 · 서버에 올라가지 않습니다</small><button class="lnk" id="rec-clear">전체 지우기</button></div>
-        <div class="recs" id="recs" hidden></div>
-
-        <div class="status" id="status"></div>
 
         <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
       </div>`
@@ -219,11 +235,12 @@ export class Lobby {
     this.seg('#seg-bots', (v) => {
       this.bots = Number(v)
       this.drawPreview()
-      if (this.bots !== 3 && this.soloMode === 'teams') this.setSeg('#seg-solo-mode', 'ffa')
+      // 팀전은 인원이 짝수여야 한다 (나 + 봇 = 4 또는 6)
+      if (this.soloMode === 'teams' && (this.bots + 1) % 2 !== 0) this.setSeg('#seg-solo-mode', 'ffa')
     })
     this.seg('#seg-solo-mode', (v) => {
       this.soloMode = v as 'ffa' | 'teams'
-      if (this.soloMode === 'teams') this.setSeg('#seg-bots', '3')
+      if (this.soloMode === 'teams' && (this.bots + 1) % 2 !== 0) this.setSeg('#seg-bots', '3')
     })
     const soloSel = h.querySelector('#kills-solo') as HTMLSelectElement
     soloSel.onchange = () => (this.killsSolo = Number(soloSel.value))
@@ -232,6 +249,12 @@ export class Lobby {
       this.killsRoom = Number(roomSel.value)
       this.hostChanged()
     }
+    this.seg('#seg-size', (v) => {
+      this.roomSize = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(v)))
+      if (this.roomMode === 'teams' && this.roomSize % 2 !== 0) this.setSeg('#seg-room-mode', 'ffa')
+      this.announce()
+      this.renderRoom()
+    })
     this.seg('#seg-room-mode', (v) => {
       this.roomMode = v as RoomMode
       if (this.role === 'host') this.members.forEach((m, i) => (m.team = this.roomMode === 'teams' ? i % 2 : 0))
@@ -239,8 +262,15 @@ export class Lobby {
       this.hostChanged()
     })
     const nickEl = h.querySelector('#nick') as HTMLInputElement
-    nickEl.addEventListener('change', () => {
+    const nickCard = h.querySelector('#nick-card') as HTMLElement | null
+    const syncNickCard = () => nickCard?.classList.toggle('empty', this.nick.trim().length === 0)
+    syncNickCard()
+    this.syncNickCard = syncNickCard
+    const applyNick = (save: boolean) => {
       this.nick = nickEl.value.trim().slice(0, 8)
+      if (this.nick.length > 0) nickEl.classList.remove('need')
+      syncNickCard()
+      if (!save) return
       nickEl.value = this.nick
       try {
         localStorage.setItem('bd.nick', this.nick)
@@ -248,7 +278,10 @@ export class Lobby {
         /* 무시 */
       }
       this.pushSelf()
-    })
+    }
+    // 치는 즉시 강조를 풀어 준다 (change 는 포커스를 잃어야 온다)
+    nickEl.addEventListener('input', () => applyNick(false))
+    nickEl.addEventListener('change', () => applyNick(true))
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
     ;(h.querySelector('#btn-join') as HTMLButtonElement).onclick = () => {
@@ -433,13 +466,25 @@ export class Lobby {
       .map((r) => {
         const c = (CHARACTERS as Record<string, { name: string } | undefined>)[r.hostChar]
         const m = isMapId(r.map) ? MAPS[r.map].name : r.map
-        const st = r.state === 'open' ? '<span class="pill ok">참가 가능</span>' : r.state === 'full' ? '<span class="pill">정원 참</span>' : '<span class="pill">게임 중</span>'
+        // 게임 중이어도 자리가 남아 있으면 난입할 수 있다
+        const room = r.count < r.max
+        const canJoin = r.state === 'open' || (r.state === 'playing' && room)
+        const st =
+          r.state === 'open'
+            ? '<span class="pill ok">참가 가능</span>'
+            : r.state === 'full'
+              ? '<span class="pill">정원 참</span>'
+              : room
+                ? '<span class="pill ok">게임 중 · 난입 가능</span>'
+                : '<span class="pill">게임 중</span>'
         return `<div class="room"><div><b>${c ? c.name : r.hostChar}</b>의 방 <span class="code-sm">${r.code}</span><br><small>${m} · ${ROOM_MODE_LABEL[r.mode] ?? r.mode} · 목표 ${r.targetKills}킬 · ${r.count}/${r.max}명</small></div>
-          <div>${st} <button class="btn" data-code="${r.code}" ${r.state === 'open' ? '' : 'disabled'}>참가</button></div></div>`
+          <div>${st} <button class="btn" data-code="${r.code}" ${canJoin ? '' : 'disabled'}>${r.state === 'playing' ? '난입' : '참가'}</button></div></div>`
       })
       .join('')
     el.querySelectorAll('button[data-code]').forEach((b) => {
-      ;(b as HTMLButtonElement).onclick = () => this.join((b as HTMLElement).dataset.code!)
+      const code = (b as HTMLElement).dataset.code!
+      const info = visible.find((r) => r.code === code)
+      ;(b as HTMLButtonElement).onclick = () => this.join(code, info?.state === 'playing')
     })
   }
 
@@ -452,8 +497,8 @@ export class Lobby {
       targetKills: this.killsRoom,
       mode: this.roomMode,
       count: this.members.length,
-      max: MAX_PLAYERS,
-      state: state ?? (this.members.length >= MAX_PLAYERS ? 'full' : 'open'),
+      max: this.roomSize,
+      state: state ?? (this.members.length >= this.roomSize ? 'full' : 'open'),
     })
   }
 
@@ -467,7 +512,9 @@ export class Lobby {
       const pick = rest.length > 0 ? rest : pool
       chars.push(pick[Math.floor(Math.random() * pick.length)])
     }
-    const teams = this.soloMode === 'teams' && chars.length === 4 ? [0, 1, 0, 1] : undefined
+    // 팀전: 앞뒤로 번갈아 배정 (4명 → 2:2, 6명 → 3:3)
+    const teams =
+      this.soloMode === 'teams' && chars.length % 2 === 0 ? chars.map((_, i) => i % 2) : undefined
     this.handlers.onStart({
       mode: 'solo',
       chars,
@@ -483,11 +530,14 @@ export class Lobby {
 
   // ---------- 방 만들기 / 참가 ----------
   /** 방에 들어가기 전 닉네임 확인. 비어 있으면 입력칸으로 보낸다 */
+  private syncNickCard: () => void = () => {}
+
   private requireNick(): boolean {
     if (this.nick.trim().length > 0) return true
     const el = this.host.querySelector('#nick') as HTMLInputElement | null
     el?.focus()
     el?.classList.add('need')
+    this.syncNickCard()
     setTimeout(() => el?.classList.remove('need'), 1200)
     this.status('닉네임을 먼저 입력해 주세요. 게임 중 캐릭터 위에 표시됩니다. (8자까지)', 'bad')
     return false
@@ -510,8 +560,14 @@ export class Lobby {
     this.renderRooms()
   }
 
-  private join(code: string): void {
+  /** 게임 중인 방에 난입하려는 중인가 */
+  private barging = false
+  private bargeSent = false
+
+  private join(code: string, barge = false): void {
     if (!this.requireNick()) return
+    this.barging = barge
+    this.bargeSent = false
     this.closeLink()
     this.role = 'guest'
     this.link = openRoom(code, 'guest')
@@ -538,6 +594,15 @@ export class Lobby {
   private wireLink(): void {
     const link = this.link!
     link.onPeerJoin((id) => {
+      // 게임 중인 방이면 대기실이 아니라 곧바로 "자리 주세요" 를 보낸다
+      if (this.barging && !this.bargeSent) {
+        this.bargeSent = true
+        this.status('게임 중인 방에 들어가는 중…', '')
+        link.sendCtl({ t: 'joinAsk', char: this.char, name: this.nick })
+        window.setTimeout(() => {
+          if (this.barging) this.giveUpRejoin('자리가 없거나 방이 응답하지 않습니다.')
+        }, 15000)
+      }
       if (this.link !== link) return
       // 새로 들어온 피어에게 내 상태를 알린다 (호스트는 hello 를 받고 멤버로 넣는다)
       this.sendHello(id)
@@ -576,6 +641,8 @@ export class Lobby {
   private giveUpRejoin(why: string): void {
     clearTimeout(this.rejoinTimer)
     this.rejoining = null
+    this.barging = false
+    this.bargeSent = false
     clearSeat()
     this.closeLink()
     this.status(why, 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
@@ -601,8 +668,9 @@ export class Lobby {
   private onCtl(m: CtlMessage, from: string): void {
     switch (m.t) {
       case 'resume': {
-        // 끊겼던 판을 이어서 시작한다
-        if (!this.rejoining) return
+        // 끊겼던 판을 이어서 시작하거나(재접속), 진행 중인 방에 끼어든다(난입)
+        if (!this.rejoining && !this.barging) return
+        this.barging = false
         clearTimeout(this.rejoinTimer)
         const seat = this.rejoining
         this.rejoining = null
@@ -687,7 +755,7 @@ export class Lobby {
       existing.name = name
       if (this.roomMode === 'teams') existing.team = m.team === 1 ? 1 : 0
     } else {
-      if (this.members.length >= MAX_PLAYERS || this.starting) {
+      if (this.members.length >= this.roomSize || this.starting) {
         this.link.sendCtl({ t: 'full' }, from)
         return
       }
@@ -760,8 +828,14 @@ export class Lobby {
     if (this.roomMode === 'teams' && (!this.members.some((m) => m.team === 0) || !this.members.some((m) => m.team === 1))) return
     this.starting = true
     const seed = (Math.random() * 0xffffffff) >>> 0
-    const delay = Math.max(2, Math.min(6, Math.ceil(link.rtt / 2 / 16.7) + 1))
+    // 입력 지연(틱). RTT 가 낮아도 **지터**(왔다 갔다 하는 값)가 있으면 한 틱만 늦어도 전원이 멈춘다.
+    // 무선·모바일이 섞이면 특히 그렇다. 그래서 하한을 3틱(50ms)으로 두고 RTT 절반을 더한다.
+    const delay = Math.max(3, Math.min(8, Math.ceil(link.rtt / 2 / 16.7) + 2))
+    // 자리는 **정원만큼** 잡아 둔다. 빈 자리는 판에 나오지 않다가 난입으로 채워진다
     const players: Member[] = this.members.map((m, i) => ({ ...m, team: this.roomMode === 'teams' ? m.team : i }))
+    while (players.length < this.roomSize) {
+      players.push({ id: '', char: 'cheolmyeon', ready: false, team: this.roomMode === 'teams' ? players.length % 2 : players.length, name: '' })
+    }
     const map = this.mapId
     const kills = this.killsRoom
     const mode = this.roomMode
@@ -791,13 +865,25 @@ export class Lobby {
       delay,
       peerIds: players.map((p) => p.id),
       names: players.map((p) => p.name ?? ''),
+      // id 가 빈 자리는 아직 아무도 없다 → 판에 나오지 않다가 난입으로 채워진다
+      absent: players.map((p) => p.id === ''),
     })
   }
 
   private launch(cfg: Omit<SessionConfig, 'onExit'>): void {
     this.link = null // 세션이 링크를 가져간다
+    // 호스트는 **게임 중에도 방을 알려야** 남들이 난입할 수 있다 → 로비 통로를 세션에 넘긴다
+    const iamHost = cfg.localPlayer === 0 && cfg.mode === 'p2p'
     if (this.lobbyLink) {
-      this.lobbyLink.leave()
+      if (iamHost) {
+        cfg = {
+          ...cfg,
+          lobby: this.lobbyLink,
+          roomInfo: { map: String(cfg.mapId ?? this.mapId), mode: this.roomMode, targetKills: cfg.targetKills, size: this.roomSize },
+        }
+      } else {
+        this.lobbyLink.leave()
+      }
       this.lobbyLink = null
     }
     this.handlers.onStart(cfg)
@@ -811,7 +897,7 @@ export class Lobby {
     const title = this.role === 'host' ? `내 방 <span class="code-sm">${link.code}</span>` : `방 <span class="code-sm">${link.code}</span>`
     const teams = this.roomMode === 'teams'
     const slots: string[] = []
-    for (let i = 0; i < MAX_PLAYERS; i++) {
+    for (let i = 0; i < this.roomSize; i++) {
       const m = this.members[i]
       if (!m) {
   slots.push(`<div class="slot empty"><div class="who">${i + 1}번 자리</div><div class="cname">비어 있음</div><div class="rd">기다리는 중</div></div>`)
@@ -836,7 +922,7 @@ export class Lobby {
         <span><b>맵</b>${MAPS[this.mapId].name}</span>
         <span><b>모드</b>${ROOM_MODE_LABEL[this.roomMode]}</span>
         <span><b>목표</b>${this.killsRoom}킬</span>
-        <span><b>인원</b>${this.members.length}/${MAX_PLAYERS}명</span>
+        <span><b>인원</b>${this.members.length}/${this.roomSize}명</span>
         ${connected && link.peers.size > 0 ? `<span><b>핑</b>${link.rtt} ms</span>` : ''}
       </div>
       <div class="slots">${slots.join('')}</div>

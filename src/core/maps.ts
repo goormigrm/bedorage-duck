@@ -112,6 +112,7 @@ export function isMapId(s: string): s is MapId {
 export type MapScale = 1 | 2 | 4
 
 export function scaleForPlayers(n: number): MapScale {
+  // 사람이 많을수록 넓게. 5~6명도 4배를 쓴다(그 이상 배율은 없다)
   return n >= 4 ? 4 : n === 3 ? 2 : 1
 }
 
