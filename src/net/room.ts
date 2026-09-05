@@ -122,17 +122,19 @@ export type Member = {
   team: number
   /** 닉네임 (비어 있으면 캐릭터 이름을 쓴다) */
   name: string
+  /** 봇 자리 (호스트가 빈 자리를 봇으로 채웠다). 호스트가 입력을 대신 만들어 보낸다 */
+  bot?: boolean
 }
 
 export type CtlMessage =
   /** 내 상태 (캐릭터·준비·팀). 모두에게 */
   | { t: 'hello'; char: string; ready: boolean; team: number; name: string }
   /** 호스트 → 모두: 방 상태 정본 */
-  | { t: 'room'; mode: RoomMode; targetKills: number; map: string; members: Member[]; size: number }
+  | { t: 'room'; mode: RoomMode; targetKills: number; map: string; members: Member[]; size: number; fillBots?: boolean }
   /** 호스트 → 정원 초과로 들어온 피어 */
   | { t: 'full' }
   /** 호스트 → 모두: 시작. players 순서가 플레이어 인덱스 */
-  | { t: 'start'; seed: number; targetKills: number; delay: number; map: string; scale: number; mode: RoomMode; players: Member[] }
+  | { t: 'start'; seed: number; targetKills: number; delay: number; map: string; scale: number; mode: RoomMode; players: Member[]; botDiff?: string }
   | { t: 'ping'; s: number }
   | { t: 'pong'; s: number }
   | { t: 'hash'; tick: number; h: number }

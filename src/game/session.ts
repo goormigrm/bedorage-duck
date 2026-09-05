@@ -43,6 +43,8 @@ export interface SessionConfig {
   names?: string[]
   /** 아직 아무도 없는 자리 (난입으로 채워진다) */
   absent?: boolean[]
+  /** 봇 자리 (P2P 방을 봇으로 채움). 호스트가 입력을 만들어 보내고, 난입으로는 채워지지 않는다 */
+  bots?: boolean[]
   /**
    * 호스트만: 로비 방송 통로. **게임 중에도 방을 계속 알려야** 남들이 난입할 수 있다.
    * 세션이 끝나면 세션이 정리한다.
@@ -286,6 +288,9 @@ export class Session {
       this.cfg.chars.length,
       start,
     )
+    this.cfg.bots?.forEach((b, i) => {
+      if (b) ls.setBot(i)
+    })
     // 이어서 시작하는 경우(난입), 지나간 틱은 빈 입력으로 메워 둔다.
     // **먼저** 해야 한다 — rejoin 은 기다림을 되살리므로 drop 뒤에 부르면 빈 자리를 다시 기다린다.
     if (start > 0) for (let i = 0; i < this.cfg.chars.length; i++) ls.rejoin(i, start)
@@ -696,6 +701,13 @@ export class Session {
       let inputs: Input[]
       if (this.lockstep) {
         this.lockstep.pushLocal(t, localIn)
+        // 봇 자리: 호스트가 지금 판을 보고 입력을 만들어 자리 패킷으로 보낸다 (게스트는 받기만)
+        if (this.isHost && this.cfg.bots) {
+          for (let i = 0; i < this.cfg.bots.length; i++) {
+            if (!this.cfg.bots[i] || this.dropped.has(i)) continue
+            this.lockstep.pushBot(i, t, botInput(this.state, this.map, i, this.bots[i], this.cfg.difficulty ?? 'normal'))
+          }
+        }
         if (!this.lockstep.hasAll(t)) {
           if (this.stallSince < 0) this.stallSince = now
           break
@@ -812,7 +824,7 @@ export class Session {
   private subLabel(i: number): string {
     // 캐릭터 이름은 점수판 이름 줄에 "닉네임(캐릭터)" 로 들어가므로 여기서는 역할만
     if (i === this.cfg.localPlayer) return '나'
-    if (this.cfg.mode === 'solo') return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
+    if (this.cfg.mode === 'solo' || this.cfg.bots?.[i]) return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
     const ally = this.cfg.teams && this.cfg.teams[i] === this.cfg.teams[this.cfg.localPlayer]
     return ally ? '아군' : '상대'
   }
@@ -965,6 +977,8 @@ export class Session {
         scale: this.map.scale,
         delay: this.cfg.delay ?? 3,
         peerIds: this.cfg.peerIds ?? [],
+        bots: this.cfg.bots,
+        difficulty: this.cfg.difficulty,
       }
       // 자리 정보(캐릭터·이름)는 joinLive 때 확정한다. 지금은 판만 준다
       this.cfg.link?.sendCtl({ t: 'resume', p: r.p, tick: this.state.tick, state: snapshot(this.state), cfg }, r.peerId)

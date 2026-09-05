@@ -1,6 +1,9 @@
 // 결정론적 락스텝 입력 버퍼 (2~4인). 매 틱 내 입력을 미래 틱(t + delay)에 넣고 모두에게 보낸다.
 // 최근 8틱 입력을 한 패킷에 중복 전송해 손실을 흡수한다. 누구 하나라도 입력이 없는 틱은 진행하지 않는다(스톨).
 // 이탈한 사람은 drop() 으로 표시하면 그 사람 입력은 빈 입력으로 간주한다.
+// **봇 자리**(P2P 방을 봇으로 채움, 2026-09-05): 호스트(0번)가 봇 입력을 만들어 자리 패킷(첫 바이트 0xFF + 자리 번호)으로
+// 보낸다. 모두가 같은 입력으로 같은 봇을 돌리므로 결정론이 지켜지고, 리싱크가 있어도 봇 기억이 어긋날 일이 없다
+// (각자 봇을 굴리면 리싱크 뒤 봇의 기억(표적·조준)이 피어마다 달라져 다시 어긋난다).
 
 import { EMPTY_INPUT, INPUT_BYTES, Input, cloneInput, readInput, writeInput } from '../core/input'
 import { RoomLink } from './room'
@@ -17,6 +20,8 @@ export class Lockstep {
   private heard: boolean[] = []
   /** 자리별로 받은 가장 앞선 틱 (난입자가 판을 따라잡았는지 본다) */
   private latestOf: number[] = []
+  /** 봇 자리 — 호스트가 입력을 대신 보낸다 */
+  private bots: boolean[] = []
   latestRemoteTick = -1
 
   constructor(
@@ -37,6 +42,7 @@ export class Lockstep {
       this.dropped.push(false)
       this.heard.push(false)
       this.latestOf.push(-1)
+      this.bots.push(false)
     }
     link.onInput((buf, from) => this.receive(buf, from))
   }
@@ -54,19 +60,47 @@ export class Lockstep {
 
   private send(latest: number): void {
     this.latestLocal = Math.max(this.latestLocal, latest)
-    this.link.sendInput(this.pack(latest, Math.min(REDUNDANCY, latest - this.startTick + 1)))
+    this.link.sendInput(this.pack(this.me, latest, Math.min(REDUNDANCY, latest - this.startTick + 1)))
   }
 
-  /** latest 부터 거슬러 count 틱의 내 입력을 한 패킷으로 */
-  private pack(latest: number, count: number): Uint8Array {
-    const mine = this.inputs[this.me]
-    const buf = new ArrayBuffer(5 + count * INPUT_BYTES)
+  /** 이 자리는 봇이다 (호스트가 입력을 대신 보낸다). 호스트·게스트 모두 표시해 둔다 */
+  setBot(idx: number): void {
+    if (idx >= 0 && idx < this.bots.length) this.bots[idx] = true
+  }
+
+  isBot(idx: number): boolean {
+    return this.bots[idx] === true
+  }
+
+  /** 호스트: 봇 자리 idx 의 틱 t 입력을 t+delay 에 배정하고 자리 패킷으로 전송 */
+  pushBot(idx: number, t: number, input: Input): void {
+    if (!this.bots[idx] || this.me !== 0) return
+    const target = t + this.delay
+    const m = this.inputs[idx]
+    if (!m.has(target)) m.set(target, cloneInput(input))
+    this.link.sendInput(this.pack(idx, target, Math.min(REDUNDANCY, target - this.startTick + 1)))
+  }
+
+  /**
+   * latest 부터 거슬러 count 틱의 입력을 한 패킷으로.
+   * 내 자리는 [latest u32][count u8][입력…], 봇 자리는 앞에 [0xFF][자리 u8] 를 붙인다
+   * (틱은 2^24 안이라 첫 바이트가 0xFF 인 일반 패킷은 없다)
+   */
+  private pack(idx: number, latest: number, count: number): Uint8Array {
+    const src = this.inputs[idx]
+    const slot = idx !== this.me
+    const off = slot ? 2 : 0
+    const buf = new ArrayBuffer(off + 5 + count * INPUT_BYTES)
     const v = new DataView(buf)
-    v.setUint32(0, latest)
-    v.setUint8(4, count)
+    if (slot) {
+      v.setUint8(0, 0xff)
+      v.setUint8(1, idx)
+    }
+    v.setUint32(off, latest)
+    v.setUint8(off + 4, count)
     for (let i = 0; i < count; i++) {
-      const inp = mine.get(latest - i) ?? EMPTY_INPUT
-      writeInput(v, 5 + i * INPUT_BYTES, inp)
+      const inp = src.get(latest - i) ?? EMPTY_INPUT
+      writeInput(v, off + 5 + i * INPUT_BYTES, inp)
     }
     return new Uint8Array(buf)
   }
@@ -80,29 +114,43 @@ export class Lockstep {
   resendTo(peerId: string): void {
     if (this.latestLocal < 0) return
     const from = Math.max(this.startTick, this.latestLocal - KEEP_MINE + 1)
-    let hi = this.latestLocal
-    while (hi >= from) {
-      const count = Math.min(255, hi - from + 1)
-      this.link.sendInput(this.pack(hi, count), peerId)
-      hi -= count
+    // 내 자리 + (호스트면) 봇 자리들
+    const slots = [this.me]
+    if (this.me === 0) for (let i = 0; i < this.bots.length; i++) if (this.bots[i]) slots.push(i)
+    for (const idx of slots) {
+      let hi = this.latestLocal
+      while (hi >= from) {
+        const count = Math.min(255, hi - from + 1)
+        this.link.sendInput(this.pack(idx, hi, count), peerId)
+        hi -= count
+      }
     }
   }
 
   private receive(raw: Uint8Array | ArrayBuffer, from: string): void {
-    const idx = this.peerIndex.get(from)
-    if (idx === undefined || idx === this.me) return
+    const sender = this.peerIndex.get(from)
+    if (sender === undefined || sender === this.me) return
     const buf = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
     if (buf.byteLength < 5) return
+    let idx = sender
+    let off = 0
+    // 봇 자리 패킷: 호스트(0번)가 보낸 것만, 봇으로 표시된 자리만 받는다
+    if (buf[0] === 0xff) {
+      if (sender !== 0 || buf.byteLength < 7) return
+      idx = buf[1]
+      if (idx === this.me || !this.bots[idx]) return
+      off = 2
+    }
     const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-    const latest = v.getUint32(0)
-    const count = v.getUint8(4)
+    const latest = v.getUint32(off)
+    const count = v.getUint8(off + 4)
     this.heard[idx] = true
     if (latest > this.latestOf[idx]) this.latestOf[idx] = latest
     const m = this.inputs[idx]
     for (let i = 0; i < count; i++) {
       const t = latest - i
       if (t < 0 || m.has(t)) continue
-      m.set(t, readInput(v, 5 + i * INPUT_BYTES))
+      m.set(t, readInput(v, off + 5 + i * INPUT_BYTES))
     }
     if (latest > this.latestRemoteTick) this.latestRemoteTick = latest
   }
@@ -166,7 +214,7 @@ export class Lockstep {
   /** 오래된 입력 정리 (남의 것은 리싱크용으로 600틱, 내 것은 몰아 보내기용으로 KEEP_MINE 틱) */
   prune(currentTick: number): void {
     for (let i = 0; i < this.inputs.length; i++) {
-      const cut = currentTick - (i === this.me ? KEEP_MINE : 600)
+      const cut = currentTick - (i === this.me || this.bots[i] ? KEEP_MINE : 600)
       if (cut <= 0) continue
       const m = this.inputs[i]
       for (const k of m.keys()) if (k < cut) m.delete(k)

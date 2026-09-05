@@ -1,7 +1,7 @@
 // 로비: 캐릭터 선택 · 맵 선택 · 혼자 하기 · 방 만들기 · 방 목록/참가 · 준비 → 자동 시작
 // 방은 정원 4명(호스트 + 게스트 3). 멤버 순서·준비·팀은 호스트가 'room' 메시지로 방송하는 것이 정본.
 
-import { Difficulty } from '../core/bot'
+import { DIFFICULTY_LABEL, Difficulty } from '../core/bot'
 import { CHARACTERS, CHARACTER_LIST, CharacterId } from '../core/characters'
 import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MAPS, MAP_LIST, MapId, isMapId, isMapScale, scaleForPlayers } from '../core/maps'
@@ -52,6 +52,10 @@ export class Lobby {
   private role: 'host' | 'guest' | null = null
   /** 방 멤버 (순서 = 플레이어 인덱스, 호스트가 0) */
   private members: Member[] = []
+  /** 호스트: 빈 자리를 봇으로 채운다 (2026-09-05). 게스트는 방 정보로 받아 안내만 본다 */
+  private fillBots = false
+  private botDiff: Difficulty = 'normal'
+  private fillBotsRemote = false
   private hostId: string | null = null
   private myReady = false
   private myTeam = 0
@@ -718,6 +722,8 @@ export class Lobby {
           scale: number
           delay: number
           peerIds: string[]
+          bots?: boolean[]
+          difficulty?: Difficulty
         }
         const link = this.link!
         this.launch({
@@ -733,6 +739,8 @@ export class Lobby {
           link,
           delay: c.delay,
           peerIds: c.peerIds,
+          bots: c.bots,
+          difficulty: c.difficulty,
           resumeState: m.state,
           resumeTick: m.tick,
         })
@@ -751,6 +759,7 @@ export class Lobby {
         clearTimeout(this.waitTimer)
         this.hostId = from
         this.members = m.members
+        this.fillBotsRemote = !!m.fillBots
         this.roomMode = m.mode
         this.killsRoom = m.targetKills
         // 정원은 호스트가 정한다 — 안 받으면 게스트 화면에 제 기본값(4)이 보인다
@@ -770,7 +779,7 @@ export class Lobby {
         this.closeLink()
         break
       case 'start':
-        if (this.role === 'guest' && from === this.hostId) this.launchFrom(m.players, m.seed, m.delay, m.mode, m.map, m.targetKills, m.scale)
+        if (this.role === 'guest' && from === this.hostId) this.launchFrom(m.players, m.seed, m.delay, m.mode, m.map, m.targetKills, m.scale, m.botDiff)
         break
       case 'leave':
         this.peerGone(from)
@@ -813,7 +822,7 @@ export class Lobby {
 
   private broadcastRoom(): void {
     if (this.role !== 'host' || !this.link) return
-    this.link.sendCtl({ t: 'room', mode: this.roomMode, targetKills: this.killsRoom, map: this.mapId, members: this.members, size: this.roomSize })
+    this.link.sendCtl({ t: 'room', mode: this.roomMode, targetKills: this.killsRoom, map: this.mapId, members: this.members, size: this.roomSize, fillBots: this.fillBots })
   }
 
   private sendHello(to?: string): void {
@@ -867,21 +876,39 @@ export class Lobby {
     // 입력 지연(틱). RTT 가 낮아도 **지터**(왔다 갔다 하는 값)가 있으면 한 틱만 늦어도 전원이 멈춘다.
     // 무선·모바일이 섞이면 특히 그렇다. 그래서 하한을 3틱(50ms)으로 두고 RTT 절반을 더한다.
     const delay = Math.max(3, Math.min(8, Math.ceil(link.rtt / 2 / 16.7) + 2))
-    // 자리는 **정원만큼** 잡아 둔다. 빈 자리는 판에 나오지 않다가 난입으로 채워진다
+    // 자리는 **정원만큼** 잡아 둔다. 빈 자리는 판에 나오지 않다가 난입으로 채워진다 — 또는 (호스트가 켰으면) 봇이 앉는다
     const players: Member[] = this.members.map((m, i) => ({ ...m, team: this.roomMode === 'teams' ? m.team : i }))
     while (players.length < this.roomSize) {
-      players.push({ id: '', char: 'cheolmyeon', ready: false, team: this.roomMode === 'teams' ? players.length % 2 : players.length, name: '' })
+      const bot = this.fillBots
+      players.push({
+        id: '',
+        char: bot ? this.pickBotChar(players) : 'cheolmyeon',
+        ready: false,
+        team: this.roomMode === 'teams' ? players.length % 2 : players.length,
+        name: '',
+        bot,
+      })
     }
     const map = this.mapId
     const kills = this.killsRoom
     const mode = this.roomMode
     const scale = scaleForPlayers(players.length)
-    link.sendCtl({ t: 'start', seed, targetKills: kills, delay, map, scale, mode, players })
+    const botDiff = players.some((p) => p.bot) ? this.botDiff : undefined
+    link.sendCtl({ t: 'start', seed, targetKills: kills, delay, map, scale, mode, players, botDiff })
     this.announce('playing')
-    setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills, scale), 150)
+    setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills, scale, botDiff), 150)
   }
 
-  private launchFrom(players: Member[], seed: number, delay: number, mode: RoomMode, map: string, targetKills: number, scale: number): void {
+  /** 봇 캐릭터: 이미 앉은 사람과 겹치지 않게 (혼자 하기와 같은 규칙) */
+  private pickBotChar(players: Member[]): CharacterId {
+    const used = new Set(players.map((p) => p.char))
+    const pool = CHARACTER_LIST.map((c) => c.id)
+    const rest = pool.filter((id) => !used.has(id))
+    const pick = rest.length > 0 ? rest : pool
+    return pick[Math.floor(Math.random() * pick.length)]
+  }
+
+  private launchFrom(players: Member[], seed: number, delay: number, mode: RoomMode, map: string, targetKills: number, scale: number, botDiff?: string): void {
     const link = this.link
     if (!link) return
     const idx = players.findIndex((p) => p.id === link.selfId)
@@ -901,8 +928,10 @@ export class Lobby {
       delay,
       peerIds: players.map((p) => p.id),
       names: players.map((p) => p.name ?? ''),
-      // id 가 빈 자리는 아직 아무도 없다 → 판에 나오지 않다가 난입으로 채워진다
-      absent: players.map((p) => p.id === ''),
+      // id 가 빈 자리는 아직 아무도 없다 → 판에 나오지 않다가 난입으로 채워진다. 봇 자리는 처음부터 있다
+      absent: players.map((p) => p.id === '' && !p.bot),
+      bots: players.some((p) => p.bot) ? players.map((p) => !!p.bot) : undefined,
+      difficulty: botDiff === 'easy' || botDiff === 'hard' ? botDiff : 'normal',
     })
   }
 
@@ -961,6 +990,19 @@ export class Lobby {
         ${connected && link.peers.size > 0 ? `<span><b>핑</b>${link.rtt} ms</span>` : ''}
       </div>
       <div class="slots">${slots.join('')}</div>
+      ${
+        this.role === 'host'
+          ? `<div class="setrow botrow">
+        <label class="chk"><input type="checkbox" id="chk-bots" ${this.fillBots ? 'checked' : ''}> 빈 자리는 <b>봇</b>으로 채우기</label>
+        <div class="seg small" id="seg-botdiff" ${this.fillBots ? '' : 'hidden'}>
+          ${(['easy', 'normal', 'hard'] as Difficulty[]).map((d) => `<button data-v="${d}" class="${d === this.botDiff ? 'on' : ''}">${DIFFICULTY_LABEL[d]}</button>`).join('')}
+        </div>
+        <span class="dim hintline">봇 자리는 난입으로 채워지지 않습니다</span>
+      </div>`
+          : this.fillBotsRemote
+            ? `<p class="roomhint dim">빈 자리는 호스트가 <b>봇</b>으로 채웁니다.</p>`
+            : ''
+      }
       <div class="room-actions">
         <button class="btn main" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
         ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
@@ -980,6 +1022,20 @@ export class Lobby {
             : '준비를 누르세요.'
     this.status(st, connected ? 'ok' : '', html)
     this.bindCancel()
+    const chk = this.host.querySelector('#chk-bots') as HTMLInputElement | null
+    if (chk) {
+      chk.onchange = () => {
+        this.fillBots = chk.checked
+        this.broadcastRoom()
+        this.renderRoom()
+      }
+      this.host.querySelectorAll<HTMLButtonElement>('#seg-botdiff button').forEach((b) => {
+        b.onclick = () => {
+          this.botDiff = b.dataset.v as Difficulty
+          this.renderRoom()
+        }
+      })
+    }
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
     const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
     if (teamBtn) teamBtn.onclick = () => this.changeTeam()

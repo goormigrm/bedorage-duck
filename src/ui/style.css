@@ -434,3 +434,11 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .topbar .mychar canvas { width: 44px; height: 44px; }
 .topbar .mychar small { display: block; font-size: 11px; color: var(--ink-2); }
 .topbar .mychar b { font-size: 15px; }
+
+/* 대기실: 빈 자리를 봇으로 */
+.setrow.botrow { align-items: center; }
+.setrow.botrow .chk { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.setrow.botrow .chk input { width: 16px; height: 16px; accent-color: var(--gold); }
+.seg.small button { padding: 4px 10px; font-size: 12px; }
+.seg[hidden] { display: none; }
+.setrow.botrow .hintline { font-size: 12px; }
