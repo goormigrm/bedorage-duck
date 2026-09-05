@@ -123,7 +123,7 @@ src/ui/favicon.ts        탭 아이콘 = 철면덕 초상을 캔버스로 그려
 tools/balance.ts         밸런스 계측 (봇 1:1 440판 · 승빠덕 제외)
 tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
 tests/                   determinism · camera · perf · balance · autoaim · sandbag · block · medkit · stats · join · spectate · sprint · headshot (104개)
-docs/img/                공지용 로비 사진 1장(shot_lobby.jpg, 메인) + GIF 5개(전투·조준경·헤드샷·모래주머니·구르기, 각 20MB 이하) — 설명용 사진은 따로 두지 않는다
+docs/img/                공지용 로비 사진 1장 + GIF 5개 — **git 에 없다**(.gitignore, 로컬에만). 다른 PC 에서는 아래 절차로 다시 뜬다
 tools/rec.js             GIF·스크린샷 녹화 도우미 (개발 서버에서 콘솔로 불러 씀)
 tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow, 20MB 자동 축소)
 ```
