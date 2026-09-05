@@ -15,7 +15,10 @@ import { PART_HEAD, WEAPONS, WeaponId } from '../src/core/weapons'
 const DIFF: Difficulty = 'normal' // 2026-09-05: 사람들 실제 실력이 '보통' 과 비슷하다(사용자) — 어려움 봇으로 재던 표는 CHANGELOG v1.9.7 까지
 const TARGET_KILLS = 3
 const MAX_TICKS = 60 * 180
-const SEEDS = process.argv.includes('ffa') ? [11, 29, 47] : [11, 29]
+// seeds=5 처럼 주면 시드를 늘린다 (2시드 440판은 ±8% 흔들린다 — 최종 수치는 5시드로)
+const seedArg = process.argv.find((a) => a.startsWith('seeds='))
+const SEED_POOL = [11, 29, 47, 61, 83, 97, 113, 131]
+const SEEDS = seedArg ? SEED_POOL.slice(0, Math.max(1, Math.min(SEED_POOL.length, Number(seedArg.slice(6)) || 2))) : process.argv.includes('ffa') ? [11, 29, 47] : [11, 29]
 const MAPS: MapId[] = ['studio', 'yard']
 
 interface CharStat {

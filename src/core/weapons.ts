@@ -89,7 +89,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // 2026-09-05 탄속 17 → 24 (사용자: 소총 밸런스 — 더 빠르게). 수명은 사거리(약 1200px)가 그대로이도록 70 → 50.
   // 빨라진 만큼 피해 23 → 20 (계측: 23 이면 소총 셋이 62~67% 로 최상위, 20 이면 48~58% 로 가운데)
   rifle: {
-    id: 'rifle', name: '소총', damage: 20, pellets: 1, fireInterval: 10, auto: true,
+    // 2026-09-05 보통 봇 기준 재조정: 20 → 23 (소총 셋이 29~37% 로 바닥). 탄속 24 는 유지
+    id: 'rifle', name: '소총', damage: 23, pellets: 1, fireInterval: 10, auto: true,
     magSize: 30, reloadTicks: 130, spreadHip: deg(6.5), spreadAds: deg(1.4), recoil: deg(2.6),
     recoilRecover: deg(0.5), speed: 24, life: 50, moveMul: 0.92, length: 24, color: 0x5f6b48,
     falloffStart: 420, falloffEnd: 820, falloffMin: 0.78,
@@ -115,7 +116,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   // 명중률은 낮고 반동은 세지만 탄이 많아 계속 퍼붓는다
   mg: {
-    id: 'mg', name: '기관총', damage: 16, pellets: 1, fireInterval: 5, auto: true,
+    // 2026-09-05 보통 봇 기준 재조정: 16 → 15 (철면덕 76% — 세게 두는 건 의도지만 너무 셌다 → 64%)
+    id: 'mg', name: '기관총', damage: 15, pellets: 1, fireInterval: 5, auto: true,
     magSize: 80, reloadTicks: 210, spreadHip: deg(8), spreadAds: deg(4.5), recoil: deg(2.4),
     recoilRecover: deg(0.35), speed: 15, life: 60, moveMul: 0.9, length: 30, color: 0x4a4f45,
     falloffStart: 320, falloffEnd: 760, falloffMin: 0.55,
