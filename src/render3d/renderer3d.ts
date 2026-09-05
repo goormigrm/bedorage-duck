@@ -22,9 +22,12 @@ const FOLLOW_DIST = 15.5
 /** 기준 세로 시야각. 화면이 넓어지면 resize() 가 이 값을 줄여 보이는 면적을 유지한다 */
 const BASE_FOV = 40
 const GUN_H = 0.95
-/** 미니맵 창 한 변(px)과 타일당 px. 회전돼 있어 대각선으로는 더 멀리 보인다 (한 변 ≈ 15칸, 대각선 ≈ 21칸) */
-const MINIMAP_SIZE = 170
-const MINIMAP_PX_PER_TILE = 11
+/**
+ * 미니맵 창 한 변(px)과 타일당 px. 회전돼 있어 대각선으로는 더 멀리 보인다.
+ * 처음 170/11(한 변 ≈ 15칸)은 "보여 주는 게 너무 적다"(2026-09-05) → 190/7 로 넓혔다 (한 변 ≈ 27칸, 대각선 ≈ 38칸).
+ */
+const MINIMAP_SIZE = 190
+const MINIMAP_PX_PER_TILE = 7
 
 interface Particle {
   mesh: THREE.Mesh
@@ -803,6 +806,22 @@ export class Renderer3D {
         ctx.stroke()
       }
     }
+    // 단군덕 패시브(중계): 시야 밖 총성 위치를 미니맵에도 찍는다(창 안이면). 화면 가장자리 화살표만으로는
+    // 방향은 알아도 거리를 모른다 (2026-09-05 요청). 좌표는 이미 타일 단위(x·U)
+    for (const g of this.pings) {
+      const k = 1 - g.life / g.max
+      ctx.globalAlpha = Math.min(1, g.life * 2)
+      ctx.strokeStyle = '#ffd84a'
+      ctx.lineWidth = 1.5 * rp
+      ctx.beginPath()
+      ctx.arc(g.x, g.z, (3.5 + k * 6) * rp, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.fillStyle = '#ff5a4a'
+      ctx.beginPath()
+      ctx.arc(g.x, g.z, 3 * rp, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
     ctx.restore()
     // 창 테두리 안쪽 십자 눈금 (가운데가 나라는 표시)
     ctx.save()

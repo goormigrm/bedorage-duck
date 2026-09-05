@@ -98,7 +98,7 @@ export class Lobby {
           </div>
         </div>
         <div class="notice" id="net-notice">
-          <b>서버가 없는 게임입니다.</b> 방을 만든 사람의 컴퓨터가 곧 방이라, <b>방장의 인터넷이 끊기면 방도 함께 사라집니다.</b>
+          <b>서버가 없는 게임입니다.</b> 방을 만든 사람의 컴퓨터가 곧 방이라, <b>방장의 인터넷이 끊기면 방도 함께 사라집니다.</b><br>
           와이파이·폰 회선처럼 흔들리는 연결로 방을 만들면 판이 터질 수 있으니, 방은 가능하면 <b>유선(랜선) PC</b>에서 만들어 주세요.
         </div>
 
@@ -113,7 +113,7 @@ export class Lobby {
             <span id="pg-label">1 / 1</span>
             <button class="btn secondary sm" id="pg-next">다음</button>
           </div>
-          <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다. 팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
+          <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다.<br>팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
         </div>
 
         <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
@@ -122,7 +122,7 @@ export class Lobby {
         <div class="dlg" id="dlg-host" hidden>
           <div class="dbox">
             <h3>방 만들기</h3>
-            <p class="cardp">정원을 정해 방을 엽니다. <b>둘만 모여도 시작</b>할 수 있고, 남은 자리는 <b>게임 중에도 난입</b>으로 채워집니다.</p>
+            <p class="cardp">정원을 정해 방을 엽니다.<br><b>둘만 모여도 시작</b>할 수 있고, 남은 자리는 <b>게임 중에도 난입</b>으로 채워집니다.</p>
             <div class="row"><label>정원</label><div class="seg" id="seg-size">
               ${[2, 3, 4].map((n) => `<button data-v="${n}" class="${n === 4 ? 'on' : ''}">${n}명</button>`).join('')}
             </div></div>
@@ -139,7 +139,7 @@ export class Lobby {
               <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
               <canvas id="map-preview" class="mappv"></canvas>
             </div>
-            <div class="warn">방장의 연결이 곧 방입니다. 와이파이나 폰 회선이면 중간에 방이 터질 수 있어요. 랜선을 꽂은 PC가 가장 안전합니다.</div>
+            <div class="warn">방장의 연결이 곧 방입니다.<br>와이파이나 폰 회선이면 중간에 방이 터질 수 있어요.<br>랜선을 꽂은 PC가 가장 안전합니다.</div>
             <div class="dacts"><button class="btn secondary" data-close>취소</button><button class="btn main" id="btn-host-go">방 만들기</button></div>
           </div>
         </div>
@@ -147,7 +147,7 @@ export class Lobby {
         <div class="dlg" id="dlg-solo" hidden>
           <div class="dbox">
             <h3>혼자 하기</h3>
-            <p class="cardp">봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
+            <p class="cardp">봇과 대결.<br>죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
             <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
               <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
             </div></div>
@@ -280,9 +280,9 @@ export class Lobby {
       hb.disabled = true
       hb.title = '폰에서는 방을 만들 수 없습니다'
       const nn = h.querySelector('#net-notice') as HTMLElement
-      nn.innerHTML = `<b>폰에서는 방을 만들 수 없습니다.</b> 이 게임은 서버가 없어 방을 만든 사람의 연결이 곧 방인데,
-        폰 회선은 자주 흔들려 모두의 판이 터집니다. <b>방 목록에서 참가</b>하거나 <b>혼자 하기</b>를 이용해 주세요.
-        방은 랜선을 꽂은 PC에서 만드는 것이 가장 안전합니다.`
+      nn.innerHTML = `<b>폰에서는 방을 만들 수 없습니다.</b><br>
+      이 게임은 서버가 없어 방을 만든 사람의 연결이 곧 방인데, 폰 회선은 자주 흔들려 모두의 판이 터집니다.<br>
+      <b>방 목록에서 참가</b>하거나 <b>혼자 하기</b>를 이용해 주세요. 방은 랜선을 꽂은 PC에서 만드는 것이 가장 안전합니다.`
       nn.classList.add('strong')
     }
     ;(h.querySelector('#btn-solo-go') as HTMLButtonElement).onclick = () => {
@@ -934,7 +934,7 @@ export class Lobby {
     const html = `
       <div class="room-head"><div class="section-t" style="margin:0">${title}</div>
         <div class="row"><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
-      <p class="roomhint dim">이 사이트 안에서만 함께합니다. 친구는 <b>방 목록</b>에서 이 방을 찾아 들어옵니다.</p>
+      <p class="roomhint dim">이 사이트 안에서만 함께합니다.<br>친구는 <b>방 목록</b>에서 이 방을 찾아 들어옵니다.</p>
       <div class="setrow">
         <span><b>맵</b>${MAPS[this.mapId].name}</span>
         <span><b>모드</b>${ROOM_MODE_LABEL[this.roomMode]}</span>

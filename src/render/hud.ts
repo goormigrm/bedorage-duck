@@ -3,7 +3,7 @@
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
 import { GameState, PlayerState, STAMINA_MAX, isTeamMatch, teamKills } from '../core/state'
-import { WEAPONS } from '../core/weapons'
+import { WEAPONS, WeaponId } from '../core/weapons'
 
 /** 기준 논리 해상도. 카메라 시야 보정의 기준점이기도 하다 */
 export const BASE_W = 1280
@@ -83,7 +83,10 @@ interface HitDir {
 }
 
 interface Banner {
-  text: string
+  /** 죽인 사람 · 죽은 사람. 사이에는 화살표 대신 **무기 그림**을 그린다 (2026-09-05 요청) */
+  left: string
+  right: string
+  weapon: WeaponId
   life: number
   max: number
   color: string
@@ -203,8 +206,16 @@ export class Hud {
   }
 
   showKill(state: GameState, killer: number, victim: number, names: string[]): void {
-    const k = CHARACTERS[state.players[killer].char]
-    this.banner = { text: `${names[killer] ?? k.name}  ▶  ${names[victim] ?? CHARACTERS[state.players[victim].char].name}`, life: 1.6, max: 1.6, color: hex(k.bodyColor) }
+    const kp = state.players[killer]
+    const k = CHARACTERS[kp.char]
+    this.banner = {
+      left: names[killer] ?? k.name,
+      right: names[victim] ?? CHARACTERS[state.players[victim].char].name,
+      weapon: kp.weapon,
+      life: 1.6,
+      max: 1.6,
+      color: hex(k.bodyColor),
+    }
   }
 
   showOver(): void {
@@ -447,7 +458,7 @@ export class Hud {
     const h = others.length * rowH + 14
     // 터치 조작이면 오른쪽 아래가 버튼 자리라 미니맵 밑으로 내린다
     const x = opts.touch ? 24 : VIEW_W - 24 - w
-    const y = opts.touch ? 204 : VIEW_H - 46 - h // 미니맵(170 + 여백) 아래
+    const y = opts.touch ? 224 : VIEW_H - 46 - h // 미니맵(190 + 여백) 아래
     this.panel(x, y, w, h)
     others.forEach((m, r) => {
       const c = CHARACTERS[m.p.char]
@@ -571,17 +582,24 @@ export class Hud {
       ctx.globalAlpha = Math.min(1, k * 4) * inK
       const y = 120
       ctx.font = '400 34px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-      ctx.textAlign = 'center'
+      ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      const tw = ctx.measureText(b.text).width + 60
+      // 이름 · [무기 그림] · 이름. 그림 자리는 무기와 상관없이 같은 폭이라 배너가 들썩이지 않는다
+      const ICON_W = 72
+      const lw = ctx.measureText(b.left).width
+      const rw = ctx.measureText(b.right).width
+      const tw = lw + ICON_W + rw + 64
+      const x0 = VIEW_W / 2 - tw / 2
       ctx.fillStyle = 'rgba(13,17,23,0.82)'
-      roundRect(ctx, VIEW_W / 2 - tw / 2, y - 26, tw, 52, 6)
+      roundRect(ctx, x0, y - 26, tw, 52, 6)
       ctx.fill()
       ctx.fillStyle = b.color
-      roundRect(ctx, VIEW_W / 2 - tw / 2, y - 26, 6, 52, 3)
+      roundRect(ctx, x0, y - 26, 6, 52, 3)
       ctx.fill()
       ctx.fillStyle = '#e6edf3'
-      ctx.fillText(b.text, VIEW_W / 2 + 4, y)
+      ctx.fillText(b.left, x0 + 32, y)
+      drawWeaponIcon(ctx, x0 + 32 + lw + ICON_W / 2, y, b.weapon)
+      ctx.fillText(b.right, x0 + 32 + lw + ICON_W, y)
       ctx.globalAlpha = 1
     }
     const wi = s.winner
@@ -665,6 +683,97 @@ export class Hud {
       }
     }
   }
+}
+
+/**
+ * 킬 배너용 무기 그림. (cx, cy) 가운데, 폭 약 50px, 총구는 오른쪽(죽은 사람 쪽).
+ * 화살표 "▶" 대신 무엇으로 죽였는지 보여 준다 (2026-09-05 요청). 선 몇 개로 그린 실루엣이라 폰트가 없어도 같다.
+ */
+function drawWeaponIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: WeaponId): void {
+  ctx.save()
+  ctx.translate(cx, cy + 1)
+  ctx.scale(1.25, 1.25) // 34px 글자 옆에서 눈에 들어오는 크기
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = '#e6edf3'
+  ctx.fillStyle = '#e6edf3'
+  const line = (x0: number, y0: number, x1: number, y1: number, t: number) => {
+    ctx.lineWidth = t
+    ctx.beginPath()
+    ctx.moveTo(x0, y0)
+    ctx.lineTo(x1, y1)
+    ctx.stroke()
+  }
+  const body = (x0: number, x1: number, t = 6) => line(x0, -3, x1, -3, t) // 몸통·총열 (y=-3 선상)
+  const grip = (x: number) => line(x, 0, x - 3, 10, 4) // 손잡이
+  const mag = (x: number, len = 9) => line(x, 0, x - 1, len, 3.5) // 탄창
+  const stock = (x: number) => line(x, -3, x - 11, 3, 5) // 개머리판
+  switch (w) {
+    case 'pistol':
+      body(-9, 11, 7)
+      line(-3, 0, -6, 11, 5) // 손잡이(권총은 크게)
+      line(2, 1, 2, 5, 2) // 방아쇠
+      break
+    case 'smg':
+      body(-14, 8)
+      body(8, 18, 3.5)
+      grip(-8)
+      mag(1)
+      break
+    case 'rifle':
+      stock(-14)
+      body(-14, 8)
+      body(8, 25, 3.5)
+      grip(-6)
+      mag(3)
+      break
+    case 'shotgun':
+      stock(-14)
+      body(-14, 4)
+      body(4, 26, 4)
+      line(2, 2, 12, 2, 3.5) // 펌프
+      grip(-8)
+      break
+    case 'sniper':
+      stock(-16)
+      body(-16, 4, 5.5)
+      body(4, 28, 3)
+      line(-8, -9, 6, -9, 3) // 조준경
+      ctx.strokeStyle = '#f2c94c'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(7, -9, 2.6, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.strokeStyle = '#e6edf3'
+      grip(-8)
+      mag(0, 6)
+      break
+    case 'mg':
+      stock(-16)
+      body(-16, 6, 8)
+      body(6, 26, 4)
+      line(14, 0, 10, 9, 2.5) // 양각대
+      line(14, 0, 18, 9, 2.5)
+      grip(-9)
+      ctx.fillRect(-5, 0, 9, 9) // 탄통
+      break
+    case 'pan':
+      // 옆에서 본 후라이팬: 손잡이 + 납작한 팬, 위에 계란후라이
+      line(-23, 0, -7, 0, 4)
+      ctx.beginPath()
+      ctx.ellipse(8, 1, 14, 5, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.ellipse(8, -3, 8, 3.2, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#f2c94c'
+      ctx.beginPath()
+      ctx.arc(8, -3.5, 2.6, 0, Math.PI * 2)
+      ctx.fill()
+      break
+  }
+  ctx.restore()
 }
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

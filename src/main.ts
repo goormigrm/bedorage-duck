@@ -22,6 +22,8 @@ function showLobby(): void {
       lobby = null
       app.innerHTML = ''
       session = new Session(app, { ...cfg, onExit: showLobby })
+      // 스크린샷·GIF 를 뜰 때(?shot=1)만 세션을 밖에 내놓는다 — 장면 연출용(자리 옮기기, 조준점 계산). 평소엔 없다
+      if (location.search.includes('shot=1')) (window as unknown as { __session: Session }).__session = session
     },
   })
 }
