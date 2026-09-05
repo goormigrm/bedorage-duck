@@ -123,7 +123,7 @@ src/ui/favicon.ts        탭 아이콘 = 철면덕 초상을 캔버스로 그려
 tools/balance.ts         밸런스 계측 (봇 1:1 440판 · 승빠덕 제외)
 tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
 tests/                   determinism · camera · perf · balance · autoaim · sandbag · block · medkit · stats · join · spectate · sprint · headshot (104개)
-docs/img/                공지용 사진 1장(shot_fight.jpg) + GIF 10개(gif_*.gif, 각 20MB 이하)
+docs/img/                공지용 로비 사진 1장(shot_lobby.jpg, 메인) + GIF 11개(gif_*.gif, 각 20MB 이하) — 설명용 사진은 따로 두지 않는다
 tools/rec.js             GIF·스크린샷 녹화 도우미 (개발 서버에서 콘솔로 불러 씀)
 tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow, 20MB 자동 축소)
 ```
@@ -168,7 +168,7 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 - [x] **킬 배너 무기 그림** — ▶ 대신 무엇으로 잡았는지(`hud.ts drawWeaponIcon`)
 - [x] **구르기 Space + Ctrl** 둘 다
 - [x] **주의 문구·안내 줄바꿈** (방 만들기 창, 로비 안내, 방 목록 안내, 캐릭터 교체 창)
-- [x] **공지용 GIF 10개** + 메인 사진 재촬영 (`tools/rec.js` · `tools/gif.py`, 각 20MB 이하)
+- [x] **공지용 GIF 11개** + 메인은 로비 사진 1장 (`tools/rec.js` · `tools/gif.py`, 각 20MB 이하). 설명용 사진은 따로 두지 않는다(사용자)
 - [ ] **매직덕 체감 재확인** — 머리가 제일 커서 헤드샷을 가장 많이 맞는다. 약하면 체력을 더 올리거나 `HEAD_SIZE_EFFECT` 를 0.5 로
 - [ ] **승빠덕 체감 재확인** — 62 로도 세면 위의 다음 차례대로. 사람 대전에서만 알 수 있다
 - [ ] **소총 체감 재확인** — 탄속 24·피해 20 이 빠르면서도 안 아픈 느낌인지
@@ -218,7 +218,8 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
   `const s=document.createElement('script');s.src='/bedorage-duck/tools/rec.js';document.head.appendChild(s)`.
   그러면 `__h.solo({char, botChars, diff, bots, kills, map})` 로 판을 열고, `__h.setup(bot, 칸수, 'up')` · `__h.pin(bot, tx, ty, mute)` · `__h.track(bot)` 로 상대를 세워 두고 조준한 뒤
   `__rec.start('장면', 12, 8)` → 연출 → `await __rec.stop()` 하면 `.frames/장면/NNN.png` 가 떨어진다. `python tools/gif.py 장면` 이 `docs/img/gif_장면.gif` 로 붙인다(20MB 넘으면 자동 축소, `--from/--to` 로 자르기).
-  한 장짜리 사진은 `await __rec.still('shot_fight')`. DOM 이 섞인 화면(로비·결과표·터치 UI)은 `__rec.dom()` / `__rec.startTouch()`(html2canvas, 4fps).
+  한 장짜리 게임 사진은 `await __rec.still('이름')`. 로비 사진(`shot_lobby.jpg`)은 html2canvas 로 body 를 1280×980 으로 찍어 `/__shot` 에 jpeg 로 보낸다(CHANGELOG v1.8.4).
+  **주의**: 패널이 숨겨져 있으면 로비의 캐릭터 초상(rAF 로 그림)이 비어 있다 — `requestAnimationFrame` 을 `setTimeout` 으로 바꿔 두고 로비를 다시 만들면(혼자 하기 → 나가기) 그려진다. DOM 이 섞인 화면(로비·결과표·터치 UI)은 `__rec.dom()` / `__rec.startTouch()`(html2canvas, 4fps).
   브라우저 패널이 숨겨져 있어도 녹화기가 `session.frame()` 을 직접 불러 그리므로 화면이 멈추지 않는다. 장면 스크립트 예는 CHANGELOG v1.8.4.
   필요: `pip install pillow`. `.frames/` 는 git 에 안 올린다.
 - **Ctrl 구르기 주의**: Ctrl 을 누른 채 W 를 누르면 크롬이 탭을 닫는다(`preventDefault` 로 못 막는다). 가이드에 "방향 먼저, Ctrl 나중" 을 적어 두었다. 제보가 오면 Ctrl 을 빼는 것도 답이다.
