@@ -39,7 +39,7 @@ npx vite-node tools/balance.ts     # 밸런스 계측 (ffa 붙이면 4인)
 PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크린샷·GIF 를 뜨려면 `?shot=1`(아래 "스크린샷·GIF 다시 뜨기").
 
-## 현재 상태 (2026-09-05 · v1.8.4)
+## 현재 상태 (2026-09-05 · v1.8.5)
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
@@ -166,7 +166,7 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 - [x] **폰에서는 방 만들기 금지 + 주의 문구** — 터치 기기면 `#btn-host` 비활성, `openDlg`/`hostRoom` 도 막음. PC 에는 "방장의 컴퓨터가 곧 방, 와이파이면 터질 수 있음" 문구
 - [x] **미니맵 확대** 170/11 → 190/7(한 변 ≈ 27칸) + 단군덕 총성 표시를 미니맵에도
 - [x] **킬 배너 무기 그림** — ▶ 대신 무엇으로 잡았는지(`hud.ts drawWeaponIcon`)
-- [x] **구르기 Space + Ctrl** 둘 다
+- [x] ~~구르기 Space + Ctrl~~ → **Ctrl 은 뺐다**(Ctrl+W 탭 닫힘 위험, 사용자 판단). 구르기는 Space 뿐
 - [x] **주의 문구·안내 줄바꿈** (방 만들기 창, 로비 안내, 방 목록 안내, 캐릭터 교체 창)
 - [x] **공지용 GIF 5개** + 메인은 로비 사진 1장 (`tools/rec.js` · `tools/gif.py`, 각 20MB 이하). 설명용 사진은 따로 두지 않는다. 11개 찍었다가 **5개로 줄였다**(사용자 — 승빠덕·단군덕 장면 제외). 필요하면 CHANGELOG v1.8.4 의 장면 목록대로 다시 찍을 수 있다
 - [ ] **매직덕 체감 재확인** — 머리가 제일 커서 헤드샷을 가장 많이 맞는다. 약하면 체력을 더 올리거나 `HEAD_SIZE_EFFECT` 를 0.5 로
@@ -222,4 +222,4 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
   **주의**: 패널이 숨겨져 있으면 로비의 캐릭터 초상(rAF 로 그림)이 비어 있다 — `requestAnimationFrame` 을 `setTimeout` 으로 바꿔 두고 로비를 다시 만들면(혼자 하기 → 나가기) 그려진다. DOM 이 섞인 화면(로비·결과표·터치 UI)은 `__rec.dom()` / `__rec.startTouch()`(html2canvas, 4fps).
   브라우저 패널이 숨겨져 있어도 녹화기가 `session.frame()` 을 직접 불러 그리므로 화면이 멈추지 않는다. 장면 스크립트 예는 CHANGELOG v1.8.4.
   필요: `pip install pillow`. `.frames/` 는 git 에 안 올린다.
-- **Ctrl 구르기 주의**: Ctrl 을 누른 채 W 를 누르면 크롬이 탭을 닫는다(`preventDefault` 로 못 막는다). 가이드에 "방향 먼저, Ctrl 나중" 을 적어 두었다. 제보가 오면 Ctrl 을 빼는 것도 답이다.
+- **구르기에 Ctrl 을 넣지 말 것**: 한 번 넣었다가 뺐다(v1.8.5). Ctrl 을 누른 채 W 를 누르면 크롬이 탭을 닫고 `preventDefault` 로 못 막는다.

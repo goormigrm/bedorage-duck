@@ -59,7 +59,7 @@ export class LocalInput {
     this.touch = touch
     const onKey = (e: KeyboardEvent, down: boolean) => {
       const k = e.key.toLowerCase()
-      if (['w', 'a', 's', 'd', ' ', 'control', 'r', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) {
+      if (['w', 'a', 's', 'd', ' ', 'r', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) {
         if (down) this.keys.add(k)
         else this.keys.delete(k)
         e.preventDefault()
@@ -196,9 +196,9 @@ export class LocalInput {
     if (this.mouseDown.has(0) || t?.firing) buttons |= BTN_FIRE
     if (this.mouseDown.has(2) || t?.ads) buttons |= BTN_ADS
     // Shift 는 달리기다. 구르기는 Space (전에는 Shift 도 구르기였다)
-    // 구르기는 Space 또는 Ctrl (2026-09-05 요청: 둘 다). Ctrl 을 누른 채 W 를 누르면 브라우저가 탭을 닫을 수 있으니
-    // 가이드에는 "방향을 먼저, Ctrl 은 나중에" 라고 적어 둔다
-    if (k.has(' ') || k.has('control') || t?.takeDash()) buttons |= BTN_DASH
+    // 구르기는 Space 뿐이다. Ctrl 도 잠깐 넣었다가(2026-09-05) 뺐다 — Ctrl 을 누른 채 W 를 누르면 크롬이 탭을 닫는데
+    // preventDefault 로 막을 수 없어 사용자가 위험하다고 판단했다
+    if (k.has(' ') || t?.takeDash()) buttons |= BTN_DASH
     // 폰은 달리기 버튼으로 켜고 끈다 (스틱 끝까지 밀기는 늘 켜져 있어 무조건 달리는 꼴이었다)
     if (k.has('shift') || t?.sprint) buttons |= BTN_SPRINT
     if (k.has('r') || t?.reload) buttons |= BTN_RELOAD
