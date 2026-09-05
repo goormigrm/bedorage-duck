@@ -82,6 +82,8 @@ export interface PlayerState {
   fireCooldown: number
   recoil: number
   ads: boolean
+  /** 조준점(커서)까지의 거리 px (입력에서 온다). 0 = 조준점 없음 */
+  aimDist: number
   dashTimer: number
   dashCooldown: number
   dashDx: number
@@ -141,6 +143,8 @@ export interface Bullet {
   hitSomeone: boolean
   /** 모래주머니를 끝까지 넘어가는 탄 (머리를 정확히 겨눈 탄) */
   over: boolean
+  /** 쏠 때 커서가 올라가 있던 적 (-1 = 없음). 이 사람을 정중앙으로 맞혀야 머리다 */
+  headTarget: number
   /**
    * 엄폐 사격이 모래주머니를 넘기는 거리(총구 기준, 0 이면 없음).
    * 기대 못 넘게 하는 것은 **내가 기대고 있는 그 자루**뿐이다.

@@ -53,6 +53,8 @@ export interface RenderOptions {
   message?: string
   /** 화면 좌표 커서 (로컬 플레이어용 조준선) */
   cursor?: { x: number; y: number }
+  /** 커서가 적 위에 올라가 있다 (헤드샷이 날 수 있는 상태) → 조준선이 금색 */
+  cursorOn?: boolean
   timeScale?: number
   /** 시야 제한 (기본 true, 관전이면 무시) */
   fog?: boolean
@@ -257,7 +259,7 @@ export class Hud {
     if (opts.spectateLabel) this.drawSpectate(opts.spectateLabel)
     this.drawBanner(s, opts)
     const lp = opts.localPlayer
-    if (opts.cursor && lp !== -1) this.drawCursor(opts.cursor, s.players[lp])
+    if (opts.cursor && lp !== -1) this.drawCursor(opts.cursor, s.players[lp], opts.cursorOn === true)
   }
 
   private drawPanels(s: GameState, opts: RenderOptions): void {
@@ -621,11 +623,12 @@ export class Hud {
     }
   }
 
-  private drawCursor(cur: { x: number; y: number }, me: PlayerState): void {
+  private drawCursor(cur: { x: number; y: number }, me: PlayerState, on: boolean): void {
     const ctx = this.ctx
     const r = me.ads ? 6 : 12 + me.recoil * 0.4
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-    ctx.lineWidth = 2
+    // 상대 위에 올라가 있으면 금색 — 지금 쏘면 헤드샷이 날 수 있다는 신호
+    ctx.strokeStyle = on ? 'rgba(255,216,74,0.95)' : 'rgba(255,255,255,0.9)'
+    ctx.lineWidth = on ? 2.5 : 2
     ctx.beginPath()
     ctx.moveTo(cur.x - r - 6, cur.y)
     ctx.lineTo(cur.x - r, cur.y)
@@ -636,9 +639,9 @@ export class Hud {
     ctx.moveTo(cur.x, cur.y + r)
     ctx.lineTo(cur.x, cur.y + r + 6)
     ctx.stroke()
-    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    ctx.fillStyle = on ? 'rgba(255,216,74,0.95)' : 'rgba(255,255,255,0.9)'
     ctx.beginPath()
-    ctx.arc(cur.x, cur.y, 1.5, 0, Math.PI * 2)
+    ctx.arc(cur.x, cur.y, on ? 2.2 : 1.5, 0, Math.PI * 2)
     ctx.fill()
     // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다
     if (this.hitMarkT > 0) {

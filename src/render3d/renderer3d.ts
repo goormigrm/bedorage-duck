@@ -6,7 +6,7 @@ import { CHARACTERS } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap, SANDBAG_HP, TILE } from '../core/map'
 import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
-import { PART_HEAD, WEAPONS } from '../core/weapons'
+import { PART_HEAD, WEAPONS, HEAD_AIM_FRAC } from '../core/weapons'
 import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
 import { PITCH, YAW, worldDirToScreen } from './camera'
@@ -566,7 +566,20 @@ export class Renderer3D {
       const me = pos[opts.localPlayer]
       this.drawScope(opts.cursor, this.worldToScreen(me.x, 0.6, me.z))
     }
-    this.hud.drawMain(curr, opts)
+    // 커서가 적 위에 있는가 (보이는 적만) → 조준선 금색
+    let cursorOn = false
+    if (opts.cursor && opts.localPlayer >= 0 && curr.players[opts.localPlayer]?.alive) {
+      const w = this.screenToWorld(opts.cursor.x, opts.cursor.y)
+      const me = curr.players[opts.localPlayer]
+      for (const p of curr.players) {
+        if (p.id === me.id || !p.alive || p.left || this.hidden[p.id] || p.team === me.team) continue
+        if (Math.hypot(w.x - p.x, w.y - p.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC) {
+          cursorOn = true
+          break
+        }
+      }
+    }
+    this.hud.drawMain(curr, { ...opts, cursorOn })
     if (opts.showHud) this.drawMinimap(curr, opts)
   }
 

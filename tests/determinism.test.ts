@@ -43,7 +43,8 @@ function runBots(o: RunOpts): { hashes: number[]; state: GameState; ticks: numbe
 function shoot(state: GameState, owner: number, x: number, y: number, vx: number, vy: number, damage: number, over = false): Bullet {
   const b: Bullet = {
     id: state.nextBulletId++, owner, x, y, px: x, py: y, vx, vy,
-    life: 60, damage, ads: false, ox: x, oy: y, weapon: 'rifle', hitSomeone: false, over, overR: 0,
+    // 2인 시험이라 상대는 1 - owner. 커서가 그 사람 위에 있었다고 친다 (헤드샷 규칙 2026-09-05)
+    life: 60, damage, ads: false, ox: x, oy: y, weapon: 'rifle', hitSomeone: false, over, overR: 0, headTarget: 1 - owner,
   }
   state.bullets.push(b)
   return b

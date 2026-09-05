@@ -97,9 +97,12 @@ function shootBag(scene: ReturnType<typeof lone>): number {
 function shoot(state: GameState, map: ReturnType<typeof buildMap>, shooter: number, aim: number, ticks: number, ads = true): number {
   const victim = state.players[1 - shooter]
   const before = victim.hp
+  const me = state.players[shooter]
+  // 조준점은 상대 위 (헤드샷·머리 조준 관통은 커서가 상대 위에 있어야 난다)
+  const aimDist = Math.min(255, Math.round(Math.hypot(victim.x - me.x, victim.y - me.y) / 4))
   for (let i = 0; i < ticks; i++) {
     const inputs: Input[] = [IDLE, IDLE]
-    inputs[shooter] = { mx: 0, my: 0, aim, buttons: BTN_FIRE | (ads ? BTN_ADS : 0), char: 0 }
+    inputs[shooter] = { mx: 0, my: 0, aim, buttons: BTN_FIRE | (ads ? BTN_ADS : 0), char: 0, aimDist }
     // 맞는 쪽은 가만히 있는다
     step(state, map, inputs)
     if (!victim.alive) break

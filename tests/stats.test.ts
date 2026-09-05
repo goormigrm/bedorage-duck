@@ -28,7 +28,7 @@ function shootAt(s: GameState, owner: number, victim: number, damage: number): v
   const b: Bullet = {
     id: s.nextBulletId++, owner, x: v.x + 18, y: v.y, px: v.x + 18, py: v.y,
     vx: -9, vy: 0, life: 20, damage, ads: false, ox: v.x + 18, oy: v.y,
-    weapon: 'rifle', hitSomeone: false, over: true, overR: 0,
+    weapon: 'rifle', hitSomeone: false, over: true, overR: 0, headTarget: victim,
   }
   s.bullets.push(b)
 }

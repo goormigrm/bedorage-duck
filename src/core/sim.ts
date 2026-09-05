@@ -37,7 +37,7 @@ import {
   isEnemy,
   teamKills,
 } from './state'
-import { HEAD_FRAC, PART_BODY, PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, headMult, partForOffset } from './weapons'
+import { HEAD_AIM_FRAC, HEAD_FRAC, PART_BODY, PART_HEAD, PART_LEGS, PART_MULT, WEAPONS, falloff, headMult, partForOffset } from './weapons'
 
 const MAX_RECOIL_MUL = 3
 
@@ -112,6 +112,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     fireCooldown: 0,
     recoil: 0,
     ads: false,
+    aimDist: 0,
     dashTimer: 0,
     dashCooldown: 0,
     dashDx: 0,
@@ -336,6 +337,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   }
 
   p.aim = input.aim & 1023
+  p.aimDist = (input.aimDist ?? 0) * 4
   p.ads = playing && (input.buttons & BTN_ADS) !== 0 && p.dashTimer === 0
 
   // 이동
@@ -411,11 +413,27 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
  */
 const COVER_REACH = COVER_DIST + TILE * 3
 
-function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: number, my: number, a: number): boolean {
+/**
+ * 쏠 때 커서(조준점)가 올라가 있는 적. 헤드샷과 '머리 조준' 모래주머니 관통은 이 사람에게만 난다.
+ * 조준점 = 내 위치 + 조준 각도 × 조준 거리. 거리가 0(조준점 없음)이면 아무도 아니다.
+ */
+function aimedEnemy(state: GameState, p: PlayerState): number {
+  if (p.aimDist <= 0) return -1
+  const ax = p.x + cosA(p.aim) * p.aimDist
+  const ay = p.y + sinA(p.aim) * p.aimDist
+  for (const e of state.players) {
+    if (!isEnemy(p, e) || !e.alive || e.left) continue
+    if (len(ax - e.x, ay - e.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC) return e.id
+  }
+  return -1
+}
+
+function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: number, my: number, a: number, headTarget: number): boolean {
+  if (headTarget < 0) return false
   const dx = cosA(a)
   const dy = sinA(a)
   for (const e of state.players) {
-    if (!isEnemy(shooter, e) || !e.alive || e.left) continue
+    if (e.id !== headTarget || !isEnemy(shooter, e) || !e.alive || e.left) continue
     const t = (e.x - mx) * dx + (e.y - my) * dy
     if (t <= 0 || t > 1200) continue
     if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * HEAD_FRAC) continue
@@ -461,6 +479,7 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
   // 모래주머니에 붙어 쏘면(엄폐) **내가 기댄 자루만** 넘어간다
   const inCover = nearSandbag(map, p.x, p.y)
   const overR = inCover ? COVER_REACH : 0
+  const headTarget = aimedEnemy(state, p)
   for (let i = 0; i < w.pellets; i++) {
     const off = spread > 0 ? randInt(state.rng, -spread, spread + 1) : 0
     const a = (p.aim + off) & 1023
@@ -480,8 +499,9 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
       oy: p.y,
       weapon: p.weapon,
       hitSomeone: false,
-      over: aimsAtHead(state, map, p, mx, my, a),
+      over: aimsAtHead(state, map, p, mx, my, a, headTarget),
       overR,
+      headTarget,
     }
     state.bullets.push(b)
   }
@@ -608,7 +628,9 @@ function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: 
 function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number): void {
   const w = WEAPONS[b.weapon]
   const dist = len(victim.x - b.ox, victim.y - b.oy)
-  const part = partForOffset(dOff, PLAYER_RADIUS)
+  let part = partForOffset(dOff, PLAYER_RADIUS)
+  // 궤적이 정중앙을 지나도, 쏠 때 커서가 이 사람 위에 없었으면 몸통이다 (2026-09-05)
+  if (part === PART_HEAD && b.headTarget !== victim.id) part = PART_BODY
   const mult = part === PART_HEAD ? headMult(w) : PART_MULT[part]
   let dmg = b.damage * mult * falloff(w, dist)
   const shooter = state.players[b.owner]

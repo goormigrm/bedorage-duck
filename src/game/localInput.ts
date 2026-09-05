@@ -31,6 +31,8 @@ export class LocalInput {
   mouse = { x: VIEW_W / 2, y: VIEW_H / 2 }
   private mouseDown = new Set<number>()
   private lastAim = 0
+  /** 조준점까지의 거리 px (마우스면 커서, 터치면 자동 조준 표적) */
+  private lastDist = 0
   private detach: (() => void) | null = null
   /** Tab 눌림 (다음 샘플 한 번만 BTN_SWAP) */
   private swapPressed = false
@@ -115,6 +117,7 @@ export class LocalInput {
     const eye = [{ x: me.x, y: me.y }]
     let want: number | null = null
     let best = Infinity
+    let bestDist = 0
     for (const p of ctx.state.players) {
       if (p.id === ctx.me || !p.alive || p.choosing || p.left) continue
       if (teams && p.team === me.team) continue
@@ -129,9 +132,11 @@ export class LocalInput {
       if (score < best) {
         best = score
         want = a
+        bestDist = d
       }
     }
-    // 적이 없으면 가는 쪽을 본다
+    // 적이 없으면 가는 쪽을 본다 (조준점 없음 → 헤드샷 없음)
+    this.lastDist = want === null ? 0 : bestDist
     if (want === null && (mx !== 0 || my !== 0)) want = radToAngle(Math.atan2(my, mx))
     if (want === null) return
     const diff = angleDiff(want, this.lastAim)
@@ -163,6 +168,7 @@ export class LocalInput {
       const dx = w.x - meX
       const dy = w.y - meY
       if (dx !== 0 || dy !== 0) this.lastAim = radToAngle(Math.atan2(dy, dx))
+      this.lastDist = Math.hypot(dx, dy)
     }
     let buttons = 0
     if (this.mouseDown.has(0) || t?.firing) buttons |= BTN_FIRE
@@ -179,6 +185,6 @@ export class LocalInput {
     }
     const char = this.pendingChar
     this.pendingChar = 0
-    return { mx, my, aim: this.lastAim, buttons, char }
+    return { mx, my, aim: this.lastAim, buttons, char, aimDist: Math.min(255, Math.round(this.lastDist / 4)) }
   }
 }

@@ -8,7 +8,7 @@ import { joinRoom, selfId, type Room } from 'trystero'
 import { MAX_PLAYERS } from '../core/state'
 
 /** 프로토콜이 바뀌면 올린다 (다른 버전 클라이언트와 섞이지 않게) */
-export const APP_ID = 'bedorage-duck-v2'
+export const APP_ID = 'bedorage-duck-v3'
 const LOBBY_ID = 'lobby'
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 

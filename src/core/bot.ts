@@ -205,6 +205,8 @@ export function botInput(
   const diffA = angleDiff(target, mem.aim)
   mem.aim = (mem.aim + Math.round(diffA * d.turnRate)) & 1023
   out.aim = mem.aim
+  // 조준점은 표적 위 (커서가 상대 위에 있어야 헤드샷이 난다). 표적이 없으면 조준점 없음
+  out.aimDist = enemy ? Math.min(255, Math.round(dist / 4)) : 0
 
   // ---- 사격 ----
   const range = PREFERRED_RANGE[me.weapon]
