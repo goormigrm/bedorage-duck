@@ -25,6 +25,14 @@ export interface AutoAimCtx {
 const TURN_STEP = 16
 /** 조준이 목표에 다가갈수록 부드럽게 — 남은 각도의 이 비율만큼 돈다 */
 const TURN_EASE = 0.25
+/**
+ * 자동 조준의 **일부러 넣은 오차** (1024 단계). 사람은 이만큼 못 맞힌다 — 정확히 정중앙을 잡아 주면
+ * 폰에서 저격이 헤드샷 기계가 됐다(2026-09-05 제보). 어려움 봇(8° + 손떨림 4.5°)보다 조금 더 크게.
+ *  - 치우침: 0.4~0.8초마다 ±AUTO_AIM_BIAS 안에서 새로 뽑는다 (봇의 wobbleBias 와 같은 구조)
+ *  - 흔들림: ±AUTO_AIM_SWAY 사인파로 계속 흔들린다
+ */
+export const AUTO_AIM_BIAS = Math.round((9 / 360) * 1024)
+export const AUTO_AIM_SWAY = Math.round((3 / 360) * 1024)
 
 export class LocalInput {
   private keys = new Set<string>()
@@ -33,6 +41,10 @@ export class LocalInput {
   private lastAim = 0
   /** 조준점까지의 거리 px (마우스면 커서, 터치면 자동 조준 표적) */
   private lastDist = 0
+  /** 자동 조준 오차 상태 (치우침 · 남은 틱 · 흔들림 위상) */
+  private aimBias = 0
+  private aimBiasLeft = 0
+  private swayT = 0
   private detach: (() => void) | null = null
   /** Tab 눌림 (다음 샘플 한 번만 BTN_SWAP) */
   private swapPressed = false
@@ -137,6 +149,16 @@ export class LocalInput {
     }
     // 적이 없으면 가는 쪽을 본다 (조준점 없음 → 헤드샷 없음)
     this.lastDist = want === null ? 0 : bestDist
+    if (want !== null) {
+      // 표적이 있을 때만 오차를 얹는다. 정확히 겨눠 주면 사람보다 잘 맞는다
+      if (this.aimBiasLeft <= 0) {
+        this.aimBias = Math.round((Math.random() * 2 - 1) * AUTO_AIM_BIAS)
+        this.aimBiasLeft = 24 + Math.floor(Math.random() * 24)
+      }
+      this.aimBiasLeft--
+      this.swayT += 0.11
+      want = (want + this.aimBias + Math.round(Math.sin(this.swayT) * AUTO_AIM_SWAY)) & ANGLE_MASK
+    }
     if (want === null && (mx !== 0 || my !== 0)) want = radToAngle(Math.atan2(my, mx))
     if (want === null) return
     const diff = angleDiff(want, this.lastAim)
@@ -175,9 +197,8 @@ export class LocalInput {
     if (this.mouseDown.has(2) || t?.ads) buttons |= BTN_ADS
     // Shift 는 달리기다. 구르기는 Space (전에는 Shift 도 구르기였다)
     if (k.has(' ') || t?.takeDash()) buttons |= BTN_DASH
-    // 폰에는 Shift 가 없으니 **스틱을 끝까지 밀면** 달린다
-    const stick = t ? Math.hypot(t.move.x, t.move.y) : 0
-    if (k.has('shift') || stick > 0.88) buttons |= BTN_SPRINT
+    // 폰은 달리기 버튼으로 켜고 끈다 (스틱 끝까지 밀기는 늘 켜져 있어 무조건 달리는 꼴이었다)
+    if (k.has('shift') || t?.sprint) buttons |= BTN_SPRINT
     if (k.has('r') || t?.reload) buttons |= BTN_RELOAD
     if (this.swapPressed || t?.takeSwap()) {
       buttons |= BTN_SWAP

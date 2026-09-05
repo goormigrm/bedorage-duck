@@ -15,6 +15,7 @@ import { Lockstep } from '../net/lockstep'
 import { CtlMessage, LobbyLink, RoomLink } from '../net/room'
 import { TEAM_NAMES, VIEW_H, VIEW_W, setViewAspect } from '../render/hud'
 import { worldDirToScreen } from '../render3d/camera'
+import { U } from '../render3d/world3d'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
@@ -747,6 +748,13 @@ export class Session {
     if (!this.touch) return this.input.mouse
     const me = this.state.players[this.cfg.localPlayer]
     const r = angleToRad(me.aim)
+    // 표적이 있으면 조준선을 **실제 조준점**(표적 위, 일부러 넣은 흔들림 포함)에 그린다 —
+    // 폰에서는 사람이 이동과 사격만 하므로, 자동 조준이 어디를 겨누는지 보여야 한다 (2026-09-05)
+    if (me.aimDist > 0) {
+      const ax = me.x + Math.cos(r) * me.aimDist
+      const ay = me.y + Math.sin(r) * me.aimDist
+      return this.renderer.worldToScreen(ax * U, 0.6, ay * U)
+    }
     const d = worldDirToScreen(Math.cos(r), Math.sin(r))
     const len = Math.hypot(d.x, d.y) || 1
     return { x: VIEW_W / 2 + (d.x / len) * 190, y: VIEW_H / 2 + (d.y / len) * 190 }

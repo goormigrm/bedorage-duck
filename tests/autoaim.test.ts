@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ANGLE_STEPS, angleDiff, radToAngle } from '../src/core/fixedmath'
 import { buildMap } from '../src/core/map'
 import { createState } from '../src/core/sim'
-import { LocalInput } from '../src/game/localInput'
+import { AUTO_AIM_BIAS, AUTO_AIM_SWAY, LocalInput } from '../src/game/localInput'
 import { TouchControls } from '../src/game/touch'
 
 /** sample() 이 보는 최소한만 흉내 낸 터치 조작 */
@@ -59,7 +59,27 @@ describe('모바일 자동 조준', () => {
     for (let i = 0; i < 120; i++) {
       aim = input.sample(noRenderer, state.players[0].x, state.players[0].y, { state, map, me: 0 }).aim
     }
-    expect(Math.abs(angleDiff(aim, want))).toBeLessThanOrEqual(2)
+    // 정확히가 아니라 **일부러 넣은 오차** 안에서 겨눈다 (사람은 정중앙을 그렇게 잡지 못한다)
+    expect(Math.abs(angleDiff(aim, want))).toBeLessThanOrEqual(AUTO_AIM_BIAS + AUTO_AIM_SWAY + 2)
+  })
+
+  it('자동 조준은 일부러 흔들린다 — 오래 겨눠도 정중앙에 붙어 있지 않다', () => {
+    const { map, state, input } = setup()
+    expect(placeInSight(map, state, 240)).toBe(true)
+    const want = radToAngle(Math.atan2(state.players[1].y - state.players[0].y, state.players[1].x - state.players[0].x))
+    let sum = 0
+    let n = 0
+    for (let i = 0; i < 600; i++) {
+      const aim = input.sample(noRenderer, state.players[0].x, state.players[0].y, { state, map, me: 0 }).aim
+      if (i >= 60) {
+        sum += Math.abs(angleDiff(aim, want))
+        n++
+      }
+    }
+    // 평균 오차가 머리 판정(0.28r ≈ 240px 에서 약 0.9° ≈ 2.7단계)보다 훨씬 커야 한다
+    expect(sum / n).toBeGreaterThan(6)
+    // 그래도 표적 근처는 맞다 (치우침 + 흔들림 한도 안)
+    expect(sum / n).toBeLessThan(AUTO_AIM_BIAS + AUTO_AIM_SWAY)
   })
 
   it('한 틱에 홱 돌지 않는다 (조준 속도 제한)', () => {

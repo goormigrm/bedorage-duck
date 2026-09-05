@@ -43,6 +43,8 @@ export class TouchControls {
   /** 화면 기준 이동 (-1..1) */
   move = { x: 0, y: 0 }
   ads = false
+  /** 달리기 켜짐 (버튼으로 켜고 끈다). 전에는 스틱을 끝까지 밀면 무조건 달렸다 */
+  sprint = false
   reload = false
   /** 눌린 순간 한 번만 소비되는 신호 */
   private dashEdge = false
@@ -69,6 +71,7 @@ export class TouchControls {
         <button class="tbtn" data-a="swap">교체</button>
         <button class="tbtn" data-a="ads">조준</button>
         <button class="tbtn" data-a="dash">구르기</button>
+        <button class="tbtn" data-a="sprint">달리기</button>
         <button class="tbtn mark" data-a="mark" hidden>신호</button>
         <button class="tbtn big" data-a="fire">사격</button>
       </div>
@@ -150,6 +153,9 @@ export class TouchControls {
         if (act === 'ads') {
           this.ads = !this.ads
           btn.classList.toggle('on', this.ads)
+        } else if (act === 'sprint') {
+          this.sprint = !this.sprint
+          btn.classList.toggle('on', this.sprint)
         } else if (act === 'reload') {
           this.reload = true
           btn.classList.add('on')

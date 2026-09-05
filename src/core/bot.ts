@@ -32,10 +32,12 @@ interface DiffDef {
 const deg = (d: number) => Math.round((d / 360) * 1024)
 
 // 2026-09-04 전체 하향: 예전 '쉬움'이 지금의 '보통' 정도다
+// 2026-09-05 조준 하향: 봇이 사람보다 잘 맞혔다(사용자). 각도 오차·손떨림을 키우고 예측 사격을 줄였다.
+//   어려움 aimErr 5.5° → 8°, wobble 3° → 4.5°, lead 0.6 → 0.5 · 보통 11° → 14° · 쉬움 18° → 22°
 const DIFFS: Record<Difficulty, DiffDef> = {
-  easy: { reaction: 62, aimErr: deg(18), turnRate: 0.07, fireChance: 0.3, useAds: false, dashChance: 0.001, lead: 0, repathEvery: 30, wobble: deg(9) },
-  normal: { reaction: 34, aimErr: deg(11), turnRate: 0.13, fireChance: 0.5, useAds: false, dashChance: 0.005, lead: 0.2, repathEvery: 20, wobble: deg(6) },
-  hard: { reaction: 16, aimErr: deg(5.5), turnRate: 0.3, fireChance: 0.8, useAds: true, dashChance: 0.02, lead: 0.6, repathEvery: 10, wobble: deg(3) },
+  easy: { reaction: 62, aimErr: deg(22), turnRate: 0.07, fireChance: 0.3, useAds: false, dashChance: 0.001, lead: 0, repathEvery: 30, wobble: deg(11) },
+  normal: { reaction: 34, aimErr: deg(14), turnRate: 0.12, fireChance: 0.5, useAds: false, dashChance: 0.005, lead: 0.15, repathEvery: 20, wobble: deg(8) },
+  hard: { reaction: 16, aimErr: deg(8), turnRate: 0.26, fireChance: 0.8, useAds: true, dashChance: 0.02, lead: 0.5, repathEvery: 10, wobble: deg(4.5) },
 }
 
 const PREFERRED_RANGE: Record<WeaponId, number> = {

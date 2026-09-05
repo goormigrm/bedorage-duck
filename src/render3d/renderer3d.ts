@@ -255,7 +255,7 @@ export class Renderer3D {
     return { x: hit.x / U, y: hit.z / U }
   }
 
-  private worldToScreen(x: number, y: number, z: number): { x: number; y: number } {
+  worldToScreen(x: number, y: number, z: number): { x: number; y: number } {
     const v = new THREE.Vector3(x, y, z).project(this.camera)
     return { x: ((v.x + 1) / 2) * VIEW_W, y: ((1 - v.y) / 2) * VIEW_H }
   }
