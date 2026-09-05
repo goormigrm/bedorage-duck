@@ -447,7 +447,7 @@ export class Hud {
     const h = others.length * rowH + 14
     // 터치 조작이면 오른쪽 아래가 버튼 자리라 미니맵 밑으로 내린다
     const x = opts.touch ? 24 : VIEW_W - 24 - w
-    const y = opts.touch ? 182 : VIEW_H - 46 - h
+    const y = opts.touch ? 204 : VIEW_H - 46 - h // 미니맵(170 + 여백) 아래
     this.panel(x, y, w, h)
     others.forEach((m, r) => {
       const c = CHARACTERS[m.p.char]

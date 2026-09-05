@@ -22,6 +22,9 @@ const FOLLOW_DIST = 15.5
 /** 기준 세로 시야각. 화면이 넓어지면 resize() 가 이 값을 줄여 보이는 면적을 유지한다 */
 const BASE_FOV = 40
 const GUN_H = 0.95
+/** 미니맵 창 한 변(px)과 타일당 px. 회전돼 있어 대각선으로는 더 멀리 보인다 (한 변 ≈ 15칸, 대각선 ≈ 21칸) */
+const MINIMAP_SIZE = 170
+const MINIMAP_PX_PER_TILE = 11
 
 interface Particle {
   mesh: THREE.Mesh
@@ -730,52 +733,87 @@ export class Renderer3D {
   }
 
   /** 왼쪽 위 미니맵 */
+  /**
+   * 미니맵 (2026-09-05 재설계): 전체 맵이 아니라 **내 주변만**, 실제 화면과 같은 방향으로 돌린 네모 창.
+   * 전에는 맵 전체를 위에서 본 그림이라 "화면에서 위" 와 "미니맵에서 위" 가 45° 어긋나 방향을 한 번 머리로 돌려야 했다.
+   * 지금은 월드 방향 → 화면 방향과 같은 회전(카메라 요)을 미니맵에도 걸고, 나를 가운데 둔다.
+   * 관전 중이면 보고 있는 사람이 가운데.
+   */
   private drawMinimap(curr: GameState, opts: RenderOptions): void {
     const map = this.map
     if (!this.miniCanvas) this.miniCanvas = renderMapTiles(map)
     const ctx = this.hud.ctx
-    const maxW = 190
-    const maxH = 150
-    const sc = Math.min(maxW / map.w, maxH / map.h)
-    const w = map.w * sc
-    const h = map.h * sc
+    const S = MINIMAP_SIZE
     const x = 16
     const y = 16
+    const cx = x + S / 2
+    const cy = y + S / 2
+    const lp = opts.localPlayer
+    const viewer = opts.viewer ?? lp
+    const center = viewer >= 0 ? curr.players[viewer] : null
+    // 가운데: 보는 사람. 없으면(시네마틱) 맵 가운데
+    const mx = center ? center.x / TILE : map.w / 2
+    const my = center ? center.y / TILE : map.h / 2
+    // 화면 방향과 맞추는 회전: 월드 +x 가 화면에서 어느 쪽인지
+    const d = worldDirToScreen(1, 0)
+    const rot = Math.atan2(d.y, d.x)
     ctx.save()
-    ctx.fillStyle = 'rgba(13,17,23,0.78)'
-    roundRect(ctx, x - 6, y - 6, w + 12, h + 12, 8)
+    ctx.fillStyle = 'rgba(13,17,23,0.82)'
+    roundRect(ctx, x - 6, y - 6, S + 12, S + 12, 10)
     ctx.fill()
     ctx.strokeStyle = 'rgba(227,179,65,0.35)'
     ctx.lineWidth = 1
     ctx.stroke()
-    ctx.globalAlpha = 0.9
-    ctx.drawImage(this.miniCanvas, x, y, w, h)
+    // 네모 창 안만 그린다
+    ctx.beginPath()
+    roundRect(ctx, x, y, S, S, 6)
+    ctx.clip()
+    ctx.fillStyle = '#05070a'
+    ctx.fillRect(x, y, S, S)
+    ctx.translate(cx, cy)
+    ctx.rotate(rot)
+    ctx.scale(MINIMAP_PX_PER_TILE, MINIMAP_PX_PER_TILE)
+    ctx.translate(-mx, -my)
+    ctx.globalAlpha = 0.92
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(this.miniCanvas, 0, 0, map.w, map.h)
     ctx.globalAlpha = 1
-    const lp = opts.localPlayer
     const teams = isTeamMatch(curr)
     const myTeam = lp >= 0 ? curr.players[lp].team : -1
+    const rp = 1 / MINIMAP_PX_PER_TILE // 타일 좌표계에서 1px
     for (let i = 0; i < curr.players.length; i++) {
       const p = curr.players[i]
       if (!p.alive || p.left) continue
       const mine = i === lp
       const ally = teams && lp >= 0 && p.team === myTeam && !mine
       if (!mine && !ally && this.hidden[i] && lp >= 0) continue // 안 보이는 적은 미니맵에도 없다
-      const px = x + (p.x / TILE) * sc
-      const py = y + (p.y / TILE) * sc
+      const px = p.x / TILE
+      const py = p.y / TILE
       ctx.fillStyle = mine ? '#ffd84a' : ally ? '#5aa9ff' : '#ff5a4a'
       ctx.beginPath()
-      ctx.arc(px, py, mine ? 3.4 : 2.8, 0, Math.PI * 2)
+      ctx.arc(px, py, (mine ? 3.6 : 3) * rp, 0, Math.PI * 2)
       ctx.fill()
-      if (mine) {
+      if (mine || ally) {
         const r = angleToRad(p.aim)
-        ctx.strokeStyle = '#ffd84a'
-        ctx.lineWidth = 1.6
+        ctx.strokeStyle = mine ? '#ffd84a' : '#5aa9ff'
+        ctx.lineWidth = 1.6 * rp
         ctx.beginPath()
         ctx.moveTo(px, py)
-        ctx.lineTo(px + Math.cos(r) * 9, py + Math.sin(r) * 9)
+        ctx.lineTo(px + Math.cos(r) * 10 * rp, py + Math.sin(r) * 10 * rp)
         ctx.stroke()
       }
     }
+    ctx.restore()
+    // 창 테두리 안쪽 십자 눈금 (가운데가 나라는 표시)
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(cx - 6, cy)
+    ctx.lineTo(cx + 6, cy)
+    ctx.moveTo(cx, cy - 6)
+    ctx.lineTo(cx, cy + 6)
+    ctx.stroke()
     ctx.restore()
   }
 

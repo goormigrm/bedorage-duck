@@ -370,3 +370,43 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .joining .jsteps li.done::before { content: "✓"; }
 .joining .jhint { color: var(--ink-3); font-size: 12.5px; margin: 6px 0 14px; }
 .joining .btn { min-width: 96px; }
+
+/* ===== 로비 재구성 (2026-09-05): 상단 바 · 가로 방 목록 · 설정은 창으로 ===== */
+.topbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 8px 0 14px; }
+.topbar .nickwrap { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; max-width: 420px; }
+.topbar .nickwrap label { font: 700 13px "IBM Plex Sans KR", sans-serif; color: var(--gold); letter-spacing: .02em; }
+.topbar .nickwrap.empty label::after { content: " · 먼저 정하세요"; color: var(--risk); font-weight: 600; }
+.topbar .topacts { display: flex; gap: 10px; flex: 0 0 auto; }
+.btn.lg { padding: 14px 26px; font-size: 16px; border-radius: 12px; }
+.card.wide { width: 100%; }
+/* 방 목록: 한 줄에 한 방, 열이 맞아야 맵·모드·목표가 한눈에 읽힌다 */
+.rhead, .rooms .room { display: grid; grid-template-columns: minmax(120px, 1.3fr) 1fr .8fr .7fr .7fr 1fr auto; align-items: center; column-gap: 10px; }
+.rhead { padding: 4px 12px 8px; font: 700 11.5px "IBM Plex Sans KR", sans-serif; color: var(--ink-3); letter-spacing: .04em; border-bottom: 1px solid var(--line-2); margin-bottom: 6px; }
+.rhead[hidden] { display: none; }
+.rooms { max-height: none; overflow: visible; }
+.rooms .room { padding: 10px 12px; font-size: 13.5px; }
+.rooms .room .rhost b { color: var(--ink); }
+.rooms .room .rmap, .rooms .room .rmode, .rooms .room .rkill, .rooms .room .rcount { color: var(--ink-2); }
+.rooms .room .ract { text-align: right; }
+.rooms .room .ract .btn { padding: 8px 16px; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 10px 0 4px; font: 600 12.5px "IBM Plex Mono", monospace; color: var(--ink-2); }
+.pager[hidden] { display: none; }
+.btn.sm { padding: 6px 12px; font-size: 12px; }
+@media (max-width: 760px) {
+  .rhead { display: none; }
+  .rooms .room { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .rooms .room .rhost { grid-column: 1 / 2; }
+  .rooms .room .ract { grid-column: 2 / 3; grid-row: 1 / 3; }
+  .rooms .room .rmap::before { content: "맵 "; color: var(--ink-3); }
+  .rooms .room .rmode, .rooms .room .rkill, .rooms .room .rcount, .rooms .room .rstate { display: inline; }
+}
+/* 설정 창 (방 만들기 · 혼자 하기) */
+.dlg { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; background: rgba(6, 9, 14, .78); backdrop-filter: blur(3px); }
+.dlg[hidden] { display: none; }
+.dlg .dbox { width: min(560px, 92vw); max-height: 92vh; overflow-y: auto; background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--gold); border-radius: 16px; padding: 22px 24px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,216,74,.15) inset; }
+.dlg h3 { margin: 0 0 6px; font: 800 20px "IBM Plex Sans KR", sans-serif; color: var(--ink); }
+.dlg .maprow { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; margin-top: 4px; }
+.dlg .maprow .mappv { width: 200px; height: auto; }
+@media (max-width: 560px) { .dlg .maprow { grid-template-columns: 1fr; } .dlg .maprow .mappv { width: 100%; } }
+.dlg .dacts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }

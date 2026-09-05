@@ -86,71 +86,83 @@ export class Lobby {
         <p class="tag"><b>최대 ${MAX_PLAYERS}인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
         <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입 (개인전)</span><span>혼자 남아도 30초 대기</span><span>설치 없음 · 서버 없음</span></div>
 
-        <div class="lobby-grid">
-          <aside class="side">
-            <div class="card nick-card" id="nick-card">
-              <h2>닉네임 <span class="k">먼저 정하세요</span></h2>
-              <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
-              <p class="cardp">게임 중 캐릭터 위에 뜹니다. 방을 만들거나 참가하려면 있어야 합니다.</p>
-            </div>
+        <div class="topbar">
+          <div class="nickwrap" id="nick-card">
+            <label for="nick">닉네임</label>
+            <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="topacts">
+            <button class="btn main lg" id="btn-host">방 만들기</button>
+            <button class="btn lg" id="btn-solo">혼자 하기</button>
+          </div>
+        </div>
 
-            <div class="status" id="status"></div>
+        <div class="status" id="status"></div>
 
-            <div class="card rooms-card">
-              <h2>방 목록 <span class="k" id="rooms-count"></span><span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
-              <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
-              <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다. 팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
-            </div>
+        <div class="card rooms-card wide">
+          <h2>방 목록 <span class="k" id="rooms-count"></span><span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
+          <div class="rhead"><span>방</span><span>맵</span><span>모드</span><span>목표</span><span>인원</span><span>상태</span><span></span></div>
+          <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
+          <div class="pager" id="pager" hidden>
+            <button class="btn secondary sm" id="pg-prev">이전</button>
+            <span id="pg-label">1 / 1</span>
+            <button class="btn secondary sm" id="pg-next">다음</button>
+          </div>
+          <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다. 팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
+        </div>
 
-            <div class="card">
-              <h2>방 만들기 <span class="k">HOST</span></h2>
-              <p class="cardp">정원을 정해 방을 엽니다. <b>둘만 모여도 시작</b>할 수 있고, 남은 자리는 <b>게임 중에도 난입</b>으로 채워집니다.</p>
-              <div class="row"><label>정원</label><div class="seg" id="seg-size">
-                ${[2, 3, 4].map((n) => `<button data-v="${n}" class="${n === 4 ? 'on' : ''}">${n}명</button>`).join('')}
-              </div></div>
-              <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
-                <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
-              </div></div>
-              <div class="row"><label>목표 킬</label><select class="sel" id="kills-room">
-                ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
-              </select></div>
-              <div class="row"><button class="btn main" id="btn-host">방 만들기</button></div>
-            </div>
+        <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
+        <div class="chars" id="chars"></div>
 
-            <div class="card solo-card">
-              <h2>혼자 하기 <span class="k">VS AI</span></h2>
-              <p class="cardp">봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
-              <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
-                <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
-              </div></div>
-              <div class="row"><label>봇 수 · 모드</label><div class="seg" id="seg-bots">
-                <button data-v="1" class="on">봇 1</button><button data-v="2">봇 2</button><button data-v="3">봇 3</button>
-              </div><div class="seg" id="seg-solo-mode">
-                <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
-              </div></div>
-              <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
-                ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
-              </select></div>
-              <div class="row"><button class="btn main" id="btn-solo">▶ 시작</button></div>
-            </div>
-          </aside>
-
-          <main class="mainpane">
-            <div class="section-t">맵 <small>구조물은 매 판 새로 생성된다 · 3명이면 2배, 4명 이상이면 4배</small></div>
+        <div class="dlg" id="dlg-host" hidden>
+          <div class="dbox">
+            <h3>방 만들기</h3>
+            <p class="cardp">정원을 정해 방을 엽니다. <b>둘만 모여도 시작</b>할 수 있고, 남은 자리는 <b>게임 중에도 난입</b>으로 채워집니다.</p>
+            <div class="row"><label>정원</label><div class="seg" id="seg-size">
+              ${[2, 3, 4].map((n) => `<button data-v="${n}" class="${n === 4 ? 'on' : ''}">${n}명</button>`).join('')}
+            </div></div>
+            <div class="row"><label>모드</label><div class="seg" id="seg-room-mode">
+              <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
+            </div></div>
+            <div class="row"><label>목표 킬</label><select class="sel" id="kills-room">
+              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+            </select></div>
+            <div class="row"><label>맵</label><div class="seg" id="seg-map">
+              ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+            </div></div>
             <div class="maprow">
-              <div>
-                <div class="seg" id="seg-map">
-                  ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
-                </div>
-                <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
-                <p class="hintline dim">노란 점이 스폰 지점. 가운데 모래주머니 진지는 항상 생긴다.</p>
-              </div>
+              <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
               <canvas id="map-preview" class="mappv"></canvas>
             </div>
+            <div class="dacts"><button class="btn secondary" data-close>취소</button><button class="btn main" id="btn-host-go">방 만들기</button></div>
+          </div>
+        </div>
 
-            <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
-            <div class="chars" id="chars"></div>
-          </main>
+        <div class="dlg" id="dlg-solo" hidden>
+          <div class="dbox">
+            <h3>혼자 하기</h3>
+            <p class="cardp">봇과 대결. 죽으면 3초 뒤 먼 곳에 리스폰, 목표 킬을 먼저 채우면 승리.</p>
+            <div class="row"><label>난이도</label><div class="seg" id="seg-diff">
+              <button data-v="easy">쉬움</button><button data-v="normal" class="on">보통</button><button data-v="hard">어려움</button>
+            </div></div>
+            <div class="row"><label>봇 수</label><div class="seg" id="seg-bots">
+              <button data-v="1" class="on">봇 1</button><button data-v="2">봇 2</button><button data-v="3">봇 3</button>
+            </div></div>
+            <div class="row"><label>모드</label><div class="seg" id="seg-solo-mode">
+              <button data-v="ffa" class="on">개인전</button><button data-v="teams">팀전</button>
+            </div></div>
+            <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
+              ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
+            </select></div>
+            <div class="row"><label>맵</label><div class="seg" id="seg-map2">
+              ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
+            </div></div>
+            <div class="maprow">
+              <p class="hintline" id="map-desc2">${MAPS[this.mapId].desc}</p>
+              <canvas id="map-preview2" class="mappv"></canvas>
+            </div>
+            <div class="dacts"><button class="btn secondary" data-close>취소</button><button class="btn main" id="btn-solo-go">▶ 시작</button></div>
+          </div>
         </div>
 
         <div class="joining" id="joining" hidden>
@@ -187,12 +199,21 @@ export class Lobby {
       requestAnimationFrame(() => drawPortrait(cv, c))
     }
 
-    this.seg('#seg-map', (v) => {
+    const onMap = (v: string) => {
       if (isMapId(v)) this.mapId = v
-      ;(h.querySelector('#map-desc') as HTMLElement).textContent = MAPS[this.mapId].desc
+      for (const id of ['#map-desc', '#map-desc2']) {
+        const el = h.querySelector(id) as HTMLElement | null
+        if (el) el.textContent = MAPS[this.mapId].desc
+      }
+      // 두 창의 맵 선택을 서로 맞춰 둔다 (맵은 하나뿐이다)
+      for (const sel of ['#seg-map', '#seg-map2']) {
+        h.querySelectorAll<HTMLButtonElement>(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === this.mapId))
+      }
       this.drawPreview()
       this.hostChanged()
-    })
+    }
+    this.seg('#seg-map', onMap)
+    this.seg('#seg-map2', onMap)
     this.seg('#seg-diff', (v) => (this.difficulty = v as Difficulty))
     this.seg('#seg-bots', (v) => {
       this.bots = Number(v)
@@ -245,18 +266,45 @@ export class Lobby {
     nickEl.addEventListener('input', () => applyNick(false))
     nickEl.addEventListener('change', () => applyNick(true))
     ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
-    ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
-    ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
+    ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-solo')
+    ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-host')
+    ;(h.querySelector('#btn-solo-go') as HTMLButtonElement).onclick = () => {
+      this.closeDlg()
+      this.startSolo()
+    }
+    ;(h.querySelector('#btn-host-go') as HTMLButtonElement).onclick = () => {
+      this.closeDlg()
+      this.hostRoom()
+    }
+    h.querySelectorAll<HTMLElement>('.dlg').forEach((d) => {
+      d.querySelectorAll<HTMLButtonElement>('[data-close]').forEach((b) => (b.onclick = () => this.closeDlg()))
+      // 바깥을 누르면 닫힌다 (창 안쪽 클릭은 그대로)
+      d.onclick = (e) => {
+        if (e.target === d) this.closeDlg()
+      }
+    })
+    ;(h.querySelector('#pg-prev') as HTMLButtonElement).onclick = () => {
+      this.roomPage--
+      this.renderRooms()
+    }
+    ;(h.querySelector('#pg-next') as HTMLButtonElement).onclick = () => {
+      this.roomPage++
+      this.renderRooms()
+    }
     requestAnimationFrame(() => this.drawPreview())
   }
 
   private drawPreview(): void {
-    const cv = this.host.querySelector('#map-preview') as HTMLCanvasElement | null
-    if (!cv) return
+    // 두 창(방 만들기·혼자 하기)에 미리보기가 하나씩 있다. 열려 있는 쪽만 그린다 (숨긴 캔버스는 폭이 0)
+    const cvs = ['#map-preview', '#map-preview2']
+      .map((id) => this.host.querySelector(id) as HTMLCanvasElement | null)
+      .filter((c): c is HTMLCanvasElement => !!c && c.clientWidth > 0)
+    if (cvs.length === 0) return
     clearTimeout(this.previewTimer)
     this.previewTimer = window.setTimeout(() => {
       const players = this.role ? Math.max(2, this.members.length) : 1 + this.bots
-      drawMapPreview(cv, buildMap(this.mapId, scaleForPlayers(players), PREVIEW_SEED))
+      const map = buildMap(this.mapId, scaleForPlayers(players), PREVIEW_SEED)
+      for (const cv of cvs) drawMapPreview(cv, map)
     }, 0)
   }
 
@@ -355,18 +403,29 @@ export class Lobby {
     }, 350)
   }
 
+  /** 한 페이지에 보여 줄 방 수 (더 많으면 페이지로 넘긴다) */
+  private static readonly ROOMS_PER_PAGE = 6
+  private roomPage = 0
+
   private renderRooms(): void {
     const el = this.host.querySelector('#rooms') as HTMLElement | null
     if (!el) return
     const visible = this.rooms.filter((r) => r.state !== 'closed' && !(this.link && r.code === this.link.code))
-    // 방이 아무리 많아져도 목록만 안에서 스크롤된다 (아래 '방 만들기'·'혼자 하기' 는 밀리지 않는다)
     const count = this.host.querySelector('#rooms-count')
     if (count) count.textContent = visible.length > 0 ? `${visible.length}개` : ''
+    const head = this.host.querySelector('.rhead') as HTMLElement | null
+    if (head) head.hidden = visible.length === 0
     if (visible.length === 0) {
       el.innerHTML = '<div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div>'
+      this.renderPager(0, 0)
       return
     }
-    el.innerHTML = visible
+    // 페이지: 방이 많아져도 목록이 길어지지 않는다
+    const per = Lobby.ROOMS_PER_PAGE
+    const pages = Math.max(1, Math.ceil(visible.length / per))
+    this.roomPage = Math.min(Math.max(0, this.roomPage), pages - 1)
+    const page = visible.slice(this.roomPage * per, this.roomPage * per + per)
+    el.innerHTML = page
       .map((r) => {
         const c = (CHARACTERS as Record<string, { name: string } | undefined>)[r.hostChar]
         const m = isMapId(r.map) ? MAPS[r.map].name : r.map
@@ -380,12 +439,19 @@ export class Lobby {
             : r.state === 'full'
               ? '<span class="pill">정원 참</span>'
               : teamsPlaying
-                ? '<span class="pill">팀전 진행 중 · 난입 불가</span>'
+                ? '<span class="pill">난입 불가</span>'
                 : room
-                  ? '<span class="pill ok">게임 중 · 난입 가능</span>'
+                  ? '<span class="pill ok">난입 가능</span>'
                   : '<span class="pill">게임 중</span>'
-        return `<div class="room"><div><b>${c ? c.name : r.hostChar}</b>의 방 <span class="code-sm">${r.code}</span><br><small>${m} · ${ROOM_MODE_LABEL[r.mode] ?? r.mode} · 목표 ${r.targetKills}킬 · ${r.count}/${r.max}명</small></div>
-          <div>${st} <button class="btn" data-code="${r.code}" ${canJoin ? '' : 'disabled'}>${r.state === 'playing' ? '난입' : '참가'}</button></div></div>`
+        return `<div class="room">
+          <span class="rhost"><b>${c ? c.name : r.hostChar}</b>의 방</span>
+          <span class="rmap">${m}</span>
+          <span class="rmode">${ROOM_MODE_LABEL[r.mode] ?? r.mode}</span>
+          <span class="rkill">${r.targetKills}킬</span>
+          <span class="rcount">${r.count}/${r.max}명</span>
+          <span class="rstate">${st}</span>
+          <span class="ract"><button class="btn" data-code="${r.code}" ${canJoin ? '' : 'disabled'}>${r.state === 'playing' ? '난입' : '참가'}</button></span>
+        </div>`
       })
       .join('')
     el.querySelectorAll('button[data-code]').forEach((b) => {
@@ -393,6 +459,31 @@ export class Lobby {
       const info = visible.find((r) => r.code === code)
       ;(b as HTMLButtonElement).onclick = () => this.join(code, info?.state === 'playing')
     })
+    this.renderPager(this.roomPage, pages)
+  }
+
+  private renderPager(page: number, pages: number): void {
+    const el = this.host.querySelector('#pager') as HTMLElement | null
+    if (!el) return
+    el.hidden = pages <= 1
+    if (pages <= 1) return
+    ;(el.querySelector('#pg-label') as HTMLElement).textContent = `${page + 1} / ${pages}`
+    ;(el.querySelector('#pg-prev') as HTMLButtonElement).disabled = page <= 0
+    ;(el.querySelector('#pg-next') as HTMLButtonElement).disabled = page >= pages - 1
+  }
+
+  /** 방 만들기·혼자 하기 창. 닉네임이 없으면 먼저 채우게 한다 */
+  private openDlg(sel: string): void {
+    if (!this.requireNick()) return
+    this.closeDlg()
+    const d = this.host.querySelector(sel) as HTMLElement | null
+    if (!d) return
+    d.hidden = false
+    this.drawPreview()
+  }
+
+  private closeDlg(): void {
+    this.host.querySelectorAll<HTMLElement>('.dlg').forEach((d) => (d.hidden = true))
   }
 
   private announce(state?: RoomInfo['state']): void {
