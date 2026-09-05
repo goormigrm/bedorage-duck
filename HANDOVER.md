@@ -42,7 +42,7 @@ npx vite-node tools/balance.ts     # 밸런스 계측 (ffa 붙이면 4인)
 PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크린샷·GIF 를 뜨려면 `?shot=1`(아래 "스크린샷·GIF 다시 뜨기").
 
-## 현재 상태 (2026-09-05 · v1.9.2 — 기능 개발 종료, 배포 준비)
+## 현재 상태 (2026-09-05 · v1.9.3 — 기능 개발 종료, 배포 준비)
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
@@ -126,7 +126,7 @@ src/ui/favicon.ts        탭 아이콘 = 철면덕 초상을 캔버스로 그려
 tools/balance.ts         밸런스 계측 (봇 1:1 440판 · 승빠덕 제외)
 tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
 tests/                   determinism · camera · perf · balance · autoaim · sandbag · block · medkit · stats · join · spectate · sprint · headshot · bots (108개)
-docs/img/                공지용 로비 사진 1장 + GIF 5개 — **git 에 없다**(.gitignore, 로컬에만). 다른 PC 에서는 아래 절차로 다시 뜬다
+docs/img/                공지용 로비 사진 1장 + GIF 7개(전투 3개는 4MB 이하) — **git 에 없다**(.gitignore, 로컬에만). 다른 PC 에서는 아래 절차로 다시 뜬다
 tools/rec.js             GIF·스크린샷 녹화 도우미 (개발 서버에서 콘솔로 불러 씀)
 tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow, 20MB 자동 축소)
 ```
@@ -163,7 +163,7 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 1. `git pull` → `npm ci` → `npm test`(108개) → `npm run build`
 2. `gh run list` 로 마지막 배포가 success 인지 본다. 실제 주소 https://goormigrm.github.io/bedorage-duck/ 를 열어
    로비 → 혼자 하기 한 판 → 방 만들기 → 대기실(봇 채우기 체크)까지 눌러 본다. 폰으로도 한 번(세로 안내 · 가로 조작).
-3. `docs/공지글-모음.md` **1장(출시 공지)** 을 **철면수심 다음 카페**에 올린다. 첨부는 로컬 `docs/img/shot_lobby.jpg` + `gif_*.gif` 5개(각 20MB 이하).
+3. `docs/공지글-모음.md` **1장(출시 공지)** 을 **철면수심 다음 카페**에 올린다. 첨부는 로컬 `docs/img/shot_lobby.jpg` + `gif_*.gif` 7개(전투 3개는 4MB 이하, 나머지 20MB 이하).
    글 안의 "이 게시글 댓글로" 가 제보 통로다. 제목은 1장 아래 "제목 후보" 중에서.
 4. 게시글 주소가 나오면 로비 바닥글(`src/ui/lobby.ts` 의 `.foot`, 지금은 "철면수심 다음 카페 게시글로" 글자만)을 그 주소 **링크**로 바꿔 커밋·푸시.
 5. 배포 뒤 첫 며칠은 카페 댓글을 모아 아래 표대로 대응한다.
@@ -223,4 +223,7 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
   **주의**: 패널이 숨겨져 있으면 로비의 캐릭터 초상(rAF 로 그림)이 비어 있다 — `requestAnimationFrame` 을 `setTimeout` 으로 바꿔 두고 로비를 다시 만들면(혼자 하기 → 나가기) 그려진다. DOM 이 섞인 화면(로비·결과표·터치 UI)은 `__rec.dom()` / `__rec.startTouch()`(html2canvas, 4fps).
   브라우저 패널이 숨겨져 있어도 녹화기가 `session.frame()` 을 직접 불러 그리므로 화면이 멈추지 않는다. 장면 스크립트 예는 CHANGELOG v1.8.4.
   필요: `pip install pillow`. `.frames/` 는 git 에 안 올린다.
+  **4인 난전 GIF**(`gif_fight1~3`): 봇 셋(철면덕·우재덕·승빠덕, 어려움)을 빈 7×7 자리에 모아 놓고 나(침착덕)는 가장 가까운 적을 계속 조준하며 연사 + 좌우 이동 + 구르기,
+  체력이 70 아래로 떨어지면 140 으로 몰래 채운다(6초 안에 죽지 않게). 5.5초 · `python tools/gif.py fightN --scale 0.5 --max-mb 3.9 --colors 128` (576×324 · 8~10fps · 3.2~3.6MB).
+  장면 스크립트는 CHANGELOG v1.9.3. `vite.config.ts` 의 `server.watch.ignored` 에 `.frames/`·`docs/img/` 를 넣어 두었다 — 프레임이 수십 장 떨어질 때 감시기가 새로고침해 판이 날아갔다.
 - **구르기에 Ctrl 을 넣지 말 것**: 한 번 넣었다가 뺐다(v1.8.5). Ctrl 을 누른 채 W 를 누르면 크롬이 탭을 닫고 `preventDefault` 로 못 막는다.

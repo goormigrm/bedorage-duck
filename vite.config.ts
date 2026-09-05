@@ -60,5 +60,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // GIF 프레임(.frames/)이 수십 장씩 떨어질 때 감시기가 페이지를 새로고침해 녹화 중인 판이 날아갔다 → 감시에서 뺀다
+    watch: { ignored: ['**/.frames/**', '**/docs/img/**'] },
   },
 })
