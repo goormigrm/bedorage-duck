@@ -123,7 +123,7 @@ src/ui/favicon.ts        탭 아이콘 = 철면덕 초상을 캔버스로 그려
 tools/balance.ts         밸런스 계측 (봇 1:1 440판 · 승빠덕 제외)
 tools/melee.ts           후라이팬 정면 대치 계측 (사람이 막기를 유지하는 상황)
 tests/                   determinism · camera · perf · balance · autoaim · sandbag · block · medkit · stats · join · spectate · sprint · headshot (104개)
-docs/img/                공지용 로비 사진 1장(shot_lobby.jpg, 메인) + GIF 11개(gif_*.gif, 각 20MB 이하) — 설명용 사진은 따로 두지 않는다
+docs/img/                공지용 로비 사진 1장(shot_lobby.jpg, 메인) + GIF 5개(전투·조준경·헤드샷·모래주머니·구르기, 각 20MB 이하) — 설명용 사진은 따로 두지 않는다
 tools/rec.js             GIF·스크린샷 녹화 도우미 (개발 서버에서 콘솔로 불러 씀)
 tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow, 20MB 자동 축소)
 ```
@@ -168,7 +168,7 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 - [x] **킬 배너 무기 그림** — ▶ 대신 무엇으로 잡았는지(`hud.ts drawWeaponIcon`)
 - [x] **구르기 Space + Ctrl** 둘 다
 - [x] **주의 문구·안내 줄바꿈** (방 만들기 창, 로비 안내, 방 목록 안내, 캐릭터 교체 창)
-- [x] **공지용 GIF 11개** + 메인은 로비 사진 1장 (`tools/rec.js` · `tools/gif.py`, 각 20MB 이하). 설명용 사진은 따로 두지 않는다(사용자)
+- [x] **공지용 GIF 5개** + 메인은 로비 사진 1장 (`tools/rec.js` · `tools/gif.py`, 각 20MB 이하). 설명용 사진은 따로 두지 않는다. 11개 찍었다가 **5개로 줄였다**(사용자 — 승빠덕·단군덕 장면 제외). 필요하면 CHANGELOG v1.8.4 의 장면 목록대로 다시 찍을 수 있다
 - [ ] **매직덕 체감 재확인** — 머리가 제일 커서 헤드샷을 가장 많이 맞는다. 약하면 체력을 더 올리거나 `HEAD_SIZE_EFFECT` 를 0.5 로
 - [ ] **승빠덕 체감 재확인** — 62 로도 세면 위의 다음 차례대로. 사람 대전에서만 알 수 있다
 - [ ] **소총 체감 재확인** — 탄속 24·피해 20 이 빠르면서도 안 아픈 느낌인지
