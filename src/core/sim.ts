@@ -36,6 +36,7 @@ import {
   SPRINT_MIN,
   SPRINT_MUL,
   STAMINA_REGEN,
+  PUNGWOL,
   SWAP_GRACE_TICKS,
   isEnemy,
   teamKills,
@@ -375,10 +376,10 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     input.buttons & BTN_DASH &&
     p.dashCooldown === 0 &&
     p.dashTimer === 0 &&
-    p.stamina >= DASH_COST &&
+    p.stamina >= (c.id === 'pungwol' ? PUNGWOL.dashCost : DASH_COST) &&
     (mx !== 0 || my !== 0)
   ) {
-    p.stamina -= DASH_COST
+    p.stamina -= c.id === 'pungwol' ? PUNGWOL.dashCost : DASH_COST // 풍월덕: 구르기가 싸다(패시브)
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     p.dashDx = mx * inv
     p.dashDy = my * inv

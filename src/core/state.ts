@@ -46,6 +46,11 @@ export const CHICKEN_MAXHP_PER_KILL = 15
 export const CHICKEN_MAXHP_CAP = 60
 export const CHICKEN_HEAL = 20
 /** 우원덕 패시브(연기): 구르기가 끝난 뒤에도 이만큼 무적이 이어진다 (틱). 계측 도구가 바꿔 볼 수 있게 객체 */
+/**
+ * 풍월덕 패시브(바람): 구르기 기력 34 → 22. 재사용 시간(25틱)만 짧아서는 소용이 없었다 — 기력 회복(22/60)이 구르기 한 번에 93틱이라
+ * 세 번 구른 뒤에는 남들과 똑같이 1.5초에 한 번이었다(2026-09-05 확인). 22 면 한 통에 네 번, 이후 1초에 한 번.
+ */
+export const PUNGWOL = { dashCost: 22 }
 export const UWON = { invulnAfterDash: 18 } // 2026-09-05: 12 → 18 (0.3초). 24 면 60% 로 튄다 — 아주 민감한 값
 /** 주펄덕 패시브(빛남): 이 거리(px) 안의 상대에게 피해 배율 */
 export const JUPEOL = { range: 200, mult: 1.35 } // 2026-09-05: 150px·1.2 → 200px·1.35. 배율보다 범위가 효과적이었다(봇은 150 안에서 잘 안 싸운다)

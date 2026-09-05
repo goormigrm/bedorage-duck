@@ -208,6 +208,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   pungwol: {
     id: 'pungwol', name: '풍월덕', basedOn: '풍월량', tagline: '금발 버섯머리에 파란 후드. 산탄총을 들고 바람처럼 구른다.',
     prominence: 8,
+    // 재사용 25틱 + 구르기 기력 22(state.ts PUNGWOL) — 재사용만 짧아서는 기력 회복에 막혀 남들과 같았다 (2026-09-05)
     maxHp: 220, speed: 3.7, weapon: 'shotgun', dashCooldown: 25,
     passiveName: '바람', passiveDesc: '남들보다 훨씬 자주 구릅니다.\n산탄총을 들고 바람처럼 파고들어 한 번에 정리하는 돌격형.',
     bodyColor: 0x8fd3ff, accentColor: 0x7fa8d4,
