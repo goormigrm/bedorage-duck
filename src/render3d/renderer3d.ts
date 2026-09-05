@@ -68,6 +68,8 @@ interface DuckVis {
   hitCd: number
   /** 근접 휘두르기 (1 → 0) */
   swing: number
+  /** 재장전 중 총을 몸 앞으로 끌어당긴 각도(팔 y 회전). 휘두르기와 같은 축이라 따로 둔다 */
+  reloadSwing: number
 }
 
 interface Flash {
@@ -926,6 +928,18 @@ export class Renderer3D {
         ctx.fillStyle = sk > 0.34 ? '#9fe0ff' : '#e08a5a'
         ctx.fillRect(bx + 1, by - 1 - (bh - 2) * sk, 4, (bh - 2) * sk)
       }
+      // 재장전 진행: 캐릭터 **왼쪽** 세로 막대, **재장전 중에만** (나·아군). 카드에서 눈을 떼지 않아도 완료 시점을 안다 (2026-09-05 요청)
+      const rw = WEAPONS[p.weapon]
+      if ((mine || ally) && p.reloadTimer > 0 && rw.reloadTicks > 0) {
+        const bh = 34
+        const bx = s.x - w / 2 - 12
+        const by = s.y + 30
+        const rk = 1 - p.reloadTimer / rw.reloadTicks
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(bx, by - bh, 6, bh)
+        ctx.fillStyle = '#f2c94c'
+        ctx.fillRect(bx + 1, by - 1 - (bh - 2) * rk, 4, (bh - 2) * rk)
+      }
       ctx.globalAlpha = 1
     }
   }
@@ -996,6 +1010,27 @@ export class Renderer3D {
     rig.body.position.set(0, bob, 0)
     rig.body.rotation.z = p.moving ? Math.sin(v.walk) * 0.07 : 0
     rig.arms.rotation.x = p.moving ? Math.sin(v.walk * 2) * 0.05 : 0
+    // 재장전: 총을 아래로 내렸다가(탄창을 갈아 끼우듯 까딱이고) 다시 올린다 — 왼쪽 아래 카드를 안 봐도
+    // 재장전 중인 줄 알 수 있게 (2026-09-05 요청). 처음 18% 에 내리고, 마지막 18% 에 올린다
+    if (p.reloadTimer > 0 && rig.weapon.reloadTicks > 0) {
+      const k = 1 - p.reloadTimer / rig.weapon.reloadTicks // 0 → 1
+      const s01 = (x: number) => {
+        const c = Math.max(0, Math.min(1, x))
+        return c * c * (3 - 2 * c)
+      }
+      const down = s01(k / 0.18) * (1 - s01((k - 0.82) / 0.18))
+      const tap = down * Math.max(0, Math.sin(k * Math.PI * 4)) * 0.14
+      // 위에서 내려다보는 카메라라 총을 내리는 것만으로는 잘 안 보인다 → 총을 몸 앞으로 끌어당기고(팔 y 회전),
+      // 몸을 살짝 웅크리며(달걀 눌림), 고개를 숙여 총을 본다
+      rig.arms.rotation.x += down * 1.0 + tap
+      v.reloadSwing = -down * 0.7
+      rig.body.scale.set(1 + down * 0.06, 1 - down * 0.14, 1 + down * 0.06)
+      rig.head.rotation.x = down * 0.35
+    } else {
+      v.reloadSwing = 0
+      rig.body.scale.set(1, 1, 1)
+      rig.head.rotation.x = 0
+    }
     rig.body.rotation.x = 0
     // 대시 = 구르기: 대시 방향으로 한 바퀴 구르며 살짝 뜬다 (몸통 중심을 축으로)
     if (p.dashTimer > 0) {
@@ -1015,7 +1050,7 @@ export class Renderer3D {
     // 정조준: 팔을 조금 더 앞으로
     rig.arms.position.z = p.ads ? 0.18 : 0.1
     // 후라이팬 휘두르기
-    rig.arms.rotation.y = v.swing > 0 ? Math.sin(v.swing * Math.PI) * 1.5 : 0
+    rig.arms.rotation.y = v.swing > 0 ? Math.sin(v.swing * Math.PI) * 1.5 : v.reloadSwing
     root.scale.set(v.sx, v.sy, v.sx)
     // 무적(스폰 보호 · 우원덕이 구른 뒤): **황금 보호막**. 전에는 몸을 반투명하게 깜빡였는데
     // 눈에 띄지 않아 우원덕 패시브가 있는지도 몰랐다(2026-09-06 제보). 구르는 동안은 구르기 연출이 이미 말해 준다
@@ -1306,7 +1341,7 @@ export class Renderer3D {
 }
 
 function newVis(): DuckVis {
-  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, flashColor: 0xffffff, deadT: -1, fall: 0, hitCd: 0, swing: 0 }
+  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, flashColor: 0xffffff, deadT: -1, fall: 0, hitCd: 0, swing: 0, reloadSwing: 0 }
 }
 
 export { hex, PLAYER_RADIUS }
