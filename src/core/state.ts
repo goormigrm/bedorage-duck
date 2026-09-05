@@ -57,7 +57,7 @@ export const CHICKEN_HEAL = 20
  */
 export const CHIM = { spreadMul: 0.55, recoilMul: 0.45, recoverMul: 3 }
 export const PUNGWOL = { dashCost: 22 }
-export const UWON = { invulnAfterDash: 18 } // 2026-09-05: 12 → 18 (0.3초). 24 면 60% 로 튄다 — 아주 민감한 값
+export const UWON = { invulnAfterDash: 24 } // 2026-09-05: 12 → 18 → 24 (0.4초). 어려움 봇 기준으로는 24 가 60% 였지만 보통 봇 기준 37%(바닥)라 올렸다
 /** 주펄덕 패시브(빛남): 이 거리(px) 안의 상대에게 피해 배율 */
 export const JUPEOL = { range: 200, mult: 1.35 } // 2026-09-05: 150px·1.2 → 200px·1.35. 배율보다 범위가 효과적이었다(봇은 150 안에서 잘 안 싸운다)
 /** 기열덕 패시브(뇌절): 연속 명중마다 피해 배율이 오른다. 빗나가면 한 단계 내려간다 (계측 도구가 바꿔 볼 수 있게 객체) */

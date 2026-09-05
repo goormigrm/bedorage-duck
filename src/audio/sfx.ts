@@ -150,7 +150,8 @@ export class Sfx {
     }
     for (let i = 0; i < n; i++) {
       const p = state.players[i]
-      if (!p.alive || p.left || !p.moving || p.dashTimer > 0) {
+      if (!p.alive || p.left || !p.moving || p.dashTimer > 0 || WEAPONS[p.weapon].suppressed) {
+        // 소음기 무기(권총)를 든 사람은 발소리가 안 난다 — 소리로 위치가 안 새는 은신형 (2026-09-05)
         this.stepPhase[i] = 0.55 // 멈췄다 다시 걸으면 곧바로 한 걸음
         continue
       }
@@ -352,11 +353,14 @@ export class Sfx {
 
   // ---------- 소리들 ----------
   private gun(w: WeaponId, s: Spatial, mine: boolean): void {
-    const { node, t0 } = this.bus(s, mine ? 1 : 0.85)
+    // 소음기(권총): 아주 작게 — 남에게는 거의 안 들린다. 내 것도 작게 내되 쐈다는 건 알게
+    const quiet = WEAPONS[w].suppressed === true
+    const { node, t0 } = this.bus(s, (mine ? 1 : 0.85) * (quiet ? (mine ? 0.3 : 0.12) : 1))
     switch (w) {
       case 'pistol':
-        this.noiseBurst(node, t0, 0.09, 'bandpass', 1800, 600, 0.9, 0.8)
-        this.tone(node, t0, 0.07, 'sine', 320, 80, 0.7)
+        // 소음기: 둔탁한 '툭'. 고음 파열음 없이 저음만
+        this.noiseBurst(node, t0, 0.06, 'lowpass', 900, 300, 0.6)
+        this.tone(node, t0, 0.06, 'sine', 180, 60, 0.6)
         break
       case 'smg':
         this.noiseBurst(node, t0, 0.06, 'highpass', 1200, 800, 0.6)

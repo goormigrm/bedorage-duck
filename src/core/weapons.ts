@@ -61,6 +61,8 @@ export interface WeaponDef {
   meleeArc?: number
   /** 정조준 시 스코프 (시야가 멀어지고 화면에 조준경) */
   scope?: boolean
+  /** 소음기: 발소리가 안 나고 총소리가 아주 작다 (권총 — 단군덕·우원덕, 2026-09-05) */
+  suppressed?: boolean
 }
 
 /** 거리에 따른 피해 배율 */
@@ -75,7 +77,8 @@ const deg = (d: number) => Math.round((d / 360) * 1024)
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   pistol: {
-    id: 'pistol', name: '권총', damage: 27, pellets: 1, fireInterval: 11, auto: true,
+    // 2026-09-05 오픈 베타: 소음기 달린 권총 — 발소리 없음·총소리 아주 작음, 피해 27 → 30 (보통 봇 표에서 권총 둘이 37~40% 바닥)
+    id: 'pistol', name: '권총', damage: 30, suppressed: true, pellets: 1, fireInterval: 11, auto: true,
     magSize: 14, reloadTicks: 90, spreadHip: deg(5), spreadAds: deg(1.6), recoil: deg(2.2),
     recoilRecover: deg(0.55), speed: 15, life: 60, moveMul: 1.0, length: 14, color: 0x9aa0a6,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,

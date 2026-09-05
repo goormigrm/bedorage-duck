@@ -139,7 +139,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'dangun', name: '단군덕', basedOn: '단군', tagline: '무대 위의 게임 캐스터. 물방울 재킷과 파란 선글라스, 마이크는 놓지 않는다.',
     prominence: 3,
     maxHp: 200, speed: 3.6, weapon: 'pistol', dashCooldown: 35,
-    passiveName: '중계', passiveDesc: '가장 빠른 발.\n안 보이는 곳에서 누가 쏘면 그 자리가 잠깐 표시돼, 미리 피하거나 덮칠 수 있습니다.',
+    passiveName: '중계', passiveDesc: '가장 빠른 발.\n안 보이는 곳에서 누가 쏘면 그 자리가 잠깐 표시돼, 미리 피하거나 덮칠 수 있습니다.\n소음기 권총: 발소리가 안 나고 총소리도 거의 안 들려 몰래 다가갑니다.',
     bodyColor: 0x7ee0a0, accentColor: 0x2f56b8,
     look: {
       skin: 0xf1c8a4, hair: 'bowl', hairColor: 0x161413, glasses: 'sunglasses', lensColor: 0x2d5bd6, beard: 'none',
@@ -179,7 +179,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'uwon', name: '우원덕', basedOn: '우원박', tagline: '단정한 정장의 배우. 구른 뒤에도 잠깐 무적이다.',
     prominence: 6,
     maxHp: 190, speed: 3.5, weapon: 'pistol', dashCooldown: 50,
-    passiveName: '연기', passiveDesc: '구르고 난 뒤에도 잠깐 무적이 이어집니다 (황금 보호막).\n구르기로 총알을 흘리며 치고 빠지는 데 특화.',
+    passiveName: '연기', passiveDesc: '구르고 난 뒤에도 잠깐 무적이 이어집니다 (황금 보호막).\n구르기로 총알을 흘리며 치고 빠지는 데 특화.\n소음기 권총: 발소리가 안 나고 총소리도 거의 안 들립니다.',
     bodyColor: 0xffb08a, accentColor: 0x2f4a7d,
     look: {
       // 사진: 이마를 덮는 검은 앞머리, 맑은 피부, 남색 정장 + 흰 셔츠 + 남색 패턴 넥타이
