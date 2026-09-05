@@ -9,7 +9,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import {
   CtlMessage, LobbyLink, Member, ROOM_MODE_LABEL, RoomInfo, RoomLink, RoomMode,
-  makeRoomCode, openLobby, openRoom, roomCodeFromUrl, roomLinkUrl,
+  makeRoomCode, openLobby, openRoom,
 } from '../net/room'
 import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
@@ -59,8 +59,6 @@ export class Lobby {
   private starting = false
   private disposed = false
 
-  /** 초대 링크로 들어왔는데 닉네임이 없어 미뤄 둔 방 코드 */
-  private pendingInvite: string | null = null
   /** 난입 요청 타임아웃 */
   private rejoinTimer = 0
   private onlineTimer = 0
@@ -76,17 +74,6 @@ export class Lobby {
     }
     this.render()
     this.openLobbyList()
-    const code = roomCodeFromUrl()
-    if (code) {
-      if (this.nick.trim().length === 0) {
-        // 닉네임부터 정하고 나면 자동으로 그 방에 들어간다
-        this.pendingInvite = code
-        this.status(`초대 링크로 들어왔습니다 (방 ${code}). 닉네임을 정하면 바로 들어갑니다.`, '')
-        ;(this.host.querySelector('#nick') as HTMLInputElement | null)?.focus()
-      } else {
-        this.join(code)
-      }
-    }
   }
 
   // ---------- 화면 ----------
@@ -110,7 +97,7 @@ export class Lobby {
             <div class="status" id="status"></div>
 
             <div class="card rooms-card">
-              <h2>방 목록 <span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
+              <h2>방 목록 <span class="k" id="rooms-count"></span><span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
               <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
               <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다. 팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
             </div>
@@ -164,6 +151,20 @@ export class Lobby {
             <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
             <div class="chars" id="chars"></div>
           </main>
+        </div>
+
+        <div class="joining" id="joining" hidden>
+          <div class="jbox">
+            <div class="jspin"></div>
+            <h3 id="j-title">게임에 들어가는 중</h3>
+            <ol class="jsteps" id="j-steps">
+              <li data-s="1">방에 연결</li>
+              <li data-s="2">자리 요청</li>
+              <li data-s="3">판 받는 중</li>
+            </ol>
+            <p class="jhint" id="j-hint">릴레이에 따라 몇 초 걸립니다.</p>
+            <button class="btn secondary" id="j-cancel">취소</button>
+          </div>
         </div>
 
         <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
@@ -239,12 +240,6 @@ export class Lobby {
         /* 무시 */
       }
       this.pushSelf()
-      // 초대 링크로 들어왔다면 이제 들어간다
-      if (this.pendingInvite && this.nick.length > 0) {
-        const code = this.pendingInvite
-        this.pendingInvite = null
-        this.join(code)
-      }
     }
     // 치는 즉시 강조를 풀어 준다 (change 는 포커스를 잃어야 온다)
     nickEl.addEventListener('input', () => applyNick(false))
@@ -364,6 +359,9 @@ export class Lobby {
     const el = this.host.querySelector('#rooms') as HTMLElement | null
     if (!el) return
     const visible = this.rooms.filter((r) => r.state !== 'closed' && !(this.link && r.code === this.link.code))
+    // 방이 아무리 많아져도 목록만 안에서 스크롤된다 (아래 '방 만들기'·'혼자 하기' 는 밀리지 않는다)
+    const count = this.host.querySelector('#rooms-count')
+    if (count) count.textContent = visible.length > 0 ? `${visible.length}개` : ''
     if (visible.length === 0) {
       el.innerHTML = '<div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div>'
       return
@@ -462,7 +460,6 @@ export class Lobby {
     this.myReady = false
     this.myTeam = 0
     this.members = [{ id: this.link.selfId, char: this.char, ready: false, team: 0, name: this.nick }]
-    history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
     this.announce()
     this.renderRoom()
@@ -495,16 +492,11 @@ export class Lobby {
     this.members = []
     this.myReady = false
     this.myTeam = 0
-    history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
     if (barge) {
-      // 누르자마자 알린다. 릴레이에 따라 첫 연결까지 몇 초 걸리는데, 그동안 아무 반응이 없으면 다시 누르게 된다
-      this.status(
-        '게임 중인 방에 연결하는 중… (릴레이에 따라 몇 초 걸립니다)',
-        '',
-        `<div class="row"><button class="btn secondary" id="btn-cancel">취소</button></div>`,
-      )
-      this.bindCancel()
+      // 누르자마자 **화면을 덮어** 들어가는 중임을 보여 준다. 전에는 옆의 작은 글씨뿐이라
+      // 아무 일도 안 일어난 줄 알고 다시 누르게 됐다(2026-09-05 요청)
+      this.showJoining(1)
     } else {
       this.renderRoom()
     }
@@ -529,10 +521,7 @@ export class Lobby {
       link.sendCtl({ t: 'joinAsk', char: this.char, name: this.nick }, id)
       if (!this.bargeSent) {
         this.bargeSent = true
-        if (this.barging) {
-          this.status('자리를 요청하는 중…', '', `<div class="row"><button class="btn secondary" id="btn-cancel">취소</button></div>`)
-          this.bindCancel()
-        }
+        if (this.barging) this.showJoining(2)
         // 호스트가 답하지 않으면 포기한다. **핸들을 저장**해야 성공·취소 때 지울 수 있다 —
         // 전에는 저장하지 않아 첫 시도의 타이머가 두 번째 시도를 죽였다
         clearTimeout(this.rejoinTimer)
@@ -556,6 +545,7 @@ export class Lobby {
   /** 난입에 실패했을 때 (자리가 없거나 방이 응답하지 않음) */
   private giveUpRejoin(why: string): void {
     clearTimeout(this.rejoinTimer)
+    this.hideJoining()
     this.closeLink()
     this.status(why, 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
     this.bindCancel()
@@ -584,6 +574,7 @@ export class Lobby {
         // 초대 링크로 들어와도(barging=false) 호스트가 게임 중이면 이 길로 온다
         if (this.role !== 'guest' || !this.link) return
         this.barging = false
+        this.showJoining(3)
         clearTimeout(this.rejoinTimer)
         clearTimeout(this.waitTimer)
         const c = m.cfg as {
@@ -806,7 +797,6 @@ export class Lobby {
   private renderRoom(): void {
     const link = this.link
     if (!link) return
-    const url = roomLinkUrl(link.code)
     const connected = this.role === 'host' || !!this.hostId
     const title = this.role === 'host' ? `내 방 <span class="code-sm">${link.code}</span>` : `방 <span class="code-sm">${link.code}</span>`
     const teams = this.roomMode === 'teams'
@@ -830,8 +820,8 @@ export class Lobby {
     }
     const html = `
       <div class="room-head"><div class="section-t" style="margin:0">${title}</div>
-        <div class="row"><button class="btn secondary" id="btn-copy">링크 복사</button><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
-      <div class="link">${url}</div>
+        <div class="row"><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
+      <p class="roomhint dim">이 사이트 안에서만 함께합니다. 친구는 <b>방 목록</b>에서 이 방을 찾아 들어옵니다.</p>
       <div class="setrow">
         <span><b>맵</b>${MAPS[this.mapId].name}</span>
         <span><b>모드</b>${ROOM_MODE_LABEL[this.roomMode]}</span>
@@ -858,12 +848,44 @@ export class Lobby {
             ? `준비 ${readyCount}/${this.members.length} · 나머지를 기다리는 중…`
             : '준비를 누르세요.'
     this.status(st, connected ? 'ok' : '', html)
-    const copy = this.host.querySelector('#btn-copy') as HTMLButtonElement
-    copy.onclick = () => void navigator.clipboard.writeText(url).then(() => (copy.textContent = '복사됨'))
     this.bindCancel()
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
     const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
     if (teamBtn) teamBtn.onclick = () => this.changeTeam()
+  }
+
+  /**
+   * 난입 진행 화면. 로비를 덮고 단계(연결 → 자리 요청 → 판 받는 중)를 보여 준다.
+   * 릴레이에 따라 첫 연결까지 몇 초 걸리는데, 그동안 아무 표시가 없으면 버튼을 또 누르게 된다.
+   */
+  private showJoining(step: number): void {
+    const el = this.host.querySelector('#joining') as HTMLElement | null
+    if (!el) return
+    el.hidden = false
+    const steps = el.querySelectorAll<HTMLElement>('#j-steps li')
+    steps.forEach((li) => {
+      const n = Number(li.dataset.s)
+      li.classList.toggle('done', n < step)
+      li.classList.toggle('now', n === step)
+    })
+    const hint = el.querySelector('#j-hint') as HTMLElement
+    hint.textContent =
+      step === 1 ? '릴레이에 따라 몇 초 걸립니다. 버튼을 다시 누를 필요는 없습니다.'
+        : step === 2 ? '방장에게 자리를 물어보는 중입니다.'
+          : '곧 화면이 게임으로 바뀝니다.'
+    const cancel = el.querySelector('#j-cancel') as HTMLButtonElement
+    cancel.hidden = step >= 3
+    cancel.onclick = () => {
+      this.hideJoining()
+      this.closeLink()
+      this.hideStatus()
+      this.renderRooms()
+    }
+  }
+
+  private hideJoining(): void {
+    const el = this.host.querySelector('#joining') as HTMLElement | null
+    if (el) el.hidden = true
   }
 
   private bindCancel(): void {
@@ -872,7 +894,6 @@ export class Lobby {
       cancel.onclick = () => {
         this.closeLink()
         this.hideStatus()
-        history.replaceState(null, '', location.pathname)
         this.renderRooms()
       }
     }
@@ -881,6 +902,7 @@ export class Lobby {
   private closeLink(): void {
     clearTimeout(this.waitTimer)
     clearTimeout(this.rejoinTimer)
+    this.hideJoining()
     this.barging = false
     this.bargeSent = false
     if (this.link) {

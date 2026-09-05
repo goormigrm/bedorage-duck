@@ -347,3 +347,26 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; cursor: pointer; }
 .card h2 .lnk.refresh:hover { color: var(--ink); border-color: var(--line-2); }
 .card h2 .lnk.refresh:disabled { opacity: .5; cursor: default; }
+
+/* 난입 진행 화면 — 로비를 덮어 "들어가는 중" 을 확실히 보여 준다 (2026-09-05) */
+.joining { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  background: rgba(6, 9, 14, .82); backdrop-filter: blur(3px); }
+/* display:grid 가 기본 [hidden] 을 덮으므로 명시한다 (안 하면 로비 첫 화면에 그대로 떠 있다) */
+.joining[hidden] { display: none; }
+.joining .jbox { width: min(420px, 88vw); background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--gold); border-radius: 16px; padding: 26px 24px 20px; text-align: center;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,216,74,.15) inset; }
+.joining h3 { margin: 14px 0 4px; font: 800 20px "IBM Plex Sans KR", sans-serif; color: var(--ink); }
+.joining .jspin { width: 46px; height: 46px; margin: 0 auto; border-radius: 50%;
+  border: 4px solid rgba(255,216,74,.18); border-top-color: var(--duck); animation: jspin .8s linear infinite; }
+@keyframes jspin { to { transform: rotate(360deg); } }
+.joining .jsteps { list-style: none; margin: 14px auto 8px; padding: 0; display: flex; flex-direction: column; gap: 6px;
+  width: fit-content; text-align: left; }
+.joining .jsteps li { font-size: 13.5px; color: var(--ink-3); padding-left: 24px; position: relative; }
+.joining .jsteps li::before { content: "○"; position: absolute; left: 4px; }
+.joining .jsteps li.now { color: var(--duck); font-weight: 700; }
+.joining .jsteps li.now::before { content: "▸"; }
+.joining .jsteps li.done { color: var(--ok); }
+.joining .jsteps li.done::before { content: "✓"; }
+.joining .jhint { color: var(--ink-3); font-size: 12.5px; margin: 6px 0 14px; }
+.joining .btn { min-width: 96px; }

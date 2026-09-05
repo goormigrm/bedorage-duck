@@ -27,10 +27,6 @@ export function makeRoomCode(): string {
   return s
 }
 
-export function normalizeCode(s: string): string {
-  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-}
-
 // ---------- 방 목록 (로비) ----------
 
 export interface RoomInfo {
@@ -303,16 +299,4 @@ export function openRoom(code: string, role: 'host' | 'guest'): RoomLink {
     link.sendCtl({ t: 'ping', s: performance.now() })
   }, 1000)
   return link
-}
-
-export function roomLinkUrl(code: string): string {
-  const u = new URL(location.href)
-  u.search = ''
-  u.hash = `room=${code}`
-  return u.toString()
-}
-
-export function roomCodeFromUrl(): string | null {
-  const m = /room=([A-Za-z0-9]{4,8})/.exec(location.hash)
-  return m ? normalizeCode(m[1]) : null
 }

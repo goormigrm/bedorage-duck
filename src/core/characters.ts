@@ -261,7 +261,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   seungwoo: {
     id: 'seungwoo', name: '승빠덕', basedOn: '승우아빠', tagline: '검은 모자에 파란 앞치마. 후라이팬으로 총알을 막고 후려친다.',
     prominence: 12,
-    maxHp: 260, speed: 3.7, weapon: 'pan', dashCooldown: 20,
+    // 2026-09-05 체력 260 → 220 (사용자). 후라이팬 피해도 80 → 62 로 같이 내렸다
+    maxHp: 220, speed: 3.7, weapon: 'pan', dashCooldown: 20,
     passiveName: '방패', passiveDesc: '앞에서 오는 총알을 후라이팬으로 절반쯤 튕겨 냅니다. 기력이 있는 동안만.\n굴러서 붙은 뒤 후려치는 근접 전용. 정면에서 서서 버티면 집니다.',
     skipBotBalance: true, // 봇이 근접 운용을 못 해 표가 실제와 반대로 나온다 → tools/melee.ts 로 본다
     bodyColor: 0x5aa9ff, accentColor: 0x16161a,
