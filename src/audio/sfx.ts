@@ -223,6 +223,9 @@ export class Sfx {
           this.gun(e.weapon, sp(e.x, e.y), e.p === localPlayer)
           this.intensity = Math.min(1, this.intensity + 0.06)
           break
+        case 'bash':
+          this.gun('pan', sp(e.x, e.y), e.p === localPlayer) // 개머리판 휘두르기 = 후라이팬 소리
+          break
         case 'hit':
           this.hit(sp(e.x, e.y), e.part === PART_HEAD)
           break

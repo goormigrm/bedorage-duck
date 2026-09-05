@@ -164,6 +164,8 @@ export interface Bullet {
 
 export type SimEvent =
   | { type: 'fire'; p: number; x: number; y: number; aim: number; weapon: WeaponId }
+  /** 저격총 개머리판 후려치기 (조준경 없이 쏠 때) */
+  | { type: 'bash'; p: number; x: number; y: number; aim: number }
   | { type: 'hit'; p: number; by: number; x: number; y: number; part: number; dmg: number }
   | { type: 'death'; p: number; by: number; x: number; y: number }
   | { type: 'respawn'; p: number; x: number; y: number }

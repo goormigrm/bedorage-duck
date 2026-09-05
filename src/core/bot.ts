@@ -41,7 +41,8 @@ const DIFFS: Record<Difficulty, DiffDef> = {
 }
 
 /** 봇 조준점의 거리 오차 비율 (계측 도구가 바꿔 볼 수 있게 객체). 헤드샷 빈도를 사람이 확정한 11~14% 근처로 맞춘 값 */
-export const BOT_AIM = { depthErr: 0.06 } // 2026-09-05 계측: 0 → 헤드샷 39%, 0.08 → 9.5%, 0.25 → 3.6%. 사람이 확정한 11~14% 근처가 0.06
+export const BOT_AIM = { depthErr: 0.06, sniperErr: 1.8 } // depthErr 2026-09-05 계측: 0 → 헤드샷 39%, 0.08 → 9.5%, 0.25 → 3.6%. 사람이 확정한 11~14% 근처가 0.06
+// sniperErr: 저격이 조준경 한 방이 된 뒤(v1.9.5) 봇 저격수는 각도 오차·손떨림을 이만큼 곱한다 — 안 그러면 봇 옥냥덕이 93% 로 판을 찢고, 혼자 하기가 저격 봇에게 계속 한 방에 죽는 판이 된다
 
 const PREFERRED_RANGE: Record<WeaponId, number> = {
   pistol: 210,
@@ -185,7 +186,7 @@ export function botInput(
 
   // ---- 조준 ----
   if (mem.wobbleTimer <= 0) {
-    mem.wobbleBias = Math.round(randSigned(mem.rng) * d.wobble)
+    mem.wobbleBias = Math.round(randSigned(mem.rng) * d.wobble * (WEAPONS[me.weapon].lethalAds ? BOT_AIM.sniperErr : 1))
     mem.wobbleTimer = randInt(mem.rng, 20, 60)
   }
   mem.wobbleTimer--
@@ -205,7 +206,7 @@ export function botInput(
     const ny = mem.wanderY - me.y
     if (nx !== 0 || ny !== 0) desired = atan2A(ny, nx)
   }
-  const err = Math.round(randSigned(mem.rng) * d.aimErr) + mem.wobbleBias
+  const err = Math.round(randSigned(mem.rng) * d.aimErr * (w.lethalAds ? BOT_AIM.sniperErr : 1)) + mem.wobbleBias
   const target = (desired + err) & 1023
   const diffA = angleDiff(target, mem.aim)
   mem.aim = (mem.aim + Math.round(diffA * d.turnRate)) & 1023
@@ -225,7 +226,8 @@ export function botInput(
       // 반자동 무기는 눌렀다 떼야 하므로 격틱 발사
       if (w.auto || state.tick % 2 === 0) out.buttons |= BTN_FIRE
     }
-    if (d.useAds && dist > 180 && me.dashTimer === 0) out.buttons |= BTN_ADS
+    // 저격총은 조준경 없이는 개머리판이라, 난이도와 상관없이 후려칠 거리 밖이면 조준경을 켠다
+    if (((d.useAds && dist > 180) || (w.bash && dist > (w.bash.range + 20))) && me.dashTimer === 0) out.buttons |= BTN_ADS
   }
   if (!los && me.ammo < w.magSize * 0.4 && me.reloadTimer === 0) out.buttons |= BTN_RELOAD
 

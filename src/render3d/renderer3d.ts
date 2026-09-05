@@ -318,6 +318,11 @@ export class Renderer3D {
     const nm = names ?? state.players.map((p) => CHARACTERS[p.char].name)
     for (const e of events) {
       switch (e.type) {
+        case 'bash': {
+          // 저격총 개머리판: 후라이팬처럼 휘두른다
+          this.vis[e.p].swing = 1
+          break
+        }
         case 'fire': {
           const w = WEAPONS[e.weapon]
           const rig = this.rigs[e.p]

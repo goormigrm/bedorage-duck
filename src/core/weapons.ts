@@ -4,10 +4,25 @@
 
 export type WeaponId = 'pistol' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'mg' | 'pan'
 
+/** 저격 조준경 탄이 반지름의 이 비율 바깥으로 지나가면 '스침' — 죽이지 않고 체력 grazeLeave 를 남긴다 */
+export const SNIPER_GRAZE_FRAC = 0.7
+
+/** 조준경 없이 쏠 때의 개머리판 후려치기 (저격총). 탄·재장전과 무관하게 언제나 된다 */
+export interface BashDef {
+  damage: number
+  range: number
+  arc: number
+  interval: number
+}
+
 export interface WeaponDef {
   id: WeaponId
   name: string
   damage: number
+  /** 조준경(ADS)으로 맞히면 한 방 — 스치면(반지름 바깥 SNIPER_GRAZE_FRAC) 체력을 grazeLeave 만 남긴다 (저격총, 2026-09-05) */
+  lethalAds?: boolean
+  grazeLeave?: number
+  bash?: BashDef
   /** 발당 탄 수 (산탄) */
   pellets: number
   /** 발사 간격 (틱) */
@@ -89,11 +104,14 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // 유일하게 한 방이 나오는 무기. 대신 재장전이 길고, 정조준(우클릭) 없이는 거의 맞지 않는다.
   // 2026-09-06: 112/260 → 120/225. 봇 1:1 1100판에서 통천덕이 38.0% 로 계속 바닥이었다.
   // 연사 간격(78)과 이동 배율(0.7)은 그대로 둔다 — 그쪽을 건드리면 저격이 단숨에 최상위로 올라간다(계측).
+  // 2026-09-05 오픈 베타 제보 "저격이 너무 어렵다(기력이 늘어 다들 빠르다)": **조준경으로 맞히면 한 방**, 스치면 체력 10 남김,
+  // 조준경 없이는 개머리판 후려치기(10, 재장전 중에도), 탄 5 → 6. damage 120 은 이제 봇 평가·표시용이고 실제 조준경 피해는 상대 체력이다.
   sniper: {
     id: 'sniper', name: '저격총', damage: 120, pellets: 1, fireInterval: 78, auto: true,
-    magSize: 5, reloadTicks: 225, spreadHip: deg(15), spreadAds: deg(0.4), recoil: deg(7),
+    magSize: 6, reloadTicks: 225, spreadHip: deg(15), spreadAds: deg(0.4), recoil: deg(7),
     recoilRecover: deg(0.35), speed: 26, life: 90, moveMul: 0.7, length: 32, color: 0x3d4a5c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1, scope: true,
+    lethalAds: true, grazeLeave: 10, bash: { damage: 10, range: 55, arc: deg(70), interval: 20 },
   },
   // 명중률은 낮고 반동은 세지만 탄이 많아 계속 퍼붓는다
   mg: {

@@ -2,6 +2,7 @@ import { CHARACTERS, CHARACTER_LIST, CharacterId, headHitScale } from './charact
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, BTN_SWAP, Input } from './input'
 import { COVER_DIST, GameMap, SANDBAG_HP, TILE, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
+import { BashDef, SNIPER_GRAZE_FRAC } from './weapons'
 import { circlesOverlap, moveCircle, pointLineDistance, segmentHitsCircle } from './physics'
 import { makeRng, rand, randInt } from './rng'
 import {
@@ -399,12 +400,17 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   const trigger = w.auto ? firePressed : firePressed && !p.prevFire
   p.prevFire = firePressed
   if (playing && trigger && p.dashTimer === 0) {
-    const infinite = w.magSize === 0
-    if (!infinite && p.ammo === 0 && p.reloadTimer === 0) {
-      p.reloadTimer = w.reloadTicks
-      state.events.push({ type: 'reload', p: p.id })
-    } else if (p.fireCooldown === 0 && p.reloadTimer === 0 && (infinite || p.ammo > 0)) {
-      fire(state, map, p)
+    // 저격총을 조준경 없이 쏘면 개머리판 후려치기 — 탄도 재장전도 안 본다 (재장전 중에도 가까운 적은 칠 수 있다, 2026-09-05)
+    if (w.bash && !p.ads) {
+      if (p.fireCooldown === 0) bashSwing(state, map, p, w.bash)
+    } else {
+      const infinite = w.magSize === 0
+      if (!infinite && p.ammo === 0 && p.reloadTimer === 0) {
+        p.reloadTimer = w.reloadTicks
+        state.events.push({ type: 'reload', p: p.id })
+      } else if (p.fireCooldown === 0 && p.reloadTimer === 0 && (infinite || p.ammo > 0)) {
+        fire(state, map, p)
+      }
     }
   }
 }
@@ -444,6 +450,23 @@ function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: nu
     return true
   }
   return false
+}
+
+/** 저격총 개머리판: 가까운 부채꼴 안의 적을 살짝 친다. 총알이 아니라 막기(후라이팬)도 안 걸린다 */
+function bashSwing(state: GameState, map: GameMap, p: PlayerState, bash: BashDef): void {
+  p.fireCooldown = bash.interval
+  state.events.push({ type: 'bash', p: p.id, x: p.x, y: p.y, aim: p.aim })
+  const range = bash.range + PLAYER_RADIUS
+  for (const victim of state.players) {
+    if (!isEnemy(p, victim) || !victim.alive || victim.left || victim.invuln > 0 || victim.dashTimer > 0) continue
+    const dx = victim.x - p.x
+    const dy = victim.y - p.y
+    if (len(dx, dy) > range) continue
+    if (Math.abs(angleDiff(atan2A(dy, dx), p.aim)) > bash.arc) continue
+    if (rayCast(map, p.x, p.y, victim.x, victim.y, 'bullet', true).blocked) continue
+    p.shots++
+    hurt(state, p, victim, bash.damage, PART_BODY, victim.x, victim.y)
+  }
 }
 
 /** 근접 무기(후라이팬): 부채꼴 안의 적을 바로 때린다 */
@@ -644,6 +667,11 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   }
   const mult = part === PART_HEAD ? headMult(w) : PART_MULT[part]
   let dmg = b.damage * mult * falloff(w, dist)
+  // 저격 조준경 탄: 맞으면 한 방. 반지름 바깥 30% 를 스치면 체력 grazeLeave(10) 만 남긴다 (2026-09-05 오픈 베타 제보 — 다들 빨라져 잡기 어렵다)
+  if (w.lethalAds && b.ads) {
+    const graze = dOff > PLAYER_RADIUS * SNIPER_GRAZE_FRAC
+    dmg = graze ? Math.max(0, victim.hp - (w.grazeLeave ?? 10)) : victim.hp
+  }
   const shooter = state.players[b.owner]
   if (shooter.char === 'jupeol' && dist < JUPEOL.range) dmg *= JUPEOL.mult
   if (shooter.char === 'giyeol') dmg *= 1 + Math.min(GIYEOL.maxStacks, shooter.streak) * GIYEOL.perHit

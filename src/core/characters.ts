@@ -223,7 +223,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'oknyang', name: '옥냥덕', basedOn: '옥냥이', tagline: '주황 고양이. 눈을 감고 웃지만 저격은 정확하다.',
     prominence: 9,
     maxHp: 200, speed: 3.0, weapon: 'sniper', dashCooldown: 55,
-    passiveName: '냉정', passiveDesc: '조준경을 들여다보면서도 평소처럼 걷습니다.\n자리를 옮기며 저격하는 기동 저격수. 머리를 맞히면 대부분 한 방.',
+    passiveName: '냉정', passiveDesc: '조준경을 들여다보면서도 평소처럼 걷습니다.\n조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이 쏘면 가까운 적을 개머리판으로 살짝 칩니다 — 재장전 중에도.',
     bodyColor: 0xf5854a, accentColor: 0xf0a83c,
     look: {
       // 아바타: 주황 고양이, 흰 얼굴 무늬, 감은 눈 웃음, 혀 내민 큰 입, 노란 후드
@@ -237,7 +237,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'tongdak', name: '통천덕', basedOn: '통닭천사', tagline: '검은 단발에 줄무늬 스웨터. 저격으로 한 방을 노린다.',
     prominence: 10,
     maxHp: 220, speed: 2.9, weapon: 'sniper', dashCooldown: 60,
-    passiveName: '치킨', passiveDesc: '한 명 잡을 때마다 최대 체력이 조금 늘고 체력도 조금 찹니다 (죽으면 원래대로).\n잡을수록 튼튼해지는 저격수.',
+    passiveName: '치킨', passiveDesc: '한 명 잡을 때마다 최대 체력이 조금 늘고 체력도 조금 찹니다 (죽으면 원래대로).\n잡을수록 튼튼해지는 저격수.\n저격총은 조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이는 개머리판 후려치기.',
     bodyColor: 0xff8fa3, accentColor: 0xd83c4a,
     look: {
       // 사진: 검은 단발, 옅은 미소, 빨강·하늘 굵은 줄무늬 스웨터
