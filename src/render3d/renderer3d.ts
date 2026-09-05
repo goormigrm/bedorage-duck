@@ -2,7 +2,7 @@
 // 카메라: 고정 피치 55°, 요 45° 고정(camera.ts). HUD 는 2D 캔버스 오버레이. 인원 2~4명.
 
 import * as THREE from 'three'
-import { CHARACTERS } from '../core/characters'
+import { CHARACTERS, headHitScale } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap, SANDBAG_HP, TILE } from '../core/map'
 import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
@@ -591,7 +591,7 @@ export class Renderer3D {
       const me = curr.players[opts.localPlayer]
       for (const p of curr.players) {
         if (p.id === me.id || !p.alive || p.left || this.hidden[p.id] || p.team === me.team) continue
-        if (Math.hypot(w.x - p.x, w.y - p.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC) {
+        if (Math.hypot(w.x - p.x, w.y - p.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC * headHitScale(p.char)) {
           cursorOn = true
           break
         }

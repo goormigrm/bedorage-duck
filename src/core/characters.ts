@@ -110,7 +110,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'cheolmyeon', name: '철면덕', basedOn: '철면수심', tagline: '배도라지장. 기관총을 들고 버티는 차돌야차.',
     prominence: 1,
     maxHp: 290, speed: 2.8, weapon: 'mg', dashCooldown: 65,
-    passiveName: '차돌', passiveDesc: '가장 튼튼한 몸으로 앞에서 버티는 탱커.\n기관총을 퍼부으며 맞아 주는 동안 팀이 정리합니다. 대신 느립니다.',
+    passiveName: '차돌', passiveDesc: '가장 튼튼한 몸으로 앞에서 버티는 탱커.\n기관총을 퍼부으며 맞아 주는 동안 팀이 정리합니다. 대신 느리고, 머리가 커서 헤드샷을 잘 맞습니다.',
     bodyColor: 0xff5a36, accentColor: 0x1e1e1e,
     look: {
       // 철면수심 공식 마스코트: 빨간 얼굴, 삐죽삐죽한 검은 머리 + 정수리 흰 별, 회색 옆머리, 반쯤 감은 눈, 쭉 내민 입술, 큰 귀
@@ -148,8 +148,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   magic: {
     id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '치과의사. 산탄총을 들고 스스로를 치료합니다.',
     prominence: 4,
-    maxHp: 235, speed: 2.9, weapon: 'shotgun', dashCooldown: 50,
-    passiveName: '진료', passiveDesc: '체력이 두껍고, 잠시 안 맞고 버티면 스스로 회복합니다.\n산탄총으로 붙었다 빠졌다 하며 오래 살아남는 타입.',
+    // 2026-09-05 체력 235 → 255. 머리가 제일 커서 헤드샷을 가장 많이 맞는 만큼 몸이 두꺼워야 한다
+    maxHp: 255, speed: 2.9, weapon: 'shotgun', dashCooldown: 50,
+    passiveName: '진료', passiveDesc: '체력이 두껍고, 잠시 안 맞고 버티면 스스로 회복합니다.\n산탄총으로 붙었다 빠졌다 하며 오래 살아남는 타입.\n머리가 제일 커서 헤드샷을 가장 잘 맞습니다.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
       // 실제 사진 기준: 검은 짧은 머리 + 옆으로 넘긴 앞머리, 얇은 검은 사각 안경, 이 드러나는 웃음, 턱 수염 자국,
@@ -287,6 +288,21 @@ export const CHARACTER_LIST: CharacterDef[] = Object.values(CHARACTERS).sort(
  * 승빠덕(후라이팬)은 봇이 "굴러서 붙고 막으며 버티는" 운용을 못 해서 표가 실제와 반대로 나온다
  * (사람이 쓰면 오히려 강한데 표에서는 최하위). 그래서 표에서 빼고 `tools/melee.ts` 로 따로 본다.
  */
+/**
+ * 머리 판정 배율 = 그 캐릭터의 머리 크기(`look.headScale`). 2026-09-05 사용자 요청:
+ * "철면덕·매직덕은 머리가 큰 만큼 헤드샷 판정을 여유롭게 — 체력이 높은 대신 헤드샷을 잘 맞게".
+ * 매직덕 1.45 · 철면덕 1.2 · 통천덕 1.12 … 우재덕 0.9 · 기열덕/주펄덕 0.95.
+ * 보이는 머리 크기와 판정이 같아서 "머리가 크면 잘 맞는다" 가 눈으로 설명된다.
+ */
+export function headHitScale(id: CharacterId): number {
+  // 머리 크기를 그대로 쓰면 매직덕(1.45)이 맞은 탄의 37.8% 를 머리로 맞아 승률이 20% 까지 떨어졌다.
+  // 차이는 남기되 절반쯤으로 눌러 준다: 매직덕 1.27 · 철면덕 1.12 · 우재덕 0.94
+  return 1 + (CHARACTERS[id].look.headScale - 1) * HEAD_SIZE_EFFECT
+}
+
+/** 머리 크기가 헤드샷 판정에 반영되는 정도 (계측 도구가 바꿔 볼 수 있게) */
+export const HEAD_SIZE_EFFECT = 0.6
+
 export const BOT_BALANCE_LIST: CharacterDef[] = CHARACTER_LIST.filter((c) => !c.skipBotBalance)
 
 export const PROTAGONIST: CharacterDef = CHARACTERS.cheolmyeon

@@ -141,8 +141,8 @@ const BODY_FRAC = 0.72
  * d = 탄 궤적(직선)과 상대 중심 사이의 거리, r = 상대 반지름.
  * 정중앙을 지나면 머리, 가장자리를 스치면 다리.
  */
-export function partForOffset(d: number, r: number): number {
-  if (d <= r * HEAD_FRAC) return PART_HEAD
+export function partForOffset(d: number, r: number, headScale = 1): number {
+  if (d <= r * HEAD_FRAC * headScale) return PART_HEAD
   if (d <= r * BODY_FRAC) return PART_BODY
   return PART_LEGS
 }

@@ -1,4 +1,4 @@
-import { CHARACTERS, CHARACTER_LIST, CharacterId } from './characters'
+import { CHARACTERS, CHARACTER_LIST, CharacterId, headHitScale } from './characters'
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, BTN_SWAP, Input } from './input'
 import { COVER_DIST, GameMap, SANDBAG_HP, TILE, TILE_SANDBAG, isWallAt, nearSandbag, rayCast } from './map'
@@ -425,7 +425,7 @@ function aimedEnemy(state: GameState, p: PlayerState): number {
   const ay = p.y + sinA(p.aim) * p.aimDist
   for (const e of state.players) {
     if (!isEnemy(p, e) || !e.alive || e.left) continue
-    if (len(ax - e.x, ay - e.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC) return e.id
+    if (len(ax - e.x, ay - e.y) <= PLAYER_RADIUS * HEAD_AIM_FRAC * headHitScale(e.char)) return e.id
   }
   return -1
 }
@@ -438,7 +438,7 @@ function aimsAtHead(state: GameState, map: GameMap, shooter: PlayerState, mx: nu
     if (e.id !== headTarget || !isEnemy(shooter, e) || !e.alive || e.left) continue
     const t = (e.x - mx) * dx + (e.y - my) * dy
     if (t <= 0 || t > 1200) continue
-    if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * HEAD_FRAC) continue
+    if (len(mx + dx * t - e.x, my + dy * t - e.y) > PLAYER_RADIUS * HEAD_FRAC * headHitScale(e.char)) continue
     if (rayCast(map, mx, my, e.x, e.y, 'sight').blocked) continue
     return true
   }
@@ -630,7 +630,7 @@ function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: 
 function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number): void {
   const w = WEAPONS[b.weapon]
   const dist = len(victim.x - b.ox, victim.y - b.oy)
-  let part = partForOffset(dOff, PLAYER_RADIUS)
+  let part = partForOffset(dOff, PLAYER_RADIUS, headHitScale(victim.char))
   if (w.pellets > 1) {
     // 산탄: 커서가 상대 위였고 **정중앙을 지나는 탄**만 머리 (탄 7개가 전부 머리가 되면 과하다)
     if (part === PART_HEAD && b.headTarget !== victim.id) part = PART_BODY
