@@ -27,6 +27,8 @@ import {
   STAMINA_MAX,
   CHICKEN_HEAL,
   GIYEOL,
+  JUPEOL,
+  UWON,
   CHICKEN_MAXHP_CAP,
   CHICKEN_MAXHP_PER_KILL,
   SPRINT_COST,
@@ -381,7 +383,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.3) : DASH_TICKS // 우재덕: 대시 거리 +30%
     p.dashCooldown = c.dashCooldown
     p.ads = false
-    if (c.id === 'uwon') p.invuln = Math.max(p.invuln, p.dashTimer + 12) // 우원덕: 대시가 끝난 뒤에도 0.2초 무적
+    if (c.id === 'uwon') p.invuln = Math.max(p.invuln, p.dashTimer + UWON.invulnAfterDash) // 우원덕: 대시가 끝난 뒤에도 잠깐 무적
     state.events.push({ type: 'dash', p: p.id })
   }
 
@@ -634,7 +636,7 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   const mult = part === PART_HEAD ? headMult(w) : PART_MULT[part]
   let dmg = b.damage * mult * falloff(w, dist)
   const shooter = state.players[b.owner]
-  if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
+  if (shooter.char === 'jupeol' && dist < JUPEOL.range) dmg *= JUPEOL.mult
   if (shooter.char === 'giyeol') dmg *= 1 + Math.min(GIYEOL.maxStacks, shooter.streak) * GIYEOL.perHit
   dmg = Math.round(dmg)
   b.hitSomeone = true

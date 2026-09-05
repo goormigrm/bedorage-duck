@@ -41,6 +41,10 @@ export const BLOCK_CHANCE = 0.5
 export const CHICKEN_MAXHP_PER_KILL = 15
 export const CHICKEN_MAXHP_CAP = 60
 export const CHICKEN_HEAL = 20
+/** 우원덕 패시브(연기): 구르기가 끝난 뒤에도 이만큼 무적이 이어진다 (틱). 계측 도구가 바꿔 볼 수 있게 객체 */
+export const UWON = { invulnAfterDash: 18 } // 2026-09-05: 12 → 18 (0.3초). 24 면 60% 로 튄다 — 아주 민감한 값
+/** 주펄덕 패시브(빛남): 이 거리(px) 안의 상대에게 피해 배율 */
+export const JUPEOL = { range: 200, mult: 1.35 } // 2026-09-05: 150px·1.2 → 200px·1.35. 배율보다 범위가 효과적이었다(봇은 150 안에서 잘 안 싸운다)
 /** 기열덕 패시브(뇌절): 연속 명중마다 피해 배율이 오른다. 빗나가면 한 단계 내려간다 (계측 도구가 바꿔 볼 수 있게 객체) */
 export const GIYEOL = { perHit: 0.06, maxStacks: 6 } // 2026-09-05: 소총으로 바꾸며 9% → 6% (최대 +36%)
 /** 죽은 자리에 떨어지는 힐팩: 회복량(최대 체력 비율) · 유지 시간 · 줍는 반경 */
