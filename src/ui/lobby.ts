@@ -899,6 +899,16 @@ export class Lobby {
     setTimeout(() => this.launchFrom(players, seed, delay, mode, map, kills, scale, botDiff), 150)
   }
 
+  /** 대기실 제목용 호스트 이름 (닉네임 → 캐릭터 이름 → '호스트') */
+  private hostName(): string {
+    const h = this.members[0]
+    if (!h) return '호스트'
+    const nick = (h.name ?? '').trim()
+    if (nick) return esc(nick)
+    const c = (CHARACTERS as Record<string, { name: string } | undefined>)[h.char]
+    return c ? c.name : '호스트'
+  }
+
   /** 봇 캐릭터: 이미 앉은 사람과 겹치지 않게 (혼자 하기와 같은 규칙) */
   private pickBotChar(players: Member[]): CharacterId {
     const used = new Set(players.map((p) => p.char))
@@ -958,7 +968,8 @@ export class Lobby {
     const link = this.link
     if (!link) return
     const connected = this.role === 'host' || !!this.hostId
-    const title = this.role === 'host' ? `내 방 <span class="code-sm">${link.code}</span>` : `방 <span class="code-sm">${link.code}</span>`
+    // 방 코드는 안 보여 준다 — 코드로 들어갈 길이 없으니 쓸 일이 없다(방 목록에서 뺀 것과 같은 이유, 2026-09-05)
+    const title = this.role === 'host' ? '내 방' : `${this.hostName()}의 방`
     const teams = this.roomMode === 'teams'
     const slots: string[] = []
     for (let i = 0; i < this.roomSize; i++) {
