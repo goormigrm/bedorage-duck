@@ -37,6 +37,7 @@ import {
   SPRINT_MUL,
   STAMINA_REGEN,
   PUNGWOL,
+  CHIM,
   SWAP_GRACE_TICKS,
   isEnemy,
   teamKills,
@@ -333,7 +334,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     p.reloadTimer--
     if (p.reloadTimer === 0) p.ammo = w.magSize
   }
-  const recover = c.id === 'chim' ? w.recoilRecover * 2 : w.recoilRecover
+  const recover = c.id === 'chim' ? w.recoilRecover * CHIM.recoverMul : w.recoilRecover
   p.recoil = Math.max(0, p.recoil - recover)
 
   // 매직덕 패시브: 피격 3초 후 초당 4 회복
@@ -489,7 +490,8 @@ function meleeSwing(state: GameState, map: GameMap, p: PlayerState): void {
 
 function fire(state: GameState, map: GameMap, p: PlayerState): void {
   const w = WEAPONS[p.weapon]
-  const spread = (p.ads ? w.spreadAds : w.spreadHip) + p.recoil
+  // 침착덕: 탄퍼짐이 작다(패시브 '침착'). 반동은 소총 연사 간격 동안 다 회복돼 실효가 없어서 퍼짐을 줄인다
+  const spread = Math.round((p.ads ? w.spreadAds : w.spreadHip) * (p.char === 'chim' ? CHIM.spreadMul : 1)) + p.recoil
   let mx = p.x + cosA(p.aim) * (PLAYER_RADIUS + 6)
   let my = p.y + sinA(p.aim) * (PLAYER_RADIUS + 6)
   if (isWallAt(map, mx, my)) {
@@ -535,7 +537,7 @@ function fire(state: GameState, map: GameMap, p: PlayerState): void {
   if (w.magSize > 0) p.ammo--
   p.shots += w.pellets // 명중률을 탄 단위로 재야 산탄총이 왜곡되지 않는다
   p.fireCooldown = w.fireInterval
-  p.recoil = Math.min(w.recoil * MAX_RECOIL_MUL * 2, p.recoil + w.recoil)
+  p.recoil = Math.min(w.recoil * MAX_RECOIL_MUL * 2, p.recoil + w.recoil * (p.char === 'chim' ? CHIM.recoilMul : 1)) // 침착덕: 발당 반동이 작다
   state.events.push({ type: 'fire', p: p.id, x: mx, y: my, aim: p.aim, weapon: p.weapon })
   if (w.magSize > 0 && p.ammo === 0) {
     p.reloadTimer = w.reloadTicks
