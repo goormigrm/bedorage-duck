@@ -13,6 +13,7 @@ import {
 } from '../net/room'
 import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
+import { isTouchDevice } from '../game/touch'
 import { TEAM_NAMES } from '../render/hud'
 import { SessionConfig } from '../game/session'
 
@@ -96,6 +97,10 @@ export class Lobby {
             <button class="btn lg" id="btn-solo">혼자 하기</button>
           </div>
         </div>
+        <div class="notice" id="net-notice">
+          <b>서버가 없는 게임입니다.</b> 방을 만든 사람의 컴퓨터가 곧 방이라, <b>방장의 인터넷이 끊기면 방도 함께 사라집니다.</b>
+          와이파이·폰 회선처럼 흔들리는 연결로 방을 만들면 판이 터질 수 있으니, 방은 가능하면 <b>유선(랜선) PC</b>에서 만들어 주세요.
+        </div>
 
         <div class="status" id="status"></div>
 
@@ -134,6 +139,7 @@ export class Lobby {
               <p class="hintline" id="map-desc">${MAPS[this.mapId].desc}</p>
               <canvas id="map-preview" class="mappv"></canvas>
             </div>
+            <div class="warn">방장의 연결이 곧 방입니다. 와이파이나 폰 회선이면 중간에 방이 터질 수 있어요. 랜선을 꽂은 PC가 가장 안전합니다.</div>
             <div class="dacts"><button class="btn secondary" data-close>취소</button><button class="btn main" id="btn-host-go">방 만들기</button></div>
           </div>
         </div>
@@ -268,6 +274,17 @@ export class Lobby {
     ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-solo')
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-host')
+    if (isTouchDevice()) {
+      // 폰은 방을 만들 수 없다. 방장의 연결이 곧 방인데 폰 회선은 자주 흔들려 모두의 판이 터진다 (2026-09-05 요청)
+      const hb = h.querySelector('#btn-host') as HTMLButtonElement
+      hb.disabled = true
+      hb.title = '폰에서는 방을 만들 수 없습니다'
+      const nn = h.querySelector('#net-notice') as HTMLElement
+      nn.innerHTML = `<b>폰에서는 방을 만들 수 없습니다.</b> 이 게임은 서버가 없어 방을 만든 사람의 연결이 곧 방인데,
+        폰 회선은 자주 흔들려 모두의 판이 터집니다. <b>방 목록에서 참가</b>하거나 <b>혼자 하기</b>를 이용해 주세요.
+        방은 랜선을 꽂은 PC에서 만드는 것이 가장 안전합니다.`
+      nn.classList.add('strong')
+    }
     ;(h.querySelector('#btn-solo-go') as HTMLButtonElement).onclick = () => {
       this.closeDlg()
       this.startSolo()
@@ -475,6 +492,10 @@ export class Lobby {
   /** 방 만들기·혼자 하기 창. 닉네임이 없으면 먼저 채우게 한다 */
   private openDlg(sel: string): void {
     if (!this.requireNick()) return
+    if (sel === '#dlg-host' && isTouchDevice()) {
+      this.status('폰에서는 방을 만들 수 없습니다. 방 목록에서 참가하거나 혼자 하기를 이용해 주세요.', 'bad')
+      return
+    }
     this.closeDlg()
     const d = this.host.querySelector(sel) as HTMLElement | null
     if (!d) return
@@ -543,6 +564,7 @@ export class Lobby {
 
   private hostRoom(): void {
     if (!this.requireNick()) return
+    if (isTouchDevice()) return // 버튼이 막혀 있지만 혹시 몰라 한 번 더
     this.closeLink()
     const code = makeRoomCode()
     this.role = 'host'
