@@ -11,6 +11,9 @@ let session: Session | null = null
 function showLobby(): void {
   session?.dispose()
   session = null
+  // 게임에서 돌아왔으면 주소의 #room= 을 지운다. 남겨 두면 로비가 초대 링크로 알고 이전 방에 다시 들어가
+  // "방 상태" 가 보여서 헷갈린다(2026-09-05 제보). 로비에 오면 방 목록부터.
+  if (session === null && location.hash.startsWith('#room=')) history.replaceState(null, '', location.pathname + location.search)
   app.innerHTML = ''
   document.body.style.cursor = ''
   lobby = new Lobby(app, {

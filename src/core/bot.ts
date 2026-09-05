@@ -40,6 +40,9 @@ const DIFFS: Record<Difficulty, DiffDef> = {
   hard: { reaction: 16, aimErr: deg(8), turnRate: 0.26, fireChance: 0.8, useAds: true, dashChance: 0.02, lead: 0.5, repathEvery: 10, wobble: deg(4.5) },
 }
 
+/** 봇 조준점의 거리 오차 비율 (계측 도구가 바꿔 볼 수 있게 객체). 헤드샷 빈도를 사람이 확정한 11~14% 근처로 맞춘 값 */
+export const BOT_AIM = { depthErr: 0.06 } // 2026-09-05 계측: 0 → 헤드샷 39%, 0.08 → 9.5%, 0.25 → 3.6%. 사람이 확정한 11~14% 근처가 0.06
+
 const PREFERRED_RANGE: Record<WeaponId, number> = {
   pistol: 210,
   smg: 170,
@@ -207,8 +210,10 @@ export function botInput(
   const diffA = angleDiff(target, mem.aim)
   mem.aim = (mem.aim + Math.round(diffA * d.turnRate)) & 1023
   out.aim = mem.aim
-  // 조준점은 표적 위 (커서가 상대 위에 있어야 헤드샷이 난다). 표적이 없으면 조준점 없음
-  out.aimDist = enemy ? Math.min(255, Math.round(dist / 4)) : 0
+  // 조준점은 표적 쪽. 단 **거리에도 ±25% 오차**를 준다 — 사람은 커서 깊이가 정확하지만 봇에게까지 그러면
+  // 각도 오차가 작을 때마다 "커서가 상대 위"(= 맞으면 헤드샷)가 돼 헤드샷 기계가 된다(2026-09-05 소총 헤드샷 39%).
+  // 표적이 없으면 조준점 없음
+  out.aimDist = enemy ? Math.min(255, Math.max(1, Math.round((dist * (1 + randSigned(mem.rng) * BOT_AIM.depthErr)) / 4))) : 0
 
   // ---- 사격 ----
   const range = PREFERRED_RANGE[me.weapon]

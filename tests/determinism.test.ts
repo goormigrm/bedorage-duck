@@ -232,6 +232,8 @@ describe('부위 판정 (덕코프식 정확도)', () => {
       s.players[0].x = spot.x - 200
       s.players[0].y = spot.y + offset
       shoot(s, 0, spot.x - 26, spot.y + offset, 16, 0, 30)
+      // 커서가 상대 위(headTarget)면 맞기만 하면 머리다(2026-09-05). 궤적 부위 판정 자체를 보려면 커서를 뗀다
+      if (offset !== 0) s.bullets[s.bullets.length - 1].headTarget = -1
       let hit: { part: number } | undefined
       for (let t = 0; t < 4 && !hit; t++) {
         step(s, map, [idle(), idle()])

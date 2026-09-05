@@ -75,6 +75,60 @@ describe('헤드샷은 커서가 상대 위에 있을 때만', () => {
     expect(firstHitPart(outside, Math.round(no / 4))).toBe(PART_BODY)
   })
 
+  it('커서가 상대 위면 탄퍼짐으로 빗겨 맞아도 머리 (금색이면 헤드샷)', () => {
+    // 지향 사격(퍼짐 6.5°)으로 여러 발 — 맞은 탄은 전부 머리여야 한다
+    const s = scene(160)
+    const aimDist = Math.round(160 / 4)
+    let hits = 0
+    let heads = 0
+    for (let t = 0; t < 240; t++) {
+      const inputs: Input[] = [{ mx: 0, my: 0, aim: 0, buttons: BTN_FIRE, char: 0, aimDist }, IDLE]
+      step(s.state, s.map, inputs)
+      for (const e of s.state.events) if (e.type === 'hit' && e.p === 1) {
+        hits++
+        if (e.part === PART_HEAD) heads++
+      }
+      s.b.hp = 200
+      s.b.alive = true
+    }
+    expect(hits).toBeGreaterThan(3)
+    expect(heads).toBe(hits)
+  })
+
+  it('산탄총은 커서가 상대 위여도 정중앙을 지나는 탄만 머리', () => {
+    const map = buildMap('yard', 1, 7)
+    for (let ty = 1; ty < map.h - 1; ty++) for (let tx = 1; tx < map.w - 1; tx++) map.tiles[ty * map.w + tx] = TILE_FLOOR
+    map.sandbagIdx.length = 0
+    const state = createState({ seed: 5, targetKills: 9, chars: ['magic', 'jupeol'] }, map)
+    state.phase = 'playing'
+    state.phaseTimer = 0
+    const [a, b] = state.players
+    a.x = 6 * TILE
+    a.y = 12 * TILE + TILE / 2
+    b.x = a.x + 120
+    b.y = a.y
+    for (const p of [a, b]) {
+      p.alive = true
+      p.invuln = 0
+      p.aliveTicks = 999
+    }
+    let hits = 0
+    let heads = 0
+    for (let t = 0; t < 300; t++) {
+      const inputs: Input[] = [{ mx: 0, my: 0, aim: 0, buttons: BTN_FIRE, char: 0, aimDist: Math.round(120 / 4) }, IDLE]
+      step(state, map, inputs)
+      for (const e of state.events) if (e.type === 'hit' && e.p === 1) {
+        hits++
+        if (e.part === PART_HEAD) heads++
+      }
+      b.hp = 200
+      b.alive = true
+    }
+    expect(hits).toBeGreaterThan(10)
+    expect(heads).toBeGreaterThan(0)
+    expect(heads).toBeLessThan(hits) // 전부 머리는 아니다
+  })
+
   it('입력 직렬화에 조준 거리가 실린다 (7바이트)', () => {
     expect(INPUT_BYTES).toBe(7)
     const v = new DataView(new ArrayBuffer(INPUT_BYTES))
