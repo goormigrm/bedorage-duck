@@ -151,7 +151,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'magic', name: '매직덕', basedOn: '매직박', tagline: '치과의사. 산탄총을 들고 스스로를 치료합니다.',
     prominence: 4,
     // 2026-09-05 체력 235 → 255. 머리가 제일 커서 헤드샷을 가장 많이 맞는 만큼 몸이 두꺼워야 한다
-    maxHp: 255, speed: 2.9, weapon: 'shotgun', dashCooldown: 50,
+    // 체력 300 → 260 → 235 → 255(헤드샷 판정 확대 보상) → 275 (2026-09-05 오픈 베타: 보통 봇 표 바닥 40%, 사용자 '다시 늘려라')
+    maxHp: 275, speed: 2.9, weapon: 'shotgun', dashCooldown: 50,
     passiveName: '진료', passiveDesc: '체력이 두껍고, 잠시 안 맞고 버티면 스스로 회복합니다.\n산탄총으로 붙었다 빠졌다 하며 오래 살아남는 타입.\n머리가 제일 커서 헤드샷을 가장 잘 맞습니다.',
     bodyColor: 0x8de0ff, accentColor: 0x3b7dd8,
     look: {
@@ -224,7 +225,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'oknyang', name: '옥냥덕', basedOn: '옥냥이', tagline: '주황 고양이. 눈을 감고 웃지만 저격은 정확하다.',
     prominence: 9,
     maxHp: 200, speed: 3.0, weapon: 'sniper', dashCooldown: 55,
-    passiveName: '냉정', passiveDesc: '조준경을 들여다보면서도 평소처럼 걷습니다.\n조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이 쏘면 가까운 적을 개머리판으로 살짝 칩니다 — 재장전 중에도.',
+    passiveName: '냉정', passiveDesc: '조준경을 들여다보면서도 평소처럼 걷습니다.\n저격총: 조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이 쏘면 가까운 적을 개머리판으로 살짝 칩니다 — 재장전 중에도.',
     bodyColor: 0xf5854a, accentColor: 0xf0a83c,
     look: {
       // 아바타: 주황 고양이, 흰 얼굴 무늬, 감은 눈 웃음, 혀 내민 큰 입, 노란 후드
@@ -238,7 +239,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: 'tongdak', name: '통천덕', basedOn: '통닭천사', tagline: '검은 단발에 줄무늬 스웨터. 저격으로 한 방을 노린다.',
     prominence: 10,
     maxHp: 220, speed: 2.9, weapon: 'sniper', dashCooldown: 60,
-    passiveName: '치킨', passiveDesc: '한 명 잡을 때마다 최대 체력이 조금 늘고 체력도 조금 찹니다 (죽으면 원래대로).\n잡을수록 튼튼해지는 저격수.\n저격총은 조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이는 개머리판 후려치기.',
+    passiveName: '치킨', passiveDesc: '한 명 잡을 때마다 최대 체력이 조금 늘고 체력도 조금 찹니다 (죽으면 원래대로).\n저격총: 조준경으로 맞히면 한 방(스치면 체력 10 남음). 조준경 없이 쏘면 가까운 적을 개머리판으로 살짝 칩니다 — 재장전 중에도.',
     bodyColor: 0xff8fa3, accentColor: 0xd83c4a,
     look: {
       // 사진: 검은 단발, 옅은 미소, 빨강·하늘 굵은 줄무늬 스웨터
