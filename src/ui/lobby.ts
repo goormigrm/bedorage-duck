@@ -92,6 +92,10 @@ export class Lobby {
             <label for="nick">닉네임</label>
             <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
           </div>
+          <button class="mychar" id="my-char" title="캐릭터 목록으로">
+            <canvas></canvas>
+            <span><small>내 캐릭터</small><b id="my-char-name"></b></span>
+          </button>
           <div class="topacts">
             <button class="btn main lg" id="btn-host">방 만들기</button>
             <button class="btn lg" id="btn-solo">혼자 하기</button>
@@ -273,6 +277,8 @@ export class Lobby {
     nickEl.addEventListener('change', () => applyNick(true))
     ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-solo')
+    ;(h.querySelector('#my-char') as HTMLButtonElement).onclick = () => h.querySelector('#chars')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    this.drawMyChar()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-host')
     if (isTouchDevice()) {
       // 폰은 방을 만들 수 없다. 방장의 연결이 곧 방인데 폰 회선은 자주 흔들려 모두의 판이 터진다 (2026-09-05 요청)
@@ -335,9 +341,21 @@ export class Lobby {
     this.renderRoom()
   }
 
+  /** 상단 바의 "내 캐릭터" 초상·이름. 캐릭터 목록이 아래라 위에서는 누굴 골랐는지 안 보였다 (2026-09-05) */
+  private drawMyChar(): void {
+    const def = CHARACTER_LIST.find((c) => c.id === this.char)
+    const el = this.host.querySelector('#my-char') as HTMLElement | null
+    if (!def || !el) return
+    ;(el.querySelector('#my-char-name') as HTMLElement).textContent = def.name
+    el.style.setProperty('--c', '#' + def.bodyColor.toString(16).padStart(6, '0'))
+    const cv = el.querySelector('canvas') as HTMLCanvasElement
+    requestAnimationFrame(() => drawPortrait(cv, def))
+  }
+
   private selectChar(id: CharacterId): void {
     this.char = id
     this.host.querySelectorAll('.char').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.id === id))
+    this.drawMyChar()
     this.myReady = false
     this.pushSelf()
   }

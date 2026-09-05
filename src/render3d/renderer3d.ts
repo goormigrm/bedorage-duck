@@ -7,7 +7,7 @@ import { angleToRad } from '../core/fixedmath'
 import { GameMap, SANDBAG_HP, TILE } from '../core/map'
 import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS, HEAD_AIM_FRAC } from '../core/weapons'
-import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
+import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, lowAmmo, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
 import { PITCH, YAW, worldDirToScreen } from './camera'
 import { CharacterRig, buildCharacter, setRigOpacity, makeShield } from './character3d'
@@ -808,6 +808,16 @@ export class Renderer3D {
         ctx.stroke()
       }
     }
+    // 힐팩: 흰 네모에 빨간 십자. 죽은 자리를 알려 주는 셈이지만 킬 배너가 이미 말해 준다 (2026-09-05)
+    for (const m of curr.medkits) {
+      const px = m.x / TILE
+      const py = m.y / TILE
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(px - 2.4 * rp, py - 2.4 * rp, 4.8 * rp, 4.8 * rp)
+      ctx.fillStyle = '#f25c4c'
+      ctx.fillRect(px - 0.7 * rp, py - 1.7 * rp, 1.4 * rp, 3.4 * rp)
+      ctx.fillRect(px - 1.7 * rp, py - 0.7 * rp, 3.4 * rp, 1.4 * rp)
+    }
     // 단군덕 패시브(중계): 시야 밖 총성 위치를 미니맵에도 찍는다(창 안이면). 화면 가장자리 화살표만으로는
     // 방향은 알아도 거리를 모른다 (2026-09-05 요청). 좌표는 이미 타일 단위(x·U)
     for (const g of this.pings) {
@@ -939,6 +949,22 @@ export class Renderer3D {
         ctx.fillRect(bx, by - bh, 6, bh)
         ctx.fillStyle = '#f2c94c'
         ctx.fillRect(bx + 1, by - 1 - (bh - 2) * rk, 4, (bh - 2) * rk)
+      }
+      // 탄 부족(탄창 20% 이하): 재장전 막대 자리에 빨간 점 "!" 이 깜빡인다 — 카드를 안 봐도 재장전할 때임을 안다
+      if ((mine || ally) && lowAmmo(p, rw)) {
+        const bx = s.x - w / 2 - 13
+        const by = s.y + 12
+        ctx.globalAlpha = fade * (Math.floor(performance.now() / 260) % 2 === 0 ? 1 : 0.45)
+        ctx.fillStyle = '#f25c4c'
+        ctx.beginPath()
+        ctx.arc(bx, by, 7.5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#ffffff'
+        ctx.font = '700 12px "IBM Plex Sans KR", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('!', bx, by + 0.5)
+        ctx.textBaseline = 'alphabetic'
       }
       ctx.globalAlpha = 1
     }

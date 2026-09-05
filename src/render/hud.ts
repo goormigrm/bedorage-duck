@@ -115,7 +115,8 @@ function fitFont(ctx: CanvasRenderingContext2D, text: string, maxW: number, size
 
 export class Hud {
   readonly ctx: CanvasRenderingContext2D
-  private banner: Banner | null = null
+  /** 킬 배너. 여러 킬이 겹치면 최대 3개를 위아래로 쌓는다 (전에는 하나뿐이라 앞 것이 사라졌다 — 2026-09-05) */
+  private banners: Banner[] = []
   private hitDirs: HitDir[] = []
   /** 조준점 히트마커: 내 탄이 맞으면 조준점 네 귀퉁이가 잠깐 벌어진다 (헤드샷은 금색) */
   private hitMarkT = 0
@@ -208,14 +209,15 @@ export class Hud {
   showKill(state: GameState, killer: number, victim: number, names: string[]): void {
     const kp = state.players[killer]
     const k = CHARACTERS[kp.char]
-    this.banner = {
+    this.banners.push({
       left: names[killer] ?? k.name,
       right: names[victim] ?? CHARACTERS[state.players[victim].char].name,
       weapon: kp.weapon,
       life: 1.6,
       max: 1.6,
       color: hex(k.bodyColor),
-    }
+    })
+    if (this.banners.length > 3) this.banners.shift()
   }
 
   showOver(): void {
@@ -228,10 +230,8 @@ export class Hud {
     const ctx = this.ctx
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     ctx.clearRect(0, 0, VIEW_W, VIEW_H)
-    if (this.banner) {
-      this.banner.life -= dt
-      if (this.banner.life <= 0) this.banner = null
-    }
+    for (const b of this.banners) b.life -= dt
+    this.banners = this.banners.filter((b) => b.life > 0)
     for (let i = this.hitDirs.length - 1; i >= 0; i--) {
       this.hitDirs[i].life -= dt
       if (this.hitDirs[i].life <= 0) this.hitDirs.splice(i, 1)
@@ -537,8 +537,10 @@ export class Hud {
     ctx.fillStyle = '#a9b4c0'
     ctx.fillText(w.name, ix, by + 70)
     const infinite = w.magSize === 0
+    // 탄 부족: 탄창의 20% 이하면 숫자가 빨갛게 깜빡인다 (재장전이 시작돼야 알던 것을 미리 — 2026-09-05)
+    const low = lowAmmo(p, w)
     ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
-    ctx.fillStyle = p.reloadTimer > 0 ? '#f2c94c' : '#e6edf3'
+    ctx.fillStyle = p.reloadTimer > 0 ? '#f2c94c' : low ? (Math.floor(performance.now() / 260) % 2 === 0 ? '#f25c4c' : '#ffb3a8') : '#e6edf3'
     ctx.fillText(infinite ? '∞' : p.reloadTimer > 0 ? '재장전' : `${p.ammo}`, ix + 60, by + 78)
     if (infinite) {
       ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
@@ -574,13 +576,14 @@ export class Hud {
   }
 
   private drawBanner(s: GameState, opts: RenderOptions): void {
-    const b = this.banner
     const ctx = this.ctx
-    if (b && s.phase !== 'over') {
+    // 최근 것이 맨 위, 먼저 난 것은 아래로 밀린다
+    for (let n = 0; n < this.banners.length && s.phase !== 'over'; n++) {
+      const b = this.banners[this.banners.length - 1 - n]
       const k = b.life / b.max
       const inK = Math.min(1, (b.max - b.life) * 6)
       ctx.globalAlpha = Math.min(1, k * 4) * inK
-      const y = 120
+      const y = 120 + n * 58
       ctx.font = '400 34px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
@@ -774,6 +777,11 @@ function drawWeaponIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, w
       break
   }
   ctx.restore()
+}
+
+/** 탄창의 20% 이하 (재장전 중·무한 탄약 제외). 카드 숫자와 캐릭터 옆 표시가 같은 기준을 쓴다 */
+export function lowAmmo(p: PlayerState, w: { magSize: number }): boolean {
+  return w.magSize > 0 && p.alive && p.reloadTimer === 0 && p.ammo <= Math.max(1, Math.ceil(w.magSize * 0.2))
 }
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

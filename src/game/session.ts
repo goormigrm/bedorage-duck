@@ -8,7 +8,7 @@ import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, joinPlayer, snapshot, step, syncSandbags } from '../core/sim'
 import { angleToRad } from '../core/fixedmath'
-import { GameState, TICK_MS, isTeamMatch, teamKills } from '../core/state'
+import { GameState, PlayerState, TICK_MS, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
@@ -71,6 +71,8 @@ export class Session {
   private touch: TouchControls | null = null
   private sfx = new Sfx()
   private bots: BotMemory[] = []
+  /** 아래 조작 안내 띠 표시 여부 (처음 두 판 · 이후 메뉴에서) */
+  private keysShown = true
   private lockstep: Lockstep | null = null
   private peerIndex = new Map<string, number>()
   private pendingDrops: PendingDrop[] = []
@@ -172,6 +174,16 @@ export class Session {
     this.root = host.querySelector('.game-root') as HTMLElement
     this.stage = host.querySelector('#stage') as HTMLElement
     this.overlay = host.querySelector('#overlay') as HTMLElement
+    // 조작 안내 띠: 처음 두 판만 보이고 그 뒤로는 감춘다(화면 아래 34px). Esc 메뉴에서 다시 켤 수 있다 (2026-09-05)
+    try {
+      const games = Number(localStorage.getItem('bd.games') ?? '0')
+      localStorage.setItem('bd.games', String(games + 1))
+      const pref = localStorage.getItem('bd.keys')
+      this.keysShown = pref !== null ? pref === '1' : games < 2
+    } catch {
+      this.keysShown = true
+    }
+    this.applyKeys()
     this.renderer = new Renderer3D(this.stage, this.map)
     // 캔버스가 UI 아래에 오도록 UI 를 맨 뒤로
     const ui = this.stage.querySelector('.game-ui') as HTMLElement
@@ -337,6 +349,11 @@ export class Session {
     }
   }
 
+  private applyKeys(): void {
+    const el = this.stage.querySelector('.keys') as HTMLElement | null
+    if (el) el.hidden = !this.keysShown
+  }
+
   private showMenu(): void {
     const solo = this.cfg.mode === 'solo'
     if (solo) this.paused = true
@@ -344,6 +361,25 @@ export class Session {
       solo ? '일시정지' : '메뉴',
       solo ? '봇은 기다려 줍니다.' : '대전 중에는 게임이 멈추지 않습니다.',
       [
+        // 조작 안내 띠 켜고 끄기 (터치는 띠 자체가 없다)
+        ...(this.touch
+          ? []
+          : [
+              {
+                label: this.keysShown ? '조작 안내 숨기기' : '조작 안내 보기',
+                primary: false,
+                onClick: () => {
+                  this.keysShown = !this.keysShown
+                  try {
+                    localStorage.setItem('bd.keys', this.keysShown ? '1' : '0')
+                  } catch {
+                    /* 저장 못 해도 이번 판은 반영된다 */
+                  }
+                  this.applyKeys()
+                  this.showMenu()
+                },
+              },
+            ]),
         // 모바일은 화면 위쪽에 ≡ 하나만 두고 소리·로비로를 이 안에 넣는다
         {
           label: this.sfx.muted ? '소리 켜기' : '소리 끄기',
@@ -799,7 +835,21 @@ export class Session {
           <td class="n">${Math.round(p.dmgDealt)}</td><td class="n">${Math.round(p.dmgTaken)}</td></tr>`
       })
       .join('')
-    return `<div class="stats"><table>
+    // 한 줄 요약(MVP): 최다 헤드샷 · 최장 연속 · 최다 피해. 0 이면 뺀다
+    const alive = this.state.players.map((p, i) => ({ p, i })).filter(({ p }) => !p.vacant)
+    const top = (key: (p: PlayerState) => number, label: string, fmt: (v: number) => string) => {
+      let best = alive[0]
+      for (const r of alive) if (key(r.p) > key(best.p)) best = r
+      const v = key(best.p)
+      return v > 0 ? `${label} <b>${this.names[best.i]} ${fmt(v)}</b>` : ''
+    }
+    const mvp = [
+      top((p) => p.heads, '최다 헤드샷', (v) => `${v}`),
+      top((p) => p.bestStreak, '최장 연속', (v) => `${v}`),
+      top((p) => p.dmgDealt, '최다 피해', (v) => `${Math.round(v)}`),
+    ].filter(Boolean)
+    const mvpLine = mvp.length ? `<p class="statsmvp">⭐ ${mvp.join(' · ')}</p>` : ''
+    return `<div class="stats">${mvpLine}<table>
       <thead><tr><th>이름</th>${teams ? '<th>팀</th>' : ''}<th>캐릭터</th><th>킬</th><th>데스</th><th>연속</th><th>명중</th><th>헤드</th><th>준 피해</th><th>받은 피해</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <p class="statsnote">명중률은 탄 단위입니다 (산탄총 한 발 = 탄 7개). 연속은 죽지 않고 이어 간 최다 킬.</p></div>`
