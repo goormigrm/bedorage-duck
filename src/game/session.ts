@@ -73,6 +73,7 @@ export class Session {
   private bots: BotMemory[] = []
   /** 아래 조작 안내 띠 표시 여부 (처음 두 판 · 이후 메뉴에서) */
   private keysShown = true
+  private lastEmoteAt = -1e9
   private lockstep: Lockstep | null = null
   private peerIndex = new Map<string, number>()
   private pendingDrops: PendingDrop[] = []
@@ -166,7 +167,7 @@ export class Session {
         <div class="game-stage" id="stage">
           <div class="game-ui">
             <div class="top-right"><button class="btn secondary" id="btn-mute">소리</button><button class="btn secondary" id="btn-lobby">로비로</button></div>
-            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 구르기 · <b>Shift</b> 달리기 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>V</b> 팀 신호 · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
+            <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 구르기 · <b>Shift</b> 달리기 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>V</b> 팀 신호 · <b>1·2·3</b> 감정 · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
         </div>
@@ -335,6 +336,12 @@ export class Session {
       e.preventDefault()
       return
     }
+    // 빠른 감정 표현: 1·2·3 (캐릭터 선택 창이 닫혀 있을 때만 — 열려 있으면 숫자는 캐릭터 고르기)
+    if (!this.pickerOpen && (e.key === '1' || e.key === '2' || e.key === '3')) {
+      this.sendEmote(Number(e.key))
+      e.preventDefault()
+      return
+    }
     if (e.key === 'Escape') {
       if (this.state.phase === 'over') return
       if (this.pickerOpen) {
@@ -426,6 +433,7 @@ export class Session {
   /** 터치 메뉴 버튼 */
   private pollTouchMenu(): void {
     if (this.touch?.takeMark() && isTeamMatch(this.state)) this.sendMark()
+    if (this.touch?.takeEmote()) this.sendEmote(1)
     if (this.touch?.takeMenu()) {
       if (this.overlay.hidden) this.showMenu()
       else this.hideOverlay()
@@ -614,6 +622,11 @@ export class Session {
       case 'abort': {
         if (this.peerIndex.get(from) !== 0) return
         this.abortMatch(m.p)
+        break
+      }
+      case 'emote': {
+        // 누구 것이든 본다(보이는 사람만 그려진다). 번호는 보낸 사람 자리와 맞아야 한다
+        if (m.p !== this.cfg.localPlayer && this.peerIndex.get(from) === m.p) this.renderer.showEmote(m.p, m.id)
         break
       }
       case 'mark': {
@@ -853,6 +866,18 @@ export class Session {
       <thead><tr><th>이름</th>${teams ? '<th>팀</th>' : ''}<th>캐릭터</th><th>킬</th><th>데스</th><th>연속</th><th>명중</th><th>헤드</th><th>준 피해</th><th>받은 피해</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <p class="statsnote">명중률은 탄 단위입니다 (산탄총 한 발 = 탄 7개). 연속은 죽지 않고 이어 간 최다 킬.</p></div>`
+  }
+
+  /** 빠른 감정 표현. 1.2초에 한 번. sim 밖(컨트롤 메시지) */
+  private sendEmote(id: number): void {
+    const lp = this.cfg.localPlayer
+    const me = this.state.players[lp]
+    if (!me || me.left) return
+    const now = performance.now()
+    if (now - this.lastEmoteAt < 1200) return
+    this.lastEmoteAt = now
+    this.renderer.showEmote(lp, id)
+    this.cfg.link?.sendCtl({ t: 'emote', p: lp, id })
   }
 
   /**

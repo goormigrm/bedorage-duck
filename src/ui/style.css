@@ -267,7 +267,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tstick i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
   background: rgba(230,237,243,.3); border: 2px solid rgba(255,255,255,.4); display: block; }
 .tbtns { position: fixed; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto;
-  grid-template-areas: "reload ads" "swap dash" "sprint mark" "fire fire"; gap: 9px; justify-items: end; }
+  grid-template-areas: "reload ads" "swap dash" "sprint mark" "emote emote" "fire fire"; gap: 9px; justify-items: end; }
 .tbtn { width: 62px; height: 62px; border-radius: 50%; border: 1px solid var(--line); background: rgba(22,27,34,.72);
   color: var(--ink-2); font: 600 12px "IBM Plex Sans KR", sans-serif; cursor: pointer; padding: 0; pointer-events: auto;
   -webkit-tap-highlight-color: transparent; touch-action: none; }
@@ -277,6 +277,7 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tbtn[data-a="dash"] { grid-area: dash; }
 .tbtn[data-a="mark"] { grid-area: mark; }
 .tbtn[data-a="sprint"] { grid-area: sprint; }
+.tbtn[data-a="emote"] { grid-area: emote; width: 62px; height: 44px; border-radius: 22px; font-size: 13px; }
 .tbtn.big { grid-area: fire; width: 100%; height: 62px; border-radius: 34px; font-size: 15px; font-weight: 700;
   color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }

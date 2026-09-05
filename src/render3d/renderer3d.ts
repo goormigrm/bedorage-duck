@@ -86,6 +86,9 @@ interface Ring {
   r1: number
 }
 
+/** 빠른 감정 표현 (키 1·2·3, 폰은 버튼). 글은 여기 한 곳에서 정한다 */
+export const EMOTES: Record<number, string> = { 1: 'ㅋㅋㅋ', 2: '굿 👍', 3: '미안 🙏' }
+
 /** 총성 위치 표시 (단군덕 패시브): 안 보이는 상대가 쏘면 그 자리를 잠깐 알려 준다 */
 interface Ping {
   x: number
@@ -137,6 +140,10 @@ export class Renderer3D {
   private pings: Ping[] = []
   /** 팀 신호 (같은 편이 찍은 "여기"). 지면 마커 + 화면 밖이면 가장자리 화살표 */
   private marks: { x: number; z: number; life: number; max: number; mesh: THREE.Mesh }[] = []
+  /** 나를 마지막으로 죽인 사람 — 그 사람을 잡으면 "복수!" (2026-09-05) */
+  private lastKiller = -1
+  /** 빠른 감정 표현 말풍선 (플레이어 번호 → 글·끝나는 시각) */
+  private emotes = new Map<number, { text: string; until: number }>()
   private shake = 0
   /** 저격 반동: 카메라가 조준 반대쪽으로 밀렸다가 돌아온다 (월드 단위) */
   private kick = 0
@@ -219,8 +226,17 @@ export class Renderer3D {
     }
   }
 
+  /** 빠른 감정 표현: 머리 위 말풍선 2.2초 */
+  showEmote(i: number, id: number): void {
+    const text = EMOTES[id]
+    if (!text) return
+    this.emotes.set(i, { text, until: performance.now() + 2200 })
+  }
+
   /** 새 판(새 맵)으로 교체 */
   setMap(map: GameMap): void {
+    this.lastKiller = -1
+    this.emotes.clear()
     this.scene.remove(this.world.group)
     this.world.dispose()
     this.scene.remove(this.vision.group)
@@ -400,7 +416,11 @@ export class Renderer3D {
             this.spawnParticle(e.x * U, 1.0, e.y * U, Math.cos(a) * sp, 0.12 + Math.random() * 0.1, Math.sin(a) * sp, 1.3, c.bodyColor, 1.2)
           }
           this.spawnRing(e.x * U, e.y * U, 0.3, 2.2, 0.5, 0xffffff)
-          this.hud.showKill(state, e.by, e.p, nm)
+          // 복수: 나를 마지막으로 죽인 사람을 내가 잡았다
+          if (e.p === localPlayer) this.lastKiller = e.by
+          const revenge = localPlayer >= 0 && e.by === localPlayer && e.p === this.lastKiller && e.p !== e.by
+          if (revenge) this.lastKiller = -1
+          this.hud.showKill(state, e.by, e.p, nm, revenge)
           this.shake = Math.max(this.shake, e.p === localPlayer ? 0.35 : 0.2)
           break
         }
@@ -586,6 +606,7 @@ export class Renderer3D {
     })
     this.hud.drawTexts(st)
     this.drawPings()
+    this.drawMarkArrows()
     this.drawNameTags(curr, pos, opts)
     this.hud.drawVignette()
     if (this.scoped && opts.cursor) {
@@ -808,6 +829,20 @@ export class Renderer3D {
         ctx.stroke()
       }
     }
+    // 팀 신호(V): 초록 마름모. 미니맵을 주변만 보여 주게 바꾼 뒤로는 창 밖이면 아래 화면 가장자리 화살표가 맡는다 (2026-09-05)
+    for (const m of this.marks) {
+      const r = 3.2 * rp
+      ctx.globalAlpha = Math.min(1, m.life * 2)
+      ctx.fillStyle = '#7ee0a0'
+      ctx.beginPath()
+      ctx.moveTo(m.x, m.z - r)
+      ctx.lineTo(m.x + r, m.z)
+      ctx.lineTo(m.x, m.z + r)
+      ctx.lineTo(m.x - r, m.z)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
     // 힐팩: 흰 네모에 빨간 십자. 죽은 자리를 알려 주는 셈이지만 킬 배너가 이미 말해 준다 (2026-09-05)
     for (const m of curr.medkits) {
       const px = m.x / TILE
@@ -867,28 +902,51 @@ export class Renderer3D {
         ctx.beginPath()
         ctx.arc(s.x, s.y, 4, 0, Math.PI * 2)
         ctx.fill()
-      } else {
-        const cx = VIEW_W / 2
-        const cy = VIEW_H / 2
-        const a = Math.atan2(s.y - cy, s.x - cx)
-        const ex = cx + Math.cos(a) * (VIEW_W / 2 - 40)
-        const ey = cy + Math.sin(a) * (VIEW_H / 2 - 40)
-        ctx.save()
-        ctx.translate(ex, ey)
-        ctx.rotate(a)
-        ctx.fillStyle = '#ffd84a'
-        ctx.beginPath()
-        ctx.moveTo(14, 0)
-        ctx.lineTo(-8, -9)
-        ctx.lineTo(-8, 9)
-        ctx.closePath()
-        ctx.fill()
-        ctx.restore()
-      }
+      } else this.edgeArrow(s, '#ffd84a')
       ctx.font = '600 11px "IBM Plex Sans KR", sans-serif'
       ctx.textAlign = 'center'
       ctx.fillStyle = '#ffd84a'
       if (inside) ctx.fillText('총성', s.x, s.y - 16 - k * 26)
+    }
+    ctx.globalAlpha = 1
+  }
+
+  /** 화면 밖의 것을 가리키는 가장자리 화살표 (총성·팀 신호 공용) */
+  private edgeArrow(s: { x: number; y: number }, color: string, label?: string): void {
+    const ctx = this.hud.ctx
+    const cx = VIEW_W / 2
+    const cy = VIEW_H / 2
+    const a = Math.atan2(s.y - cy, s.x - cx)
+    const ex = cx + Math.cos(a) * (VIEW_W / 2 - 40)
+    const ey = cy + Math.sin(a) * (VIEW_H / 2 - 40)
+    ctx.save()
+    ctx.translate(ex, ey)
+    ctx.rotate(a)
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(14, 0)
+    ctx.lineTo(-8, -9)
+    ctx.lineTo(-8, 9)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
+    if (label) {
+      ctx.font = '600 11px "IBM Plex Sans KR", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillStyle = color
+      ctx.fillText(label, ex - Math.cos(a) * 22, ey - Math.sin(a) * 22 + 4)
+    }
+  }
+
+  /** 팀 신호가 화면 밖이면 가장자리 화살표 + "신호" */
+  private drawMarkArrows(): void {
+    const ctx = this.hud.ctx
+    for (const m of this.marks) {
+      const s = this.worldToScreen(m.x, 0.06, m.z)
+      const inside = s.x > 20 && s.x < VIEW_W - 20 && s.y > 20 && s.y < VIEW_H - 20
+      if (inside) continue
+      ctx.globalAlpha = Math.min(1, m.life * 2)
+      this.edgeArrow(s, '#7ee0a0', '신호')
     }
     ctx.globalAlpha = 1
   }
@@ -917,6 +975,33 @@ export class Renderer3D {
       ctx.strokeText(name, s.x, s.y)
       ctx.fillStyle = mine ? '#ffe680' : ally ? '#9fd6ff' : teams ? (TEAM_COLORS[p.team] ?? '#fff') : '#ffffff'
       ctx.fillText(name, s.x, s.y)
+      // 감정 표현 말풍선 (이름 위). 보이는 사람 것만 — 이 루프가 이미 숨은 사람을 건너뛴다
+      const em = this.emotes.get(i)
+      if (em) {
+        const left = em.until - performance.now()
+        if (left <= 0) this.emotes.delete(i)
+        else {
+          ctx.save()
+          ctx.globalAlpha = Math.min(1, left / 350)
+          ctx.font = '700 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+          const tw = ctx.measureText(em.text).width + 20
+          const by = s.y - 40
+          ctx.fillStyle = '#ffffff'
+          roundRect(ctx, s.x - tw / 2, by - 13, tw, 26, 13)
+          ctx.fill()
+          ctx.beginPath()
+          ctx.moveTo(s.x - 5, by + 12)
+          ctx.lineTo(s.x + 5, by + 12)
+          ctx.lineTo(s.x, by + 19)
+          ctx.closePath()
+          ctx.fill()
+          ctx.fillStyle = '#1a1f26'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(em.text, s.x, by + 1)
+          ctx.textBaseline = 'alphabetic'
+          ctx.restore()
+        }
+      }
       if (!showHp) continue
       const w = mine ? 48 : 36
       const hpK = Math.max(0, p.hp / p.maxHp)

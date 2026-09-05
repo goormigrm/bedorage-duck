@@ -142,6 +142,8 @@ export type CtlMessage =
   | { t: 'drop'; p: number; tick: number }
   /** 팀 신호: 같은 편에게 "여기" 를 찍는다. sim 밖(렌더 전용)이라 결정론과 무관하다 */
   | { t: 'mark'; p: number; x: number; y: number }
+  /** 빠른 감정 표현 (ㅋㅋ · 굿 · 미안). sim 밖 */
+  | { t: 'emote'; p: number; id: number }
   /**
    * 난입 (진행 중인 방에 새로 들어가기). 순서:
    *   1. 게스트 → 호스트 joinAsk. 호스트는 자리를 잡아 두고 곧바로 resume(판 전체)을 보낸다.

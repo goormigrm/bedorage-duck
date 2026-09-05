@@ -87,6 +87,8 @@ interface Banner {
   left: string
   right: string
   weapon: WeaponId
+  /** "복수!" 같은 꼬리표 (없으면 생략) */
+  tag?: string
   life: number
   max: number
   color: string
@@ -206,15 +208,16 @@ export class Hud {
     ctx.globalAlpha = 1
   }
 
-  showKill(state: GameState, killer: number, victim: number, names: string[]): void {
+  showKill(state: GameState, killer: number, victim: number, names: string[], revenge = false): void {
     const kp = state.players[killer]
     const k = CHARACTERS[kp.char]
     this.banners.push({
       left: names[killer] ?? k.name,
       right: names[victim] ?? CHARACTERS[state.players[victim].char].name,
       weapon: kp.weapon,
-      life: 1.6,
-      max: 1.6,
+      tag: revenge ? '복수!' : undefined,
+      life: revenge ? 2.2 : 1.6,
+      max: revenge ? 2.2 : 1.6,
       color: hex(k.bodyColor),
     })
     if (this.banners.length > 3) this.banners.shift()
@@ -603,6 +606,19 @@ export class Hud {
       ctx.fillText(b.left, x0 + 32, y)
       drawWeaponIcon(ctx, x0 + 32 + lw + ICON_W / 2, y, b.weapon)
       ctx.fillText(b.right, x0 + 32 + lw + ICON_W, y)
+      if (b.tag) {
+        // 꼬리표(복수!): 배너 왼쪽 위에 금색 알약
+        ctx.font = '700 15px "IBM Plex Sans KR", sans-serif'
+        const tw2 = ctx.measureText(b.tag).width + 22
+        ctx.fillStyle = '#f2c94c'
+        roundRect(ctx, x0 - 10, y - 44, tw2, 26, 13)
+        ctx.fill()
+        ctx.fillStyle = '#1a1406'
+        ctx.textAlign = 'center'
+        ctx.fillText(b.tag, x0 - 10 + tw2 / 2, y - 31)
+        ctx.textAlign = 'left'
+        ctx.font = '400 34px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
+      }
       ctx.globalAlpha = 1
     }
     const wi = s.winner
