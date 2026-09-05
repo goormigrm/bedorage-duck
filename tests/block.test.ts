@@ -11,6 +11,7 @@ import { radToAngle } from '../src/core/fixedmath'
 import { BTN_ADS, BTN_FIRE, Input } from '../src/core/input'
 import { TILE_FLOOR, buildMap } from '../src/core/map'
 import { createState, step } from '../src/core/sim'
+import { CHARACTERS } from '../src/core/characters'
 import { BLOCK_CHANCE, BLOCK_COST, BLOCK_LOCK_TICKS, COUNTDOWN_TICKS, STAMINA_MAX, STAMINA_REGEN } from '../src/core/state'
 
 const IDLE: Input = { mx: 0, my: 0, aim: 0, buttons: 0, char: 0 }
@@ -66,7 +67,7 @@ describe('후라이팬 방어', () => {
     // 아무도 쏘지 않는 2초
     for (let i = 0; i < 120; i++) step(s.state, s.map, [{ ...IDLE, aim: s.aimAtGun }, { ...IDLE, aim: s.aimAtPan }])
     expect(s.pan.stamina).toBeGreaterThan(20 + STAMINA_REGEN * 60)
-    expect(s.pan.stamina).toBeLessThanOrEqual(STAMINA_MAX)
+    expect(s.pan.stamina).toBeLessThanOrEqual(s.pan.staminaMax)
   })
 
   it('계속 쏘면 방어가 결국 뚫려 체력이 깎인다', () => {
@@ -78,7 +79,7 @@ describe('후라이팬 방어', () => {
     expect(s.pan.alive).toBe(false)
   })
 
-  it('앞에서 온 탄도 절반쯤만 막는다 (BLOCK_CHANCE)', () => {
+  it('앞에서 온 탄도 BLOCK_CHANCE 만큼만 막는다', () => {
     // 기력을 계속 채워 "막을 수 있는데도 안 막히는" 비율만 본다
     let hits = 0
     let blocks = 0
@@ -86,7 +87,7 @@ describe('후라이팬 방어', () => {
       const s = scene(300)
       s.state.rng.s = seed >>> 0
       for (let i = 0; i < 300; i++) {
-        s.pan.stamina = STAMINA_MAX // 기력 고갈 요인 제거
+        s.pan.stamina = s.pan.staminaMax // 기력 고갈 요인 제거
         const inputs: Input[] = [
           { ...IDLE, aim: s.aimAtGun },
           { mx: 0, my: 0, aim: s.aimAtPan, buttons: BTN_FIRE | BTN_ADS, char: 0 },
@@ -103,8 +104,8 @@ describe('후라이팬 방어', () => {
     const total = hits + blocks
     expect(total).toBeGreaterThan(60)
     const ratio = blocks / total
-    expect(ratio).toBeGreaterThan(0.35)
-    expect(ratio).toBeLessThan(0.65)
+    expect(ratio).toBeGreaterThan(BLOCK_CHANCE - 0.15)
+    expect(ratio).toBeLessThan(BLOCK_CHANCE + 0.15)
   })
 
   it('막기는 기력을 쓰므로 무한하지 않다 — 기력이 0 이면 그대로 맞는다', () => {
@@ -117,7 +118,7 @@ describe('후라이팬 방어', () => {
 
   it('뒤에서 오는 탄은 막지 못한다', () => {
     const s = scene(300)
-    s.pan.stamina = STAMINA_MAX
+    s.pan.stamina = s.pan.staminaMax
     const hp0 = s.pan.hp
     // 상대를 등지고 선다
     for (let i = 0; i < 90; i++) {
@@ -128,7 +129,7 @@ describe('후라이팬 방어', () => {
       step(s.state, s.map, inputs)
     }
     expect(s.pan.hp).toBeLessThan(hp0)
-    expect(s.pan.stamina).toBe(STAMINA_MAX) // 기력은 한 톨도 안 썼다
+    expect(s.pan.stamina).toBe(s.pan.staminaMax) // 기력은 한 톨도 안 썼다
   })
 
   it('상수가 뒤집히지 않았는지 — 잠금이 실제로 걸리고 막을 수 있는 양에 한계가 있다', () => {
@@ -136,7 +137,9 @@ describe('후라이팬 방어', () => {
     expect(BLOCK_COST).toBeGreaterThan(0)
     expect(BLOCK_CHANCE).toBeGreaterThan(0)
     expect(BLOCK_CHANCE).toBeLessThanOrEqual(1)
-    // 기력 한 통으로 막을 수 있는 몸통 피해량 (너무 크면 다시 무적이 된다)
+    // 기력 한 통으로 막을 수 있는 몸통 피해량 (너무 크면 다시 무적이 된다). 승빠덕은 통이 150 이라 272 — 대신 막을 확률이 40%
     expect(STAMINA_MAX / BLOCK_COST).toBeLessThan(200)
+    expect((CHARACTERS.seungwoo.staminaMax ?? STAMINA_MAX) / BLOCK_COST).toBeLessThan(300)
+    expect(BLOCK_CHANCE).toBeLessThanOrEqual(0.4)
   })
 })

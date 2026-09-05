@@ -2,7 +2,7 @@
 // 2명이면 좌우 카드, 3~4명이면 내 카드 + 오른쪽 아래 상대 목록. 팀전은 위 점수판이 A팀 : B팀.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
-import { GameState, PlayerState, STAMINA_MAX, isTeamMatch, teamKills } from '../core/state'
+import { GameState, PlayerState, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS, WeaponId } from '../core/weapons'
 
 /** 기준 논리 해상도. 카메라 시야 보정의 기준점이기도 하다 */
@@ -562,7 +562,7 @@ export class Hud {
       roundRect(ctx, ix + 140, by + 66, 100 * k, 6, 3)
       ctx.fill()
     }
-    const sk = Math.max(0, Math.min(1, p.stamina / STAMINA_MAX))
+    const sk = Math.max(0, Math.min(1, p.stamina / p.staminaMax))
     ctx.fillStyle = 'rgba(255,255,255,0.1)'
     roundRect(ctx, ix + 208, by + 58, 60, 6, 3)
     ctx.fill()

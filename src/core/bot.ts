@@ -6,7 +6,7 @@ import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
 import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, Input } from './input'
 import { GameMap, TILE, isWall, rayBlocked } from './map'
 import { Rng, makeRng, rand, randInt, randSigned } from './rng'
-import { GameState, PlayerState, STAMINA_MAX, isEnemy } from './state'
+import { GameState, PlayerState, isEnemy } from './state'
 import { WEAPONS, WeaponId } from './weapons'
 
 export type Difficulty = 'easy' | 'normal' | 'hard'
@@ -341,7 +341,7 @@ export function botInput(
   // 다 써 버리면 회피를 못 해 봇이 눈에 띄게 약해진다.
   if (
     (out.mx !== 0 || out.my !== 0) &&
-    me.stamina > STAMINA_MAX * 0.75 &&
+    me.stamina > me.staminaMax * 0.75 &&
     (out.buttons & (BTN_ADS | BTN_DASH)) === 0 &&
     mode !== 'fight'
   ) {

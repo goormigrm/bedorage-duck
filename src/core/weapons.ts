@@ -105,9 +105,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // 승빠덕 전용 근접 무기. 꾹 누르면 계속 휘두르고, 기력으로 총알을 막는다
   // 2026-09-05 피해 80 → 62. 봇 표에서는 빠져 있지만(근접을 못 쓴다) **사람 손에서는 승률이 계속 높다**(사용자).
   // 세 대(186) 로는 아무도 못 잡고 네 대(248) 부터. 같은 날 소총 하향으로 상대가 약해져 68 로는
-  // tools/melee.ts 정면 대치가 5/10(권장 2~4)이라 62 까지 내렸다 → 3/10
+  // tools/melee.ts 정면 대치가 5/10(권장 2~4)이라 62 까지 내렸다 → 3/10. 2026-09-05 오픈 베타 제보로 55 (네 대 220 = 체력 220 이하만 네 대)
   pan: {
-    id: 'pan', name: '후라이팬', damage: 62, pellets: 1, fireInterval: 23, auto: true,
+    id: 'pan', name: '후라이팬', damage: 55, pellets: 1, fireInterval: 23, auto: true,
     magSize: 0, reloadTicks: 0, spreadHip: 0, spreadAds: 0, recoil: 0,
     recoilRecover: 0, speed: 0, life: 0, moveMul: 1.02, length: 20, color: 0x33383c,
     falloffStart: 9999, falloffEnd: 9999, falloffMin: 1,

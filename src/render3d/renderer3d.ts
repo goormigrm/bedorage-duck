@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { CHARACTERS, headHitScale } from '../core/characters'
 import { angleToRad } from '../core/fixedmath'
 import { GameMap, SANDBAG_HP, TILE } from '../core/map'
-import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, STAMINA_MAX, SimEvent, isTeamMatch } from '../core/state'
+import { DASH_TICKS, GameState, PLAYER_RADIUS, PlayerState, SimEvent, isTeamMatch } from '../core/state'
 import { PART_HEAD, WEAPONS, HEAD_AIM_FRAC } from '../core/weapons'
 import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, lowAmmo, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
@@ -1017,7 +1017,7 @@ export class Renderer3D {
         const bh = 34
         const bx = s.x + w / 2 + 6
         const by = s.y + 30
-        const sk = Math.max(0, Math.min(1, p.stamina / STAMINA_MAX))
+        const sk = Math.max(0, Math.min(1, p.stamina / p.staminaMax))
         ctx.fillStyle = 'rgba(0,0,0,0.55)'
         ctx.fillRect(bx, by - bh, 6, bh)
         ctx.fillStyle = sk > 0.34 ? '#9fe0ff' : '#e08a5a'

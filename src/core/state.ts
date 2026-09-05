@@ -32,8 +32,11 @@ export const SPRINT_MIN = 20
 export const BLOCK_COST = 0.55
 /** 막은 뒤 기력이 다시 차기까지 (계속 맞으면 방어가 뚫리도록) */
 export const BLOCK_LOCK_TICKS = 30
-/** 앞에서 오는 탄을 후라이팬으로 막을 확률. 나머지는 그대로 맞는다 (2026-09-06: 승빠덕이 여전히 너무 세서 50%) */
-export const BLOCK_CHANCE = 0.5
+/**
+ * 앞에서 오는 탄을 후라이팬으로 막을 확률. 나머지는 그대로 맞는다.
+ * 2026-09-06 50% → 2026-09-05 오픈 베타 제보("사람끼리는 아직 세다") 로 **40%**. 대신 기력 통을 150 으로(characters.ts staminaMax).
+ */
+export const BLOCK_CHANCE = 0.4
 /**
  * 통천덕 패시브(치킨): 킬마다 최대 체력이 늘고 조금 회복한다. 죽으면 원래대로.
  * 전에는 킬 시 50 회복이었다(2026-09-06 변경 — 회복은 줄이고 최대 체력을 올리는 쪽으로).
@@ -112,8 +115,10 @@ export interface PlayerState {
   choosing: boolean
   /** 연속 명중 수 (기열덕 패시브). 빗나가면 0 */
   streak: number
-  /** 기력 0..STAMINA_MAX */
+  /** 기력 0..staminaMax */
   stamina: number
+  /** 기력 통 크기. 보통 STAMINA_MAX(100), 승빠덕은 150 — 막기를 약하게 하는 대신 더 구르고 달리라고 (2026-09-05) */
+  staminaMax: number
   /** 총알을 막은 직후 기력이 다시 차지 않는 틱 수. 계속 맞으면 방어가 결국 뚫린다 */
   blockLock: number
   /** 결과 화면 통계. sim 안에 두어야 리싱크·재접속에도 값이 어긋나지 않는다 */

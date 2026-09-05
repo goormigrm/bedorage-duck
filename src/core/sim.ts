@@ -132,7 +132,8 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     vacant: false,
     choosing: false,
     streak: 0,
-    stamina: STAMINA_MAX,
+    stamina: c.staminaMax ?? STAMINA_MAX,
+    staminaMax: c.staminaMax ?? STAMINA_MAX,
     blockLock: 0,
     shots: 0,
     hits: 0,
@@ -321,8 +322,8 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     (input.buttons & BTN_SPRINT) !== 0 &&
     (input.buttons & BTN_ADS) === 0
   if (p.sprinting) p.stamina = Math.max(0, p.stamina - SPRINT_COST)
-  if (p.dashTimer === 0 && p.blockLock === 0 && !p.sprinting && p.stamina < STAMINA_MAX) {
-    p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * (w.melee ? 2.4 : 1))
+  if (p.dashTimer === 0 && p.blockLock === 0 && !p.sprinting && p.stamina < p.staminaMax) {
+    p.stamina = Math.min(p.staminaMax, p.stamina + STAMINA_REGEN * (w.melee ? 2.4 : 1))
   }
   if (p.invuln > 0) p.invuln--
   if (p.legInjury > 0) p.legInjury--
@@ -652,17 +653,20 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   // 근접 무기(후라이팬)를 든 사람은 앞에서 오는 탄을 기력으로 막는다.
   // 기력 한 통(=피해 181)까지만 막을 수 있고, **막는 동안에는 기력이 차지 않는다**.
   // 예전에는 맞으면서도 기력이 차서, 서서 막기만 해도 총알을 무한히 튕겨 냈다.
-  // 그래도 정면 대치에서 너무 세서, 앞에서 온 탄이라도 **BLOCK_CHANCE(50%) 확률로만** 막는다.
+  // 그래도 정면 대치에서 너무 세서, 앞에서 온 탄이라도 **BLOCK_CHANCE 확률로만** 막는다(50% → 40%, 2026-09-05 오픈 베타 제보).
   // 추첨은 sim 의 rng 라 양쪽 브라우저에서 같은 결과가 난다.
-  if (WEAPONS[victim.weapon].melee && victim.stamina > 0) {
+  // 앞에서 맞고 있으면 **막았든 못 막았든** 기력이 차지 않는다 — 확률을 낮추자 안 막힌 사이사이에 기력이 차서
+  // 서서 버티며 회복하는 일이 생겼다(테스트가 잡았다). 기력 통이 150 이라 회복까지 되면 다시 방패가 된다.
+  if (WEAPONS[victim.weapon].melee) {
     const from = atan2A(b.oy - victim.y, b.ox - victim.x)
-    if (Math.abs(angleDiff(from, victim.aim)) < 213 && rand(state.rng) < BLOCK_CHANCE) {
-      const absorbed = Math.min(dmg, Math.floor(victim.stamina / BLOCK_COST))
-      victim.stamina = Math.max(0, victim.stamina - absorbed * BLOCK_COST)
-      dmg -= absorbed
+    if (Math.abs(angleDiff(from, victim.aim)) < 213) {
       victim.blockLock = BLOCK_LOCK_TICKS
-
-      state.events.push({ type: 'block', p: victim.id, x: b.x, y: b.y })
+      if (victim.stamina > 0 && rand(state.rng) < BLOCK_CHANCE) {
+        const absorbed = Math.min(dmg, Math.floor(victim.stamina / BLOCK_COST))
+        victim.stamina = Math.max(0, victim.stamina - absorbed * BLOCK_COST)
+        dmg -= absorbed
+        state.events.push({ type: 'block', p: victim.id, x: b.x, y: b.y })
+      }
     }
   }
   hurt(state, shooter, victim, dmg, part, b.x, b.y)
@@ -697,7 +701,8 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
   p.aliveTicks = 0
   p.lastHitTick = -10000
   p.streak = 0
-  p.stamina = STAMINA_MAX
+  p.staminaMax = c.staminaMax ?? STAMINA_MAX
+  p.stamina = p.staminaMax
   p.blockLock = 0
   p.sprinting = false
   state.events.push({ type: 'respawn', p: p.id, x: p.x, y: p.y })
