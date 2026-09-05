@@ -12,7 +12,7 @@ import { createState, step } from '../src/core/sim'
 import { GameState } from '../src/core/state'
 import { PART_HEAD, WEAPONS, WeaponId } from '../src/core/weapons'
 
-const DIFF: Difficulty = 'hard'
+const DIFF: Difficulty = 'normal' // 2026-09-05: 사람들 실제 실력이 '보통' 과 비슷하다(사용자) — 어려움 봇으로 재던 표는 CHANGELOG v1.9.7 까지
 const TARGET_KILLS = 3
 const MAX_TICKS = 60 * 180
 const SEEDS = process.argv.includes('ffa') ? [11, 29, 47] : [11, 29]

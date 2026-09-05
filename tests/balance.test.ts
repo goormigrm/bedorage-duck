@@ -27,7 +27,7 @@ function play(chars: CharacterId[], seed: number, wins: Map<CharacterId, Stat>, 
   const bots = chars.map((_, i) => makeBot(seed ^ (i * 131 + 7)))
   let t = 0
   while (t < MAX_TICKS && state.phase !== 'over') {
-    const inputs: Input[] = bots.map((b, i) => botInput(state, map, i, b, 'hard'))
+    const inputs: Input[] = bots.map((b, i) => botInput(state, map, i, b, 'normal')) // 2026-09-05: 보통 난이도로 잰다(사람 실력에 가깝다)
     step(state, map, inputs)
     for (const e of state.events) {
       if (e.type === 'hit') {
