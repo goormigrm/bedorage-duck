@@ -67,6 +67,8 @@ export interface ScreenText {
   k: number
   color: string
   big: boolean
+  /** 글자 크기 배율 (막 뜰 때 튀어 오르는 느낌) */
+  scale?: number
 }
 
 /** 피격 방향 표시: 화면 기준 각도(라디안, 0 = 오른쪽)와 남은 시간 */
@@ -90,10 +92,30 @@ function leftLabel(p: PlayerState): string {
   return p.vacant ? '빈 자리' : '나감'
 }
 
+/** 점수판 이름: 닉네임(캐릭터). 닉네임이 없어 캐릭터 이름을 그대로 쓰는 사람은 캐릭터 이름만 */
+function nameTag(nick: string, p: PlayerState): string {
+  const c = CHARACTERS[p.char].name
+  return nick === c || nick.startsWith(c + ' ') ? nick : `${nick}(${c})`
+}
+
+/** 글자가 maxW 를 넘으면 크기를 줄여 맞춘다 (닉네임 8자 + 캐릭터 이름이 판 밖으로 나가지 않게). 최소 9px */
+function fitFont(ctx: CanvasRenderingContext2D, text: string, maxW: number, size: number, weight: number): void {
+  let px = size
+  for (;;) {
+    ctx.font = `${weight} ${px}px "IBM Plex Sans KR", "Malgun Gothic", sans-serif`
+    if (ctx.measureText(text).width <= maxW || px <= 9) return
+    px -= 0.5
+  }
+}
+
 export class Hud {
   readonly ctx: CanvasRenderingContext2D
   private banner: Banner | null = null
   private hitDirs: HitDir[] = []
+  /** 조준점 히트마커: 내 탄이 맞으면 조준점 네 귀퉁이가 잠깐 벌어진다 (헤드샷은 금색) */
+  private hitMarkT = 0
+  private hitMarkMax = 0.22
+  private hitMarkHead = false
   private overT = 0
   private countdownPulse = 0
   private lastCountdownSec = -1
@@ -117,6 +139,12 @@ export class Hud {
    * 시야가 좁은 게임이라 "어느 쪽에서 쐈는지" 를 모르면 대응할 수가 없다.
    * 각도는 **화면 기준**이라 호가 가리키는 쪽을 그대로 보면 된다.
    */
+  hitMark(head: boolean): void {
+    this.hitMarkMax = head ? 0.32 : 0.22
+    this.hitMarkT = this.hitMarkMax
+    this.hitMarkHead = head
+  }
+
   addHitDir(angle: number, big: boolean): void {
     // 비슷한 방향이면 새로 만들지 말고 수명만 되살린다 (연사에 화면이 지저분해지지 않게)
     for (const h of this.hitDirs) {
@@ -183,6 +211,7 @@ export class Hud {
 
   /** 프레임 시작: 변환 초기화 + 지우기 */
   begin(dt: number): void {
+    if (this.hitMarkT > 0) this.hitMarkT = Math.max(0, this.hitMarkT - dt)
     const ctx = this.ctx
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     ctx.clearRect(0, 0, VIEW_W, VIEW_H)
@@ -201,7 +230,7 @@ export class Hud {
     const ctx = this.ctx
     for (const t of texts) {
       ctx.globalAlpha = Math.min(1, t.k * 2)
-      ctx.font = `${t.big ? 800 : 700} ${t.big ? 20 : 15}px "IBM Plex Sans KR", "Malgun Gothic", sans-serif`
+      ctx.font = `${t.big ? 800 : 700} ${Math.round((t.big ? 20 : 15) * (t.scale ?? 1))}px "IBM Plex Sans KR", "Malgun Gothic", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'alphabetic'
       ctx.lineWidth = 3
@@ -304,7 +333,9 @@ export class Hud {
   private drawFfaScore(s: GameState, opts: RenderOptions): void {
     const ctx = this.ctx
     const n = s.players.length
-    const pw = n === 2 ? 420 : 150 * n + 40
+    // 닉네임(캐릭터) 를 쓰므로 폭을 넉넉히 (닉네임 8자 + 캐릭터 3자가 들어가야 한다)
+    const colW = 170
+    const pw = n === 2 ? 540 : colW * n + 40
     const px = VIEW_W / 2 - pw / 2
     this.panel(px, 14, pw, 62)
     ctx.textBaseline = 'middle'
@@ -319,13 +350,15 @@ export class Hud {
       ctx.fillStyle = '#6b7683'
       ctx.font = '400 26px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
       ctx.fillText(':', VIEW_W / 2, 43)
-      ctx.font = '600 15px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
+      // 닉네임(캐릭터): 누가 무슨 캐릭터인지 한눈에. 이름이 길면 글자를 줄여 판 안에 들어가게 한다
       ctx.textAlign = 'right'
       ctx.fillStyle = hex(c0.bodyColor)
-      ctx.fillText(opts.names[0], VIEW_W / 2 - 100, 38)
+      fitFont(ctx, nameTag(opts.names[0], s.players[0]), pw / 2 - 108, 15, 600)
+      ctx.fillText(nameTag(opts.names[0], s.players[0]), VIEW_W / 2 - 100, 38)
       ctx.textAlign = 'left'
       ctx.fillStyle = hex(c1.bodyColor)
-      ctx.fillText(opts.names[1], VIEW_W / 2 + 100, 38)
+      fitFont(ctx, nameTag(opts.names[1], s.players[1]), pw / 2 - 108, 15, 600)
+      ctx.fillText(nameTag(opts.names[1], s.players[1]), VIEW_W / 2 + 100, 38)
       ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
       ctx.fillStyle = '#7d8896'
       ctx.textAlign = 'right'
@@ -333,15 +366,15 @@ export class Hud {
       ctx.textAlign = 'left'
       ctx.fillText(opts.subLabels[1], VIEW_W / 2 + 100, 58)
     } else {
-      const colW = 150
       for (let i = 0; i < n; i++) {
         const p = s.players[i]
         const c = CHARACTERS[p.char]
         const cx = px + 20 + colW * i + colW / 2
         ctx.textAlign = 'center'
-        ctx.font = '600 13px "IBM Plex Sans KR", "Malgun Gothic", sans-serif'
         ctx.fillStyle = p.left ? '#666' : hex(c.bodyColor)
-        ctx.fillText(opts.names[i] + (i === opts.localPlayer ? ' (나)' : ''), cx, 30)
+        const label = p.vacant ? opts.names[i] : nameTag(opts.names[i], p) + (i === opts.localPlayer ? ' (나)' : '')
+        fitFont(ctx, label, colW - 12, 13, 600)
+        ctx.fillText(label, cx, 30)
         ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
         ctx.fillStyle = p.left ? '#666' : '#e6edf3'
         ctx.fillText(p.left ? leftLabel(p) : `${p.kills}`, cx, 54)
@@ -360,7 +393,7 @@ export class Hud {
   /** 팀전 점수판: A팀 킬 : B팀 킬 + 팀원 이름 */
   private drawTeamScore(s: GameState, opts: RenderOptions): void {
     const ctx = this.ctx
-    const pw = 520
+    const pw = 660
     const px = VIEW_W / 2 - pw / 2
     this.panel(px, 14, pw, 62)
     ctx.textBaseline = 'middle'
@@ -379,10 +412,11 @@ export class Hud {
       ctx.font = '600 15px "IBM Plex Sans KR", sans-serif'
       ctx.fillStyle = TEAM_COLORS[team]
       ctx.fillText(TEAM_NAMES[team], x, 32)
-      const members = s.players.map((p, i) => ({ p, i })).filter((m) => m.p.team === team)
-      ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
+      const members = s.players.map((p, i) => ({ p, i })).filter((m) => m.p.team === team && !m.p.vacant)
       ctx.fillStyle = '#a9b4c0'
-      ctx.fillText(members.map((m) => `${opts.names[m.i]}${m.i === opts.localPlayer ? '(나)' : ''} ${m.p.kills}`).join(' · '), x, 52)
+      const line = members.map((m) => `${nameTag(opts.names[m.i], m.p)}${m.i === opts.localPlayer ? '(나)' : ''} ${m.p.kills}`).join(' · ')
+      fitFont(ctx, line, pw / 2 - 108, 11, 400)
+      ctx.fillText(line, x, 52)
     }
     ctx.font = '500 11px "IBM Plex Mono", "IBM Plex Sans KR", monospace'
     ctx.fillStyle = '#a9b4c0'
@@ -606,6 +640,20 @@ export class Hud {
     ctx.beginPath()
     ctx.arc(cur.x, cur.y, 1.5, 0, Math.PI * 2)
     ctx.fill()
+    // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다
+    if (this.hitMarkT > 0) {
+      const k = this.hitMarkT / this.hitMarkMax
+      const d0 = r + 6 + (1 - k) * 5
+      const d1 = d0 + (this.hitMarkHead ? 11 : 8)
+      ctx.strokeStyle = this.hitMarkHead ? `rgba(255,216,74,${k.toFixed(3)})` : `rgba(255,255,255,${k.toFixed(3)})`
+      ctx.lineWidth = this.hitMarkHead ? 3 : 2.5
+      ctx.beginPath()
+      for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+        ctx.moveTo(cur.x + sx * d0 * 0.7071, cur.y + sy * d0 * 0.7071)
+        ctx.lineTo(cur.x + sx * d1 * 0.7071, cur.y + sy * d1 * 0.7071)
+      }
+      ctx.stroke()
+    }
   }
 }
 

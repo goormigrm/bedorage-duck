@@ -52,8 +52,11 @@ describe('밸런스', () => {
     const hits = new Map<WeaponId, number>()
     for (let a = 0; a < ids.length; a++) {
       for (let b = a + 1; b < ids.length; b++) {
-        play([ids[a], ids[b]], 11, wins, hits)
-        play([ids[b], ids[a]], 12, wins, hits)
+        // 시드 한 쌍(20판)으로는 ±15%p 가 흔들려 80% 경계에 걸리곤 했다 → 두 쌍(40판)
+        for (const seed of [11, 41]) {
+          play([ids[a], ids[b]], seed, wins, hits)
+          play([ids[b], ids[a]], seed + 1, wins, hits)
+        }
       }
     }
     const rows = [...wins.entries()].map(([id, s]) => ({ id, rate: s.wins / s.matches, matches: s.matches }))
@@ -64,7 +67,7 @@ describe('밸런스', () => {
     // eslint-disable-next-line no-console
     console.log(`[balance] ${summary}`)
     for (const r of rows) {
-      expect(r.matches).toBe((ids.length - 1) * 2)
+      expect(r.matches).toBe((ids.length - 1) * 4)
       expect(r.rate, `${CHARACTERS[r.id].name} 승률`).toBeGreaterThan(0.2)
       expect(r.rate, `${CHARACTERS[r.id].name} 승률`).toBeLessThan(0.8)
     }

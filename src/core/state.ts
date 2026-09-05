@@ -41,6 +41,8 @@ export const BLOCK_CHANCE = 0.5
 export const CHICKEN_MAXHP_PER_KILL = 15
 export const CHICKEN_MAXHP_CAP = 60
 export const CHICKEN_HEAL = 20
+/** 기열덕 패시브(뇌절): 연속 명중마다 피해 배율이 오른다. 빗나가면 한 단계 내려간다 (계측 도구가 바꿔 볼 수 있게 객체) */
+export const GIYEOL = { perHit: 0.06, maxStacks: 6 } // 2026-09-05: 소총으로 바꾸며 9% → 6% (최대 +36%)
 /** 죽은 자리에 떨어지는 힐팩: 회복량(최대 체력 비율) · 유지 시간 · 줍는 반경 */
 export const MEDKIT_HEAL_FRAC = 0.35
 export const MEDKIT_TTL = 60 * 20

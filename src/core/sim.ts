@@ -26,6 +26,7 @@ import {
   SPAWN_PROTECT_TICKS,
   STAMINA_MAX,
   CHICKEN_HEAL,
+  GIYEOL,
   CHICKEN_MAXHP_CAP,
   CHICKEN_MAXHP_PER_KILL,
   SPRINT_COST,
@@ -612,7 +613,7 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
   let dmg = b.damage * mult * falloff(w, dist)
   const shooter = state.players[b.owner]
   if (shooter.char === 'jupeol' && dist < 150) dmg *= 1.2
-  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(6, shooter.streak) * 0.09
+  if (shooter.char === 'giyeol') dmg *= 1 + Math.min(GIYEOL.maxStacks, shooter.streak) * GIYEOL.perHit
   dmg = Math.round(dmg)
   b.hitSomeone = true
   shooter.streak = Math.min(99, shooter.streak + 1)

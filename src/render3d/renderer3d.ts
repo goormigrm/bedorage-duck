@@ -114,7 +114,9 @@ export class Renderer3D {
   private hitShow: number[] = []
   /** 힐팩 표시 (id → 메시). 흰 상자에 빨간 십자 */
   private medkitMeshes = new Map<number, THREE.Group>()
-  private bulletPool: THREE.Mesh[] = []
+  private bulletPool: THREE.Group[] = []
+  /** 명중·벽 섬광 (카메라를 보는 스프라이트, 커지며 사라진다) */
+  private impacts: { sprite: THREE.Sprite; life: number; max: number; size: number }[] = []
   private particles: Particle[] = []
   private particlePool: THREE.Mesh[] = []
   private texts: WorldText[] = []
@@ -135,11 +137,18 @@ export class Renderer3D {
   private t = 0
   private lastDt = 0.016
   private dpr = 1
-  private bulletGeo = new THREE.SphereGeometry(0.07, 8, 6)
-  private bulletMat = new THREE.MeshBasicMaterial({ color: 0xfff1a0 })
-  private trailGeo = new THREE.BoxGeometry(0.05, 0.05, 0.6)
-  private trailMat = new THREE.MeshBasicMaterial({ color: 0xffd65a, transparent: true, opacity: 0.55 })
-  private trailPool: THREE.Mesh[] = []
+  /**
+   * 탄 = 빛줄기(덕코프식). 예전에는 구슬 + 짧은 막대라 끝에 동그란 알갱이가 보였다(2026-09-05 제보).
+   * 머리는 밝고 꼬리로 갈수록 사라지는 띠 하나. 바닥과 나란한 판 + 세로 판을 겹쳐 어느 각도에서도 보인다.
+   */
+  private streakGeo = new THREE.PlaneGeometry(1, 1)
+  private streakTex = makeStreakTexture()
+  private glowTex = makeGlowTexture()
+  private streakMats = {
+    default: this.streakMat(0xffe28a),
+    sniper: this.streakMat(0xffffff),
+    shotgun: this.streakMat(0xffb060),
+  }
   private particleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1)
   private raycaster = new THREE.Raycaster()
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -312,11 +321,13 @@ export class Renderer3D {
         }
         case 'wall': {
           const rad = angleToRad(e.aim)
-          for (let i = 0; i < 4; i++) {
-            const a = rad + Math.PI + (Math.random() - 0.5) * 1.6
-            const sp = 0.05 + Math.random() * 0.1
-            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.06 + Math.random() * 0.08, Math.sin(a) * sp, 0.3, 0xf2e6b3, 0.6)
+          for (let i = 0; i < 7; i++) {
+            const a = rad + Math.PI + (Math.random() - 0.5) * 1.8
+            const sp = 0.05 + Math.random() * 0.13
+            const spark = i % 2 === 0
+            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.09, Math.sin(a) * sp, spark ? 0.2 : 0.35, spark ? 0xffe8a8 : 0xc9c0ae, spark ? 0.35 : 0.55)
           }
+          this.spawnImpact(e.x * U, GUN_H, e.y * U, 0xffe8b0, 0.8)
           break
         }
         case 'hit': {
@@ -331,11 +342,15 @@ export class Renderer3D {
           }
           const head = e.part === PART_HEAD
           this.texts.push({ x: e.x * U, z: e.y * U, y: 1.9, text: head ? `${e.dmg} 헤드` : `${e.dmg}`, life: 0.8, max: 0.8, color: head ? '#ffd84a' : '#ffffff', big: head })
-          for (let i = 0; i < 6; i++) {
+          // 덕코프식 명중: 빨간 덩어리 대신 **불꽃이 튀고 하얗게 번쩍인다**
+          for (let i = 0; i < 9; i++) {
             const a = Math.random() * Math.PI * 2
-            const sp = 0.03 + Math.random() * 0.07
-            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.08 + Math.random() * 0.06, Math.sin(a) * sp, 0.45, 0xe04a3a, 0.8)
+            const sp = 0.07 + Math.random() * 0.12
+            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.1, Math.sin(a) * sp, 0.22 + Math.random() * 0.1, i % 3 === 0 ? 0xffb347 : 0xfff3c0, 0.42)
           }
+          this.spawnImpact(e.x * U, GUN_H, e.y * U, head ? 0xffe08a : 0xffffff, head ? 1.9 : 1.4)
+          // 쏜 사람이 나면 조준점에 히트마커
+          if (e.by === localPlayer) this.hud.hitMark(head)
           if (e.p === localPlayer) {
             this.shake = Math.max(this.shake, 0.18)
             // 쏜 사람 쪽을 화면 기준 각도로 바꿔 가장자리에 호로 표시한다
@@ -416,6 +431,7 @@ export class Renderer3D {
             this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.06, Math.sin(a) * sp, 0.3, 0xbfd8ff, 0.7)
           }
           this.texts.push({ x: e.x * U, z: e.y * U, y: 1.6, text: '막음', life: 0.5, max: 0.5, color: '#9fe0ff', big: false })
+          this.spawnImpact(e.x * U, GUN_H, e.y * U, 0x9fe0ff, 1.3)
           break
         }
         case 'over':
@@ -425,6 +441,32 @@ export class Renderer3D {
           break
       }
     }
+  }
+
+  private streakMat(color: number): THREE.MeshBasicMaterial {
+    return new THREE.MeshBasicMaterial({
+      map: this.streakTex, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    })
+  }
+
+  /** 빛줄기 하나: 바닥과 나란한 판 + 세로 판. 길이는 x, 폭은 y·z 스케일 */
+  private makeStreak(): THREE.Group {
+    const g = new THREE.Group()
+    const flat = new THREE.Mesh(this.streakGeo, this.streakMats.default)
+    flat.rotation.x = -Math.PI / 2
+    const up = new THREE.Mesh(this.streakGeo, this.streakMats.default)
+    g.add(flat, up)
+    return g
+  }
+
+  /** 명중·벽·막음 섬광: 카메라를 보는 빛무리가 커지면서 사라진다 */
+  private spawnImpact(x: number, y: number, z: number, color: number, size: number): void {
+    const mat = new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
+    const sprite = new THREE.Sprite(mat)
+    sprite.position.set(x, y, z)
+    sprite.scale.setScalar(size * 0.5)
+    this.scene.add(sprite)
+    this.impacts.push({ sprite, life: 0.14, max: 0.14, size })
   }
 
   private spawnFlash(pos: THREE.Vector3, size: number): void {
@@ -512,7 +554,9 @@ export class Renderer3D {
     this.hud.begin(dt)
     const st: ScreenText[] = this.texts.map((t) => {
       const p = this.worldToScreen(t.x, t.y + (1 - t.life / t.max) * 0.8, t.z)
-      return { x: p.x, y: p.y, text: t.text, k: t.life / t.max, color: t.color, big: t.big }
+      const k = t.life / t.max
+      // 막 뜰 때 크게 튀었다가 제 크기로 (덕코프 숫자 느낌)
+      return { x: p.x, y: p.y, text: t.text, k, color: t.color, big: t.big, scale: 1 + 0.8 * Math.max(0, (k - 0.72) / 0.28) }
     })
     this.hud.drawTexts(st)
     this.drawPings()
@@ -947,32 +991,29 @@ export class Renderer3D {
       const pb = prevById.get(b.id) ?? { x: b.px, y: b.py }
       const x = (pb.x + (b.x - pb.x) * alpha) * U
       const z = (pb.y + (b.y - pb.y) * alpha) * U
-      let mesh = this.bulletPool[n]
-      if (!mesh) {
-        mesh = new THREE.Mesh(this.bulletGeo, this.bulletMat)
-        this.bulletPool[n] = mesh
-        this.scene.add(mesh)
+      let streak = this.bulletPool[n]
+      if (!streak) {
+        streak = this.makeStreak()
+        this.bulletPool[n] = streak
+        this.scene.add(streak)
       }
-      mesh.visible = true
-      mesh.position.set(x, GUN_H, z)
-      let trail = this.trailPool[n]
-      if (!trail) {
-        trail = new THREE.Mesh(this.trailGeo, this.trailMat)
-        this.trailPool[n] = trail
-        this.scene.add(trail)
-      }
-      trail.visible = true
-      const ang = Math.atan2(b.vx, b.vy)
-      trail.rotation.y = ang
-      const l = Math.hypot(b.vx, b.vy) * U
-      trail.scale.z = Math.max(0.4, l * 1.6)
-      trail.position.set(x - (b.vx * U) * 0.5, GUN_H, z - (b.vy * U) * 0.5)
+      streak.visible = true
+      const speed = Math.hypot(b.vx, b.vy)
+      const dx = speed > 0 ? b.vx / speed : 1
+      const dz = speed > 0 ? b.vy / speed : 0
+      // 무기마다 줄기 길이·색이 다르다: 저격은 길고 하얗게, 산탄은 짧고 주황
+      const w = WEAPONS[b.weapon]
+      const mat = w.scope ? this.streakMats.sniper : w.pellets > 1 ? this.streakMats.shotgun : this.streakMats.default
+      for (const child of streak.children) (child as THREE.Mesh).material = mat
+      const len = speed * U * (w.scope ? 3.4 : w.pellets > 1 ? 1.3 : 2.1)
+      const wid = w.scope ? 0.14 : 0.1
+      // 머리(밝은 끝)가 탄 위치, 꼬리는 뒤로
+      streak.position.set(x - dx * len * 0.5, GUN_H, z - dz * len * 0.5)
+      streak.rotation.y = -Math.atan2(dz, dx)
+      streak.scale.set(len, wid, wid)
       n++
     }
-    for (let i = n; i < this.bulletPool.length; i++) {
-      this.bulletPool[i].visible = false
-      if (this.trailPool[i]) this.trailPool[i].visible = false
-    }
+    for (let i = n; i < this.bulletPool.length; i++) this.bulletPool[i].visible = false
   }
 
   private updateEffects(dt: number): void {
@@ -1003,6 +1044,19 @@ export class Renderer3D {
     for (let i = this.texts.length - 1; i >= 0; i--) {
       this.texts[i].life -= dt
       if (this.texts[i].life <= 0) this.texts.splice(i, 1)
+    }
+    for (let i = this.impacts.length - 1; i >= 0; i--) {
+      const im = this.impacts[i]
+      im.life -= dt
+      if (im.life <= 0) {
+        this.scene.remove(im.sprite)
+        ;(im.sprite.material as THREE.SpriteMaterial).dispose()
+        this.impacts.splice(i, 1)
+        continue
+      }
+      const k = 1 - im.life / im.max
+      im.sprite.scale.setScalar(im.size * (0.5 + k * 1.1))
+      ;(im.sprite.material as THREE.SpriteMaterial).opacity = 1 - k
     }
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i]
@@ -1168,3 +1222,48 @@ function newVis(): DuckVis {
 }
 
 export { hex, PLAYER_RADIUS }
+
+/** 빛줄기 텍스처: 머리(u=1)는 밝고 꼬리(u=0)로 갈수록 사라진다. 위아래 가장자리도 부드럽게 */
+function makeStreakTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 128
+  c.height = 16
+  const g = c.getContext('2d')!
+  const h = g.createLinearGradient(0, 0, 128, 0)
+  h.addColorStop(0, 'rgba(255,255,255,0)')
+  h.addColorStop(0.5, 'rgba(255,255,255,0.3)')
+  h.addColorStop(0.88, 'rgba(255,255,255,1)')
+  h.addColorStop(1, 'rgba(255,255,255,0.85)')
+  g.fillStyle = h
+  g.fillRect(0, 0, 128, 16)
+  const v = g.createLinearGradient(0, 0, 0, 16)
+  v.addColorStop(0, 'rgba(0,0,0,1)')
+  v.addColorStop(0.45, 'rgba(0,0,0,0)')
+  v.addColorStop(0.55, 'rgba(0,0,0,0)')
+  v.addColorStop(1, 'rgba(0,0,0,1)')
+  g.globalCompositeOperation = 'destination-out'
+  g.fillStyle = v
+  g.fillRect(0, 0, 128, 16)
+  const t = new THREE.CanvasTexture(c)
+  t.minFilter = THREE.LinearFilter
+  t.magFilter = THREE.LinearFilter
+  return t
+}
+
+/** 빛무리 텍스처: 가운데가 밝고 가장자리로 사라지는 원 (명중·벽 섬광) */
+function makeGlowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 64
+  const g = c.getContext('2d')!
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32)
+  r.addColorStop(0, 'rgba(255,255,255,1)')
+  r.addColorStop(0.35, 'rgba(255,255,255,0.55)')
+  r.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = r
+  g.fillRect(0, 0, 64, 64)
+  const t = new THREE.CanvasTexture(c)
+  t.minFilter = THREE.LinearFilter
+  t.magFilter = THREE.LinearFilter
+  return t
+}

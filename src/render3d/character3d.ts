@@ -254,6 +254,16 @@ function buildPan(len: number, bodyM: THREE.MeshLambertMaterial, darkM: THREE.Me
   inner.rotation.x = -Math.PI / 2
   inner.position.set(0, 0.031, cz)
   g.add(inner)
+  // 계란후라이 하나 (요청). 흰자는 살짝 찌그러진 납작한 원, 노른자는 도톰한 반구
+  const white = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.54, 0.018, 18), mat(0xfaf6ee))
+  white.scale.set(1.15, 1, 0.88)
+  white.position.set(r * 0.06, 0.045, cz - r * 0.05)
+  white.rotation.y = 0.5
+  g.add(white)
+  const yolk = new THREE.Mesh(new THREE.SphereGeometry(r * 0.2, 14, 10), mat(0xffb300, { emissive: 0x3a2600 }))
+  yolk.scale.set(1, 0.5, 1)
+  yolk.position.set(r * 0.02, 0.055, cz - r * 0.08)
+  g.add(yolk)
   const tip = new THREE.Object3D()
   tip.position.set(0, 0.03, cz)
   g.add(tip)

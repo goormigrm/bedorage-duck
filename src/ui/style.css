@@ -82,7 +82,7 @@ button { font-family: inherit; }
 .char .ct { min-width: 0; }
 .char .ct b { display: block; font-size: 15px; line-height: 1.2; }
 .char .ct small { display: block; color: var(--ink-3); font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.char .pv { color: #c9d4e0; font-size: 12.5px; line-height: 1.45; min-width: 0; }
+.char .pv { color: #c9d4e0; font-size: 12.5px; line-height: 1.45; min-width: 0; white-space: pre-line; }
 .char .pv b { display: inline; font-size: 12.5px; color: var(--gold); margin-right: 4px; }
 @media (max-width: 700px) {
   .char { grid-template-columns: 40px minmax(0, 1fr); row-gap: 2px; }

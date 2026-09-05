@@ -753,11 +753,11 @@ export class Session {
   }
 
   private subLabel(i: number): string {
-    const c = CHARACTERS[this.state.players[i].char]
-    if (i === this.cfg.localPlayer) return `나 · ${c.basedOn}`
+    // 캐릭터 이름은 점수판 이름 줄에 "닉네임(캐릭터)" 로 들어가므로 여기서는 역할만
+    if (i === this.cfg.localPlayer) return '나'
     if (this.cfg.mode === 'solo') return `AI · ${DIFFICULTY_LABEL[this.cfg.difficulty ?? 'normal']}`
     const ally = this.cfg.teams && this.cfg.teams[i] === this.cfg.teams[this.cfg.localPlayer]
-    return `${ally ? '아군' : '상대'} · ${c.basedOn}`
+    return ally ? '아군' : '상대'
   }
 
   /** 버튼이 여러 개인 분기에서 통계 표를 붙이기 쉽게 */
