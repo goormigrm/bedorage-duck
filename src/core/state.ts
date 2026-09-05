@@ -34,6 +34,13 @@ export const BLOCK_COST = 0.55
 export const BLOCK_LOCK_TICKS = 30
 /** 앞에서 오는 탄을 후라이팬으로 막을 확률. 나머지는 그대로 맞는다 (2026-09-06: 승빠덕이 여전히 너무 세서 50%) */
 export const BLOCK_CHANCE = 0.5
+/**
+ * 통천덕 패시브(치킨): 킬마다 최대 체력이 늘고 조금 회복한다. 죽으면 원래대로.
+ * 전에는 킬 시 50 회복이었다(2026-09-06 변경 — 회복은 줄이고 최대 체력을 올리는 쪽으로).
+ */
+export const CHICKEN_MAXHP_PER_KILL = 15
+export const CHICKEN_MAXHP_CAP = 60
+export const CHICKEN_HEAL = 20
 /** 죽은 자리에 떨어지는 힐팩: 회복량(최대 체력 비율) · 유지 시간 · 줍는 반경 */
 export const MEDKIT_HEAL_FRAC = 0.35
 export const MEDKIT_TTL = 60 * 20
@@ -63,6 +70,8 @@ export interface PlayerState {
   y: number
   aim: number
   hp: number
+  /** 지금의 최대 체력. 보통 캐릭터 값과 같고, 통천덕은 킬마다 늘어난다(죽으면 원래대로) */
+  maxHp: number
   alive: boolean
   respawnTimer: number
   weapon: WeaponId
@@ -89,6 +98,8 @@ export interface PlayerState {
   aliveTicks: number
   /** 경기 도중 나간 사람. 더 이상 리스폰하지 않고 표적에서도 제외 */
   left: boolean
+  /** 아직 아무도 앉지 않은 자리 (left 와 함께 true). 화면에 "나감" 이 아니라 "빈 자리" 로 보인다 */
+  vacant: boolean
   /** 캐릭터 고르는 중: 소환되지 않아 맞지도 않는다. 고르면 먼 곳에 리스폰 */
   choosing: boolean
   /** 연속 명중 수 (기열덕 패시브). 빗나가면 0 */

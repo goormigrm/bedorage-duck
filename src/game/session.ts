@@ -8,7 +8,7 @@ import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, joinPlayer, snapshot, step, syncSandbags } from '../core/sim'
 import { angleToRad } from '../core/fixedmath'
-import { GameState, TICK_MS, isTeamMatch } from '../core/state'
+import { GameState, TICK_MS, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
@@ -18,7 +18,6 @@ import { worldDirToScreen } from '../render3d/camera'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
-import { saveRecord } from './records'
 import { TouchControls, enterLandscape, isTouchDevice } from './touch'
 import { Ticker } from './ticker'
 
@@ -97,7 +96,26 @@ export class Session {
   /** 혼자 남기 시작한 틱 (-1 = 혼자가 아니다) */
   private aloneSince = -1
   /** 호스트만: 돌아오기로 한 사람 (틱이 되면 상태를 보낸다) */
-  private pendingRejoin: { peerId: string; p: number; tick: number } | null = null
+  private pendingRejoin: {
+    peerId: string
+    p: number
+    char: CharacterId
+    team: number
+    name: string
+    /** 판(resume)을 보냈는가 */
+    sent: boolean
+    /** 난입자가 "모두와 연결됐다" 고 했는가 */
+    ready: boolean
+    /** 이 시각(performance.now)까지 준비가 안 되면 끊는다 */
+    deadline: number
+  } | null = null
+  /** 난입자 쪽: 아직 판에 들어가지 않은 관전 상태 (자리 배정 확정 전) */
+  private joiningIn = false
+  private joinReadySent = false
+  /** 난입 준비 제한. 이 안에 모두와 연결되지 않으면 호스트가 끊고 자리를 되돌린다 */
+  private static readonly JOIN_TIMEOUT_MS = 8000
+  /** joinLive 를 방송하고 실제로 자리를 채우기까지의 여유 (메시지가 모두에게 닿을 시간) */
+  private static readonly JOIN_LEAD_TICKS = 40
   /** 정해진 틱에 자리를 채울 사람들 (난입) */
   private pendingJoins: { p: number; tick: number; char: CharacterId; team: number; name: string }[] = []
   private syncMute: () => void = () => {}
@@ -122,9 +140,16 @@ export class Session {
       // 아무도 없는 자리(나갔거나 아직 안 온 자리)는 입력을 기다리면 안 된다.
       // 이걸 빠뜨려 난입한 사람이 빈 자리 입력을 기다리다 멈추고, 그 사람이 멈추니
       // 락스텝 특성상 방 전체가 함께 멈췄다(2026-09-06 제보).
+      // 내 자리도 마찬가지다 — 난입자는 호스트가 joinLive 로 활성화할 때까지 **관전만** 한다.
+      // 그래서 기존 사람들은 내가 준비되는 동안 내 입력을 전혀 기다리지 않는다.
       this.state.players.forEach((p, i) => {
-        if (p.left && i !== cfg.localPlayer) this.dropped.add(i)
+        if (p.left) this.dropped.add(i)
       })
+      if (this.state.players[cfg.localPlayer].left) {
+        this.joiningIn = true
+        this.message = '자리에 앉는 중… 모두와 연결되면 들어갑니다'
+        this.spectate = this.nextAlive(-1) // 들어가기 전에는 남의 시점으로 본다
+      }
     }
     // 아직 아무도 없는 자리도 같은 취급 (다시 하기로 판을 새로 짜도 유지된다)
     cfg.absent?.forEach((a, i) => {
@@ -178,6 +203,17 @@ export class Session {
       this.lockstep = this.newLockstep()
       cfg.link.onCtl((m, from) => this.onCtl(m, from))
       cfg.link.onPeerLeave((id) => this.onPeerGone(id))
+      // 메시는 피어마다 다른 시점에 완성된다. 평소 패킷은 최근 8틱만 겹치므로,
+      // 8틱 넘게 늦게 붙은 피어에게는 지난 입력을 몰아 보내야 그쪽이 멈추지 않는다
+      cfg.link.onPeerJoin((id) => {
+        this.lockstep?.resendTo(id)
+        this.checkJoinReady()
+      })
+      if (this.joiningIn) {
+        // 세션이 열리기 전에 온 패킷은 받을 곳이 없었다 → 모두에게 지난 입력을 다시 달라고 한다
+        cfg.link.sendCtl({ t: 'inputsPlease' })
+        this.checkJoinReady()
+      }
     }
 
     window.addEventListener('keydown', this.onKey)
@@ -220,6 +256,7 @@ export class Session {
   private computeNames(): string[] {
     const base = displayNames(this.state.players.map((p) => p.char))
     return base.map((n, i) => {
+      if (this.state.players[i].vacant) return '빈 자리'
       const nick = this.cfg.names?.[i]?.trim()
       return nick ? nick.slice(0, 8) : n
     })
@@ -395,7 +432,20 @@ export class Session {
   private onPeerGone(id: string): void {
     if (this.disposed) return
     const idx = this.peerIndex.get(id)
-    if (idx === undefined || this.dropped.has(idx)) return
+    if (idx === undefined) return
+    // 자리를 받아 놓고 앉기 전에 나간 난입자: 배정을 물린다. 안 그러면 그 자리에 유령이 소환되고
+    // 모두가 그 입력을 기다리다 멈춘다 (난입 버튼을 두 번 누르면 같은 id 로 나갔다 들어와 이렇게 된다)
+    if (this.isHost && this.pendingRejoin?.peerId === id) {
+      this.cancelJoin(id, false)
+      return
+    }
+    if (this.dropped.has(idx)) return
+    // 팀전은 한 명만 빠져도 짝이 안 맞으니 그 자리에서 끝낸다 (사용자 요청)
+    if (isTeamMatch(this.state) && this.state.phase !== 'over') {
+      if (this.isHost) this.cfg.link?.sendCtl({ t: 'abort', p: idx })
+      this.abortMatch(idx)
+      return
+    }
     this.dropped.add(idx)
     this.lockstep?.drop(idx)
     if (idx === 0) {
@@ -500,13 +550,33 @@ export class Session {
         this.onJoinAsk(m.char as CharacterId, m.name, from)
         break
       }
-      case 'joinAt': {
+      case 'joinReady': {
+        if (this.isHost && this.pendingRejoin?.peerId === from) this.pendingRejoin.ready = true
+        break
+      }
+      case 'inputsPlease': {
+        this.lockstep?.resendTo(from)
+        break
+      }
+      case 'joinLive': {
+        if (this.peerIndex.get(from) !== 0) return
         // 난입자의 피어 id 를 모두가 기록한다 (없으면 그 사람 입력을 버려 방 전체가 멈춘다)
-        if (m.id) {
+        if (m.id && m.id !== this.cfg.link?.selfId) {
           this.peerIndex.set(m.id, m.p)
           if (this.cfg.peerIds) this.cfg.peerIds[m.p] = m.id
         }
         this.pendingJoins.push({ p: m.p, tick: m.tick, char: m.char as CharacterId, team: m.team, name: m.name })
+        if (m.id === this.cfg.link?.selfId) this.message = '들어갑니다…'
+        break
+      }
+      case 'joinCancel': {
+        if (this.peerIndex.get(from) !== 0) return
+        this.applyJoinCancel(m.p, m.id)
+        break
+      }
+      case 'abort': {
+        if (this.peerIndex.get(from) !== 0) return
+        this.abortMatch(m.p)
         break
       }
       case 'mark': {
@@ -562,7 +632,9 @@ export class Session {
     let steps = 0
     // 멈췄다 풀리면 밀린 틱을 몰아서 처리한다. 너무 많이 몰면 화면이 튀므로
     // 한 번에 최대 4틱만 따라잡는다(나머지는 다음 호출에서). 렌더 쪽 스무딩과 짝이다.
-    while (this.acc >= TICK_MS && steps < 4) {
+    // 난입해서 관전 중일 때는 아무도 나를 기다리지 않으니 빨리 따라잡는다 (그래야 빨리 자리에 앉는다)
+    const maxSteps = this.joiningIn ? 16 : 4
+    while (this.acc >= TICK_MS && steps < maxSteps) {
       const t = this.state.tick
       const localIn = this.input.sample(
         this.renderer,
@@ -600,7 +672,7 @@ export class Session {
         this.lockstep.prune(this.state.tick)
       }
       this.applyJoins()
-      if (this.isHost) this.servePendingRejoin()
+      if (this.isHost) this.serveJoin()
       for (const e of this.state.events) {
         if (e.type === 'over') this.onOver()
         // 내가 죽으면 나를 죽인 사람을 본다 (자살·이탈이면 살아 있는 아무나)
@@ -610,6 +682,11 @@ export class Session {
           this.spectate = !teams && e.by !== e.p ? e.by : this.nextAlive(-1)
         } else if (e.type === 'respawn' && e.p === this.cfg.localPlayer) {
           this.spectate = -1
+        } else if (e.type === 'join' && e.p === this.cfg.localPlayer) {
+          // 난입 확정: 관전을 끝내고 내 시점으로
+          this.joiningIn = false
+          this.spectate = -1
+          this.message = ''
         }
       }
       this.acc -= TICK_MS
@@ -701,6 +778,7 @@ export class Session {
     const teams = isTeamMatch(this.state)
     const rows = this.state.players
       .map((p, i) => ({ p, i }))
+      .filter(({ p }) => !p.vacant)
       .sort((a, b) => b.p.kills - a.p.kills || a.p.deaths - b.p.deaths)
       .map(({ p, i }) => {
         const acc = p.shots > 0 ? Math.round((p.hits / p.shots) * 100) : 0
@@ -744,7 +822,16 @@ export class Session {
       this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '이미 끝난 판입니다' }, peerId)
       return
     }
-    if (this.pendingRejoin || this.pendingJoins.length > 0) {
+    // 팀전은 난입 불가 — 짝이 안 맞는 채로 이어 봐야 의미가 없다(누가 나가면 그 자리에서 끝낸다)
+    if (isTeamMatch(this.state)) {
+      this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '팀전에는 난입할 수 없습니다' }, peerId)
+      return
+    }
+    // 같은 사람이 다시 물어봤다 (연결이 늦어 두 번 보냈거나 버튼을 두 번 눌렀다): 이미 배정 중이면 그대로 둔다
+    const seated = this.peerIndex.get(peerId)
+    if (seated !== undefined && !this.dropped.has(seated)) return
+    if (this.pendingRejoin) {
+      if (this.pendingRejoin.peerId === peerId) return
       this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '다른 사람이 먼저 들어오는 중입니다' }, peerId)
       return
     }
@@ -760,21 +847,133 @@ export class Session {
       this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '자리가 없습니다' }, peerId)
       return
     }
-    // 팀전이면 사람이 적은 팀으로
-    let team = slot
-    if (isTeamMatch(this.state)) {
-      const count = [0, 0]
-      for (const p of this.state.players) if (!p.left && p.team < 2) count[p.team]++
-      team = count[0] <= count[1] ? 0 : 1
-    }
-    const tick = this.state.tick + 120
+    // 이제 그 사람의 입력 패킷을 이 자리 것으로 받는다 (아직 기다리지는 않는다 — 자리는 dropped 그대로)
     this.peerIndex.set(peerId, slot)
     // 다음에 난입하는 사람에게 넘겨줄 목록에도 넣는다 (빠지면 그 사람이 이 사람 입력을 못 받는다)
     if (this.cfg.peerIds) this.cfg.peerIds[slot] = peerId
-    this.cfg.link?.sendCtl({ t: 'joinAt', p: slot, tick, char, team, name, id: peerId })
-    this.pendingJoins.push({ p: slot, tick, char, team, name })
-    this.pendingRejoin = { peerId, p: slot, tick }
-    this.lockstep?.rejoin(slot, tick)
+    this.pendingRejoin = {
+      peerId,
+      p: slot,
+      char,
+      team: slot,
+      name,
+      sent: false,
+      ready: false,
+      deadline: performance.now() + Session.JOIN_TIMEOUT_MS,
+    }
+  }
+
+  /**
+   * 호스트, 매 틱: 난입 진행. 판을 보내고 → 준비를 기다리고 → 준비되면 활성화 틱을 방송하고 → 늦으면 끊는다.
+   * 기존 사람들은 이 사이 어느 단계에서도 그 자리를 기다리지 않는다.
+   */
+  private serveJoin(): void {
+    const r = this.pendingRejoin
+    if (!r) return
+    if (!r.sent) {
+      r.sent = true
+      const cfg = {
+        chars: this.cfg.chars,
+        teams: this.cfg.teams,
+        names: this.cfg.names ?? [],
+        targetKills: this.cfg.targetKills,
+        seed: this.cfg.seed,
+        map: this.cfg.mapId ?? DEFAULT_MAP,
+        scale: this.map.scale,
+        delay: this.cfg.delay ?? 3,
+        peerIds: this.cfg.peerIds ?? [],
+      }
+      // 자리 정보(캐릭터·이름)는 joinLive 때 확정한다. 지금은 판만 준다
+      this.cfg.link?.sendCtl({ t: 'resume', p: r.p, tick: this.state.tick, state: snapshot(this.state), cfg }, r.peerId)
+      return
+    }
+    // 준비됐고, 그 사람 입력 패킷이 실제로 오고 있고, **판도 거의 따라잡았다** → 조금 뒤 틱에 모두 같이 자리를 채운다.
+    // 따라잡기 전에 활성화하면 활성화 틱에서 모두가 그 사람 입력을 기다린다 (실측 0.45초 멈춤).
+    const caughtUp = (this.lockstep?.latestFrom(r.p) ?? -1) >= this.state.tick - 10
+    if (r.ready && caughtUp && this.lockstep?.heardFrom(r.p)) {
+      const tick = this.state.tick + Session.JOIN_LEAD_TICKS
+      const live = { t: 'joinLive' as const, p: r.p, tick, char: r.char, team: r.team, name: r.name, id: r.peerId }
+      this.cfg.link?.sendCtl(live)
+      this.pendingJoins.push({ p: r.p, tick, char: r.char, team: r.team, name: r.name })
+      this.pendingRejoin = null
+      return
+    }
+    // 늦으면 끊는다. 기존 사람들 판은 아무 영향이 없다 (그 자리는 계속 빈 자리였다)
+    if (performance.now() > r.deadline) this.cancelJoin(r.peerId, true)
+  }
+
+  /**
+   * 호스트: 난입자의 배정을 물리고 모두에게 알린다.
+   * kick 이면(준비가 늦었다) 그 사람에게도 알려 로비로 돌려보낸다 — 붙잡고 기다리지 않는다.
+   */
+  private cancelJoin(peerId: string, kick: boolean): void {
+    const r = this.pendingRejoin
+    if (!r) return
+    this.pendingRejoin = null
+    this.applyJoinCancel(r.p, peerId)
+    this.cfg.link?.sendCtl({ t: 'joinCancel', p: r.p, id: peerId })
+    if (kick) this.cfg.link?.sendCtl({ t: 'rejoinNo', why: '연결이 늦어 들어가지 못했습니다. 다시 시도해 보세요.' }, peerId)
+  }
+
+  /** 모두: 자리 p 의 배정을 물린다 — 그 자리 입력을 다시 기다리지 않는다. 내가 그 사람이면 로비로 */
+  private applyJoinCancel(p: number, peerId: string): void {
+    this.pendingJoins = this.pendingJoins.filter((j) => j.p !== p)
+    if (this.peerIndex.get(peerId) === p) this.peerIndex.delete(peerId)
+    if (this.cfg.peerIds && this.cfg.peerIds[p] === peerId) this.cfg.peerIds[p] = ''
+    this.lockstep?.drop(p)
+    if (this.joiningIn && peerId === this.cfg.link?.selfId) this.leaveAsRejected('연결이 늦어 들어가지 못했습니다')
+  }
+
+  /** 난입자: 호스트가 받아 주지 않았다 → 로비로 */
+  private leaveAsRejected(why: string): void {
+    if (this.disposed) return
+    this.paused = true
+    this.showOverlay('들어가지 못했습니다', `${why}. 잠시 뒤 다시 시도해 보세요.`, [
+      { label: '로비로', primary: true, onClick: () => this.exit() },
+    ])
+  }
+
+  /**
+   * 난입자: 호스트가 준 피어 목록(자리에 있는 사람들)과 전부 연결되면 호스트에게 알린다.
+   * 호스트는 이걸 받고 나서야 활성화 틱을 정한다 — 그래야 어느 게스트도 내 입력을 못 받아 멈추는 일이 없다.
+   */
+  private checkJoinReady(): void {
+    if (!this.joiningIn || this.joinReadySent) return
+    const link = this.cfg.link
+    if (!link) return
+    const ids = this.cfg.peerIds ?? []
+    const need = this.state.players.map((p, i) => (p.left ? '' : ids[i] ?? '')).filter((id) => id && id !== link.selfId)
+    if (need.some((id) => !link.peers.has(id))) return
+    this.joinReadySent = true
+    link.sendCtl({ t: 'joinReady' }, ids[0])
+    this.message = '연결 완료 · 자리를 기다리는 중…'
+  }
+
+  /**
+   * 팀전 중단: 누가 나가면 그 자리에서 끝내고 결과표를 띄운다.
+   * 승자는 그때까지의 팀 킬로 정한다(같으면 무승부). 다시 하기는 없다 — 짝이 안 맞는다.
+   * sim 밖에서 phase 를 바꾸지만 이후 틱을 더 돌리지 않으므로 어긋날 것이 없다.
+   */
+  private abortMatch(gone: number): void {
+    if (this.state.phase === 'over' || this.disposed) return
+    const p = this.state.players[gone]
+    if (p) {
+      p.left = true
+      this.dropped.add(gone)
+      this.lockstep?.drop(gone)
+    }
+    const k0 = teamKills(this.state, 0)
+    const k1 = teamKills(this.state, 1)
+    const winner = k0 === k1 ? -1 : k0 > k1 ? 0 : 1
+    this.state.phase = 'over'
+    this.state.winner = winner
+    this.message = ''
+    const lp = this.cfg.localPlayer
+    const myTeam = this.state.players[lp].team
+    const title = winner < 0 ? '경기 중단 · 무승부' : winner === myTeam ? '경기 중단 · 우세승' : '경기 중단 · 열세'
+    const desc = `${this.names[gone]} 님이 나가서 팀전을 끝냈습니다 · ${TEAM_NAMES[0]} ${k0} : ${k1} ${TEAM_NAMES[1]}`
+    this.showOverlay(title, desc, [{ label: '로비로', primary: true, onClick: () => this.exit() }], this.statsTable())
+    this.paused = true
   }
 
   /** 정해진 틱이 되면 자리를 채운다 (모두가 같은 틱에) */
@@ -791,7 +990,8 @@ export class Session {
         this.names = this.computeNames()
         this.makeBotFor(j.p)
         this.dropped.delete(j.p)
-        this.lockstep?.rejoin(j.p, j.tick)
+        // 이 틱 전의 입력은 모두 빈 입력으로 (난입자는 관전 중에도 입력을 보내고 있었다)
+        this.lockstep?.activate(j.p, j.tick)
       } else keep.push(j)
     }
     this.pendingJoins = keep
@@ -800,28 +1000,6 @@ export class Session {
   /** 난입한 자리의 봇 기억을 새로 만든다 (봇이 조종하던 자리였을 수 있다) */
   private makeBotFor(idx: number): void {
     this.bots[idx] = makeBot((this.cfg.seed ^ 0x9e37) + idx * 7919 + this.state.tick)
-  }
-
-  /** 호스트: 약속한 틱에 도달하면 판 전체를 보내 준다 */
-  private servePendingRejoin(): void {
-    const r = this.pendingRejoin
-    if (!r || this.state.tick < r.tick) return
-    this.pendingRejoin = null
-    const cfg = {
-      chars: this.cfg.chars,
-      teams: this.cfg.teams,
-      names: this.cfg.names ?? [],
-      targetKills: this.cfg.targetKills,
-      seed: this.cfg.seed,
-      map: this.cfg.mapId ?? DEFAULT_MAP,
-      scale: this.map.scale,
-      delay: this.cfg.delay ?? 3,
-      peerIds: this.cfg.peerIds ?? [],
-    }
-    this.cfg.link?.sendCtl(
-      { t: 'resume', p: r.p, tick: this.state.tick, state: snapshot(this.state), cfg },
-      r.peerId,
-    )
   }
 
   /**
@@ -862,24 +1040,6 @@ export class Session {
     const iWon = this.state.players[lp].team === w
     const title = iWon ? '승리!' : '패배'
     const teams = isTeamMatch(this.state)
-    // 결정적 시뮬이라 방에 있던 모두가 똑같은 내용을 각자 브라우저에 남긴다 (서버·DB 없음)
-    saveRecord({
-      at: Date.now(),
-      mode: this.cfg.mode,
-      teams,
-      map: this.cfg.mapId ?? DEFAULT_MAP,
-      target: this.cfg.targetKills,
-      winner: w,
-      me: lp,
-      players: this.state.players.map((p, i) => ({
-        nick: this.names[i],
-        char: p.char,
-        kills: p.kills,
-        deaths: p.deaths,
-        team: p.team,
-        left: p.left,
-      })),
-    })
     const stats = this.statsTable()
     const desc = teams
       ? `${TEAM_NAMES[w] ?? '?'} 승리 · ` + this.state.players.map((p, i) => `${this.names[i]} ${p.kills}`).join(' · ')

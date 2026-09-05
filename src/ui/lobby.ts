@@ -15,7 +15,6 @@ import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
 import { TEAM_NAMES } from '../render/hud'
 import { SessionConfig } from '../game/session'
-import { MatchRecord, clearRecords, formatRecord, loadRecords, ranked, recordDate, winnerLabel } from '../game/records'
 
 export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
@@ -98,7 +97,7 @@ export class Lobby {
         <div class="season">BEDORAGE DUCK · P2P · 2~${MAX_PLAYERS} PLAYERS</div>
         <h1><span class="t1">배도라지</span> <span class="t2">덕</span></h1>
         <p class="tag"><b>최대 ${MAX_PLAYERS}인 쿼터뷰 슈터</b> · 서버 없는 P2P 대전 · 비공식 팬게임</p>
-        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입</span><span>혼자 남아도 30초 대기</span><span>설치 없음 · 서버 없음</span></div>
+        <div class="feats"><span>덕코프식 시야</span><span>개인전 · 팀전</span><span>게임 중 난입 (개인전)</span><span>혼자 남아도 30초 대기</span><span>설치 없음 · 서버 없음</span></div>
 
         <div class="lobby-grid">
           <aside class="side">
@@ -113,7 +112,7 @@ export class Lobby {
             <div class="card rooms-card">
               <h2>방 목록 <span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
               <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
-              <p class="hintline dim">게임 중인 방도 자리가 있으면 <b>난입</b>할 수 있습니다.</p>
+              <p class="hintline dim">게임 중인 개인전 방도 자리가 있으면 <b>난입</b>할 수 있습니다. 팀전은 난입이 없고, 누가 나가면 그 자리에서 끝납니다.</p>
             </div>
 
             <div class="card">
@@ -164,9 +163,6 @@ export class Lobby {
 
             <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
             <div class="chars" id="chars"></div>
-
-            <div class="section-t" id="rec-t" hidden>최근 전적 <small>이 브라우저에만 남습니다 · 서버에 올라가지 않습니다</small><button class="lnk" id="rec-clear">전체 지우기</button></div>
-            <div class="recs" id="recs" hidden></div>
           </main>
         </div>
 
@@ -179,10 +175,10 @@ export class Lobby {
       el.className = 'char' + (c.id === this.char ? ' on' : '')
       el.dataset.id = c.id
       el.style.setProperty('--c', '#' + c.bodyColor.toString(16).padStart(6, '0'))
+      // 한 줄에 한 명. 설명이 카드 안에서 세 줄로 접히면 읽히지 않아 행으로 편다 (2026-09-06 요청)
       el.innerHTML = `
         <canvas></canvas>
-        <b>${c.name}</b>
-        <small>${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}</small>
+        <div class="ct"><b>${c.name}</b><small>${c.basedOn} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}</small></div>
         <div class="pv"><b>${c.passiveName}</b> ${c.passiveDesc}</div>`
       el.onclick = () => this.selectChar(c.id)
       chars.appendChild(el)
@@ -256,96 +252,7 @@ export class Lobby {
     ;(h.querySelector('#btn-refresh') as HTMLButtonElement).onclick = () => this.refreshRooms()
     ;(h.querySelector('#btn-solo') as HTMLButtonElement).onclick = () => this.startSolo()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.hostRoom()
-    ;(h.querySelector('#rec-clear') as HTMLButtonElement).onclick = () => {
-      clearRecords()
-      this.renderRecords()
-    }
-    this.renderRecords()
     requestAnimationFrame(() => this.drawPreview())
-  }
-
-  /**
-   * 최근 전적. 서버도 DB도 없이, 끝난 판의 결과를 각자 브라우저에 적어 둔 것을 읽어 온다.
-   * 같은 방에 있던 사람들은 (결정적 시뮬이라) 완전히 같은 내용을 갖고 있다.
-   */
-  private renderRecords(): void {
-    const wrap = this.host.querySelector('#recs') as HTMLElement | null
-    const title = this.host.querySelector('#rec-t') as HTMLElement | null
-    if (!wrap || !title) return
-    const list = loadRecords().slice(0, 8)
-    title.hidden = list.length === 0
-    wrap.hidden = list.length === 0
-    if (list.length === 0) return
-    wrap.innerHTML = list
-      .map((r, idx) => {
-        const won = r.teams ? r.players[r.me]?.team === r.winner : r.me === r.winner
-        const rows = ranked(r)
-          .map((p) => {
-            const me = p === r.players[r.me] ? ' me' : ''
-            const team = r.teams ? `<i class="tm t${p.team}">${TEAM_NAMES[p.team] ?? ''}</i>` : ''
-            const name = CHARACTERS[p.char]?.name ?? ''
-            const out = p.left ? '<small class="out">나감</small>' : ''
-            return `<li class="${me.trim()}">${team}<b>${esc(p.nick)}</b><small>${name}</small>${out}<span>${p.kills}<em>킬</em> ${p.deaths}<em>데스</em></span></li>`
-          })
-          .join('')
-        return `<div class="rec ${won ? 'win' : 'lose'}">
-          <div class="rh">
-            <b>${won ? '승리' : '패배'}</b>
-            <span>${r.mode === 'solo' ? '혼자 하기' : '방 대전'} · ${r.teams ? '2v2' : '개인전'} · ${MAPS[r.map]?.name ?? r.map} · 목표 ${r.target}킬</span>
-            <time>${recordDate(r.at)}</time>
-            <button class="lnk" data-copy="${idx}">복사</button>
-          </div>
-          <div class="rw">${winnerLabel(r)}</div>
-          <ul>${rows}</ul>
-        </div>`
-      })
-      .join('')
-    for (const btn of Array.from(wrap.querySelectorAll<HTMLButtonElement>('button[data-copy]'))) {
-      btn.onclick = () => this.copyRecord(list[Number(btn.dataset.copy)], btn)
-    }
-  }
-
-  private copyRecord(r: MatchRecord, btn: HTMLButtonElement): void {
-    const text = formatRecord(r)
-    const done = () => {
-      btn.textContent = '복사됨'
-      setTimeout(() => (btn.textContent = '복사'), 1400)
-    }
-    // 창이 뒤에 있거나 권한이 없으면 clipboard API 가 거절한다 → 옛 방식, 그것도 막히면 직접 고르게
-    const manual = () => {
-      const card = btn.closest('.rec')
-      if (!card) return
-      card.querySelector('textarea')?.remove()
-      const ta = document.createElement('textarea')
-      ta.className = 'recbox'
-      ta.readOnly = true
-      ta.rows = 7
-      ta.value = text
-      card.appendChild(ta)
-      ta.focus()
-      ta.select()
-      btn.textContent = 'Ctrl+C'
-    }
-    const legacy = () => {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.setAttribute('readonly', '')
-      ta.style.cssText = 'position:fixed;left:-9999px;top:0'
-      document.body.appendChild(ta)
-      ta.select()
-      let ok = false
-      try {
-        ok = document.execCommand('copy')
-      } catch {
-        ok = false
-      }
-      ta.remove()
-      if (ok) done()
-      else manual()
-    }
-    const p = navigator.clipboard?.writeText(text)
-    if (p) p.then(done, legacy)
-    else legacy()
   }
 
   private drawPreview(): void {
@@ -465,17 +372,20 @@ export class Lobby {
       .map((r) => {
         const c = (CHARACTERS as Record<string, { name: string } | undefined>)[r.hostChar]
         const m = isMapId(r.map) ? MAPS[r.map].name : r.map
-        // 게임 중이어도 자리가 남아 있으면 난입할 수 있다
+        // 게임 중이어도 자리가 남아 있으면 난입할 수 있다. 단 팀전은 짝이 안 맞아 난입 불가
         const room = r.count < r.max
-        const canJoin = r.state === 'open' || (r.state === 'playing' && room)
+        const teamsPlaying = r.state === 'playing' && r.mode === 'teams'
+        const canJoin = r.state === 'open' || (r.state === 'playing' && room && !teamsPlaying)
         const st =
           r.state === 'open'
             ? '<span class="pill ok">참가 가능</span>'
             : r.state === 'full'
               ? '<span class="pill">정원 참</span>'
-              : room
-                ? '<span class="pill ok">게임 중 · 난입 가능</span>'
-                : '<span class="pill">게임 중</span>'
+              : teamsPlaying
+                ? '<span class="pill">팀전 진행 중 · 난입 불가</span>'
+                : room
+                  ? '<span class="pill ok">게임 중 · 난입 가능</span>'
+                  : '<span class="pill">게임 중</span>'
         return `<div class="room"><div><b>${c ? c.name : r.hostChar}</b>의 방 <span class="code-sm">${r.code}</span><br><small>${m} · ${ROOM_MODE_LABEL[r.mode] ?? r.mode} · 목표 ${r.targetKills}킬 · ${r.count}/${r.max}명</small></div>
           <div>${st} <button class="btn" data-code="${r.code}" ${canJoin ? '' : 'disabled'}>${r.state === 'playing' ? '난입' : '참가'}</button></div></div>`
       })
@@ -563,11 +473,22 @@ export class Lobby {
   private barging = false
   private bargeSent = false
 
+  /**
+   * 방에 들어간다. 대기실이든 게임 중이든 **연결되는 피어마다** "자리 주세요"(joinAsk) 를 보낸다.
+   * - 풀 메시라 피어는 한 명씩 연결된다. 전에는 **처음 연결된 한 명에게만** 보냈는데, 그게 게스트면
+   *   호스트는 영영 못 듣고 15초 뒤 실패했다(기존 인원이 3명이면 첫 연결이 호스트일 확률은 1/3 —
+   *   "세 번째는 되는데 네 번째는 계속 실패" 의 원인).
+   * - 대기실 호스트는 joinAsk 를 무시하고 room 을 보낸다 → 대기실. 게임 중인 호스트는 joinAt/resume 을 보낸다 → 난입.
+   *   그래서 초대 링크로 게임 중인 방에 들어와도 그대로 난입이 된다.
+   */
   private join(code: string, barge = false): void {
     if (!this.requireNick()) return
+    // 같은 방에 이미 들어가는 중이면 그대로 둔다. 버튼을 두 번 누르면 전에는 나갔다 다시 들어갔는데,
+    // 같은 피어 id 로 0.3초 안에 나갔다 들어오면 시그널링이 새 연결을 잘 못 만들어 20초를 헛기다렸다
+    if (this.link && this.role === 'guest' && this.link.code === code) return
+    this.closeLink()
     this.barging = barge
     this.bargeSent = false
-    this.closeLink()
     this.role = 'guest'
     this.link = openRoom(code, 'guest')
     this.hostId = null
@@ -576,9 +497,19 @@ export class Lobby {
     this.myTeam = 0
     history.replaceState(null, '', `#room=${code}`)
     this.wireLink()
-    this.renderRoom()
+    if (barge) {
+      // 누르자마자 알린다. 릴레이에 따라 첫 연결까지 몇 초 걸리는데, 그동안 아무 반응이 없으면 다시 누르게 된다
+      this.status(
+        '게임 중인 방에 연결하는 중… (릴레이에 따라 몇 초 걸립니다)',
+        '',
+        `<div class="row"><button class="btn secondary" id="btn-cancel">취소</button></div>`,
+      )
+      this.bindCancel()
+    } else {
+      this.renderRoom()
+    }
     this.waitTimer = window.setTimeout(() => {
-      if (this.link && !this.hostId) {
+      if (this.link && !this.hostId && !this.bargeSent) {
         this.status(
           '연결되지 않았습니다. 방이 아직 열려 있는지 확인하세요. 회사·학교망이면 폰 핫스팟으로 시도해 보세요.',
           'bad',
@@ -593,17 +524,23 @@ export class Lobby {
   private wireLink(): void {
     const link = this.link!
     link.onPeerJoin((id) => {
-      // 게임 중인 방이면 대기실이 아니라 곧바로 "자리 주세요" 를 보낸다
-      if (this.barging && !this.bargeSent) {
+      if (this.link !== link) return
+      // 연결되는 피어마다 자리를 묻는다 (게스트는 무시하고, 호스트만 답한다)
+      link.sendCtl({ t: 'joinAsk', char: this.char, name: this.nick }, id)
+      if (!this.bargeSent) {
         this.bargeSent = true
-        this.status('게임 중인 방에 들어가는 중…', '')
-        link.sendCtl({ t: 'joinAsk', char: this.char, name: this.nick })
-        window.setTimeout(() => {
-          if (this.barging) this.giveUpRejoin('자리가 없거나 방이 응답하지 않습니다.')
+        if (this.barging) {
+          this.status('자리를 요청하는 중…', '', `<div class="row"><button class="btn secondary" id="btn-cancel">취소</button></div>`)
+          this.bindCancel()
+        }
+        // 호스트가 답하지 않으면 포기한다. **핸들을 저장**해야 성공·취소 때 지울 수 있다 —
+        // 전에는 저장하지 않아 첫 시도의 타이머가 두 번째 시도를 죽였다
+        clearTimeout(this.rejoinTimer)
+        this.rejoinTimer = window.setTimeout(() => {
+          if (this.link === link && this.barging) this.giveUpRejoin('방이 응답하지 않습니다. 잠시 뒤 다시 시도해 보세요.')
         }, 15000)
       }
-      if (this.link !== link) return
-      // 새로 들어온 피어에게 내 상태를 알린다 (호스트는 hello 를 받고 멤버로 넣는다)
+      // 새로 들어온 피어에게 내 상태를 알린다 (대기실 호스트는 hello 를 받고 멤버로 넣는다)
       this.sendHello(id)
     })
     link.onPeerLeave((id) => {
@@ -619,8 +556,6 @@ export class Lobby {
   /** 난입에 실패했을 때 (자리가 없거나 방이 응답하지 않음) */
   private giveUpRejoin(why: string): void {
     clearTimeout(this.rejoinTimer)
-    this.barging = false
-    this.bargeSent = false
     this.closeLink()
     this.status(why, 'bad', `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`)
     this.bindCancel()
@@ -645,10 +580,12 @@ export class Lobby {
   private onCtl(m: CtlMessage, from: string): void {
     switch (m.t) {
       case 'resume': {
-        // 진행 중인 방에 끼어든다(난입). 호스트가 보내 준 그 시점의 판으로 시작한다
-        if (!this.barging) return
+        // 진행 중인 방에 끼어든다(난입). 호스트가 보내 준 그 시점의 판으로 시작한다.
+        // 초대 링크로 들어와도(barging=false) 호스트가 게임 중이면 이 길로 온다
+        if (this.role !== 'guest' || !this.link) return
         this.barging = false
         clearTimeout(this.rejoinTimer)
+        clearTimeout(this.waitTimer)
         const c = m.cfg as {
           chars: CharacterId[]
           teams?: number[]
@@ -680,7 +617,8 @@ export class Lobby {
         return
       }
       case 'rejoinNo': {
-        if (this.barging) this.giveUpRejoin(m.why)
+        // 게임 중인 호스트가 거절했다 (팀전·자리 없음·이미 끝남). 대기실이라면 이 메시지는 오지 않는다
+        if (this.role === 'guest') this.giveUpRejoin(m.why)
         return
       }
       case 'hello':
@@ -942,6 +880,9 @@ export class Lobby {
 
   private closeLink(): void {
     clearTimeout(this.waitTimer)
+    clearTimeout(this.rejoinTimer)
+    this.barging = false
+    this.bargeSent = false
     if (this.link) {
       if (this.role === 'host' && this.lobbyLink) this.lobbyLink.announce(null)
       this.link.sendCtl({ t: 'leave' })

@@ -85,7 +85,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     falloffStart: 200, falloffEnd: 500, falloffMin: 0.35,
   },
   // 유일하게 한 방이 나오는 무기. 대신 재장전이 길고, 정조준(우클릭) 없이는 거의 맞지 않는다.
-  // 2026-09-06: 112/260 → 120/225. 봇 1:1 1100판에서 통닭덕이 38.0% 로 계속 바닥이었다.
+  // 2026-09-06: 112/260 → 120/225. 봇 1:1 1100판에서 통천덕이 38.0% 로 계속 바닥이었다.
   // 연사 간격(78)과 이동 배율(0.7)은 그대로 둔다 — 그쪽을 건드리면 저격이 단숨에 최상위로 올라간다(계측).
   sniper: {
     id: 'sniper', name: '저격총', damage: 120, pellets: 1, fireInterval: 78, auto: true,

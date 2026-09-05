@@ -248,3 +248,188 @@ describe('난입해도 멈추지 않는다', () => {
     expect(run(all, start + 100)).toBeLessThan(start + 100)
   })
 })
+
+/**
+ * 연결이 **한 쌍씩** 따로 되는 메시. 실제 WebRTC 가 이렇다 — 난입자는 호스트와 먼저 붙고
+ * 다른 게스트와는 몇 초 뒤에 붙기도 한다. 연결되지 않은 쌍 사이 패킷은 버린다.
+ */
+function makeMesh() {
+  const subs = new Map<string, (buf: Uint8Array, from: string) => void>()
+  const links = new Map<string, Set<string>>()
+  const peersOf = (id: string) => {
+    let s = links.get(id)
+    if (!s) links.set(id, (s = new Set()))
+    return s
+  }
+  const link = (id: string): RoomLink =>
+    ({
+      code: 'TEST12',
+      role: id === 'a' ? 'host' : 'guest',
+      selfId: id,
+      peers: peersOf(id),
+      rtt: 0,
+      sendCtl: () => {},
+      sendInput: (buf: Uint8Array, to?: string) => {
+        for (const [pid, fn] of subs) {
+          if (pid === id || !peersOf(id).has(pid)) continue
+          if (to !== undefined && pid !== to) continue
+          fn(buf, id)
+        }
+      },
+      onCtl: () => {},
+      onInput: (fn: (buf: Uint8Array, from: string) => void) => subs.set(id, fn),
+      onPeerJoin: () => {},
+      onPeerLeave: () => {},
+      leave: () => {},
+    }) as unknown as RoomLink
+  const connect = (x: string, y: string) => {
+    peersOf(x).add(y)
+    peersOf(y).add(x)
+  }
+  return { link, connect }
+}
+
+/**
+ * 2026-09-06 재설계: 난입자는 준비될 때까지 **관전만** 하고, 기존 사람들은 그 자리를 전혀 기다리지 않는다.
+ * 호스트가 활성화 틱(joinLive)을 정하면 그때부터 보통 피어처럼 기다린다. 늦으면 끊는다.
+ * 그래서 "난입 때문에 기존 사람이 멈추는 일" 이 없어야 한다(사용자 요구: 바로 되거나, 못 들어오거나).
+ */
+describe('난입자는 준비될 때까지 아무도 기다리게 하지 않는다', () => {
+  const DELAY = 3
+  const N = 4
+
+  function run(peers: { ls: Lockstep; tick: number }[], until: number): number {
+    let moved = true
+    while (moved) {
+      moved = false
+      for (const p of peers) {
+        if (p.tick >= until) continue
+        p.ls.pushLocal(p.tick, IN(1))
+        if (p.ls.hasAll(p.tick)) {
+          p.tick++
+          moved = true
+        }
+      }
+    }
+    return Math.min(...peers.map((p) => p.tick))
+  }
+
+  it('자리를 받아 놓고 아무것도 안 보내도 기존 사람들은 계속 돈다 (활성화 전)', () => {
+    const { link, connect } = makeMesh()
+    connect('a', 'b')
+    const idxA = new Map([['a', 0], ['b', 1]])
+    const idxB = new Map([['a', 0], ['b', 1]])
+    const a = new Lockstep(link('a'), DELAY, 0, idxA, N)
+    const b = new Lockstep(link('b'), DELAY, 1, idxB, N)
+    for (const ls of [a, b]) {
+      ls.drop(2)
+      ls.drop(3)
+    }
+    // 호스트가 c 에게 자리 2 를 잡아 줬다 — 하지만 활성화 전이라 락스텝에는 아무 변화가 없다
+    idxA.set('c', 2)
+    const peers = [{ ls: a, tick: 0 }, { ls: b, tick: 0 }]
+    expect(run(peers, 300)).toBe(300)
+    // c 는 호스트에게만 붙어 있고 입력을 하나도 안 보냈다 → 아무도 안 멈춘다 (위에서 확인)
+    expect(a.heardFrom(2)).toBe(false)
+  })
+
+  it('활성화하면 그 전 입력은 모두 빈 입력으로 — 누가 먼저 받았든 판이 같다', () => {
+    const { link, connect } = makeMesh()
+    connect('a', 'b')
+    connect('a', 'c')
+    connect('b', 'c')
+    const idxA = new Map([['a', 0], ['b', 1], ['c', 2]])
+    const idxB = new Map([['a', 0], ['b', 1], ['c', 2]])
+    const a = new Lockstep(link('a'), DELAY, 0, idxA, N)
+    const b = new Lockstep(link('b'), DELAY, 1, idxB, N)
+    for (const ls of [a, b]) {
+      ls.drop(2)
+      ls.drop(3)
+    }
+    const peers = [{ ls: a, tick: 0 }, { ls: b, tick: 0 }]
+    run(peers, 100)
+    // c 가 관전하면서 입력을 보낸다 (100~130). a 는 색인이 있어 받고, b 도 받는다 — 하지만 둘 다 dropped 라 안 쓴다
+    const idxC = new Map([['a', 0], ['b', 1]])
+    const c = new Lockstep(link('c'), DELAY, 2, idxC, N, 100)
+    for (let i = 0; i < N; i++) c.rejoin(i, 100)
+    c.drop(2)
+    c.drop(3)
+    for (let t = 100; t < 130; t++) c.pushLocal(t, IN(1))
+    expect(a.heardFrom(2)).toBe(true)
+    expect(a.get(120)[2]).toEqual(EMPTY_INPUT) // 활성화 전에는 안 쓴다
+    // 호스트가 140 부터 활성화
+    for (const ls of [a, b, c]) ls.activate(2, 140)
+    // 140 전은 누구에게나 빈 입력이다 (a 는 실제 입력을 받아 뒀지만 지웠다)
+    expect(a.get(125)[2]).toEqual(EMPTY_INPUT)
+    expect(b.get(125)[2]).toEqual(EMPTY_INPUT)
+    expect(c.get(125)[2]).toEqual(EMPTY_INPUT)
+    // 140 부터는 실제 입력을 기다린다
+    expect(a.hasAll(140)).toBe(false)
+    c.pushLocal(137, IN(1))
+    expect(a.get(140)[2].mx).toBe(1)
+  })
+
+  it('늦게 붙은 쌍은 지난 입력을 몰아 받아 멈추지 않는다 (resendTo)', () => {
+    const { link, connect } = makeMesh()
+    connect('a', 'b')
+    const idxA = new Map([['a', 0], ['b', 1]])
+    const idxB = new Map([['a', 0], ['b', 1]])
+    const a = new Lockstep(link('a'), DELAY, 0, idxA, N)
+    const b = new Lockstep(link('b'), DELAY, 1, idxB, N)
+    for (const ls of [a, b]) {
+      ls.drop(2)
+      ls.drop(3)
+    }
+    const ab = [{ ls: a, tick: 0 }, { ls: b, tick: 0 }]
+    run(ab, 100)
+    // c 는 호스트(a)와만 먼저 붙는다
+    connect('a', 'c')
+    const idxC = new Map([['a', 0], ['b', 1]])
+    const c = new Lockstep(link('c'), DELAY, 2, idxC, N, 100)
+    for (let i = 0; i < N; i++) c.rejoin(i, 100)
+    c.drop(2)
+    c.drop(3)
+    idxA.set('c', 2)
+    idxB.set('c', 2)
+    // a·b 는 계속 돌고(c 는 아직 활성화 전), c 는 a 의 입력만 받아 b 것이 없어 멈춘다
+    // (처음 delay 틱은 모두 빈 입력으로 미리 채워지므로 103 에서 선다)
+    run(ab, 160)
+    expect(run([{ ls: c, tick: 100 }], 200)).toBe(100 + DELAY)
+    // 60틱 뒤에 b·c 가 붙는다. 8틱 넘게 늦었으므로 평소 패킷만으로는 100~152 가 영영 빈다
+    connect('b', 'c')
+    b.resendTo('c')
+    c.resendTo('b')
+    // 이제 셋이 같이 활성화하고 돌린다
+    for (const ls of [a, b, c]) ls.activate(2, 200)
+    const all = [{ ls: a, tick: 160 }, { ls: b, tick: 160 }, { ls: c, tick: 100 + DELAY }]
+    expect(run(all, 300)).toBe(300)
+  })
+
+  it('몰아 보내기가 없으면 늦게 붙은 쌍은 멈춘다 (버그 재현)', () => {
+    const { link, connect } = makeMesh()
+    connect('a', 'b')
+    const idxA = new Map([['a', 0], ['b', 1]])
+    const idxB = new Map([['a', 0], ['b', 1]])
+    const a = new Lockstep(link('a'), DELAY, 0, idxA, N)
+    const b = new Lockstep(link('b'), DELAY, 1, idxB, N)
+    for (const ls of [a, b]) {
+      ls.drop(2)
+      ls.drop(3)
+    }
+    const ab = [{ ls: a, tick: 0 }, { ls: b, tick: 0 }]
+    run(ab, 100)
+    connect('a', 'c')
+    const idxC = new Map([['a', 0], ['b', 1]])
+    const c = new Lockstep(link('c'), DELAY, 2, idxC, N, 100)
+    for (let i = 0; i < N; i++) c.rejoin(i, 100)
+    c.drop(2)
+    c.drop(3)
+    idxA.set('c', 2)
+    idxB.set('c', 2)
+    run(ab, 160)
+    connect('b', 'c') // 붙기만 하고 몰아 보내지 않는다
+    for (const ls of [a, b, c]) ls.activate(2, 200)
+    const all = [{ ls: a, tick: 160 }, { ls: b, tick: 160 }, { ls: c, tick: 100 }]
+    expect(run(all, 300)).toBeLessThan(300)
+  })
+})

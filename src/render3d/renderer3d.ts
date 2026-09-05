@@ -10,7 +10,7 @@ import { PART_HEAD, WEAPONS } from '../core/weapons'
 import { BASE_H, BASE_W, Hud, RenderOptions, ScreenText, TEAM_COLORS, VIEW_H, VIEW_W, hex, roundRect } from '../render/hud'
 import { renderMapTiles } from '../render/minimap'
 import { PITCH, YAW, worldDirToScreen } from './camera'
-import { CharacterRig, buildCharacter, setRigOpacity } from './character3d'
+import { CharacterRig, buildCharacter, setRigOpacity, makeShield } from './character3d'
 import { VIEW_RADIUS_TILES, Viewer, Vision, canSee } from './vision'
 import { U, World3D, buildWorld } from './world3d'
 
@@ -124,6 +124,11 @@ export class Renderer3D {
   /** 팀 신호 (같은 편이 찍은 "여기"). 지면 마커 + 화면 밖이면 가장자리 화살표 */
   private marks: { x: number; z: number; life: number; max: number; mesh: THREE.Mesh }[] = []
   private shake = 0
+  /** 저격 반동: 카메라가 조준 반대쪽으로 밀렸다가 돌아온다 (월드 단위) */
+  private kick = 0
+  private kickDir = 0
+  /** 저격 조준경 섬광 (0~1). 스코프 안에서는 총구 화염이 안 보여 쐈는지도 몰랐다(제보) */
+  private scopeFlash = 0
   private camTarget = new THREE.Vector3()
   private camDist = FOLLOW_DIST
   private camInit = false
@@ -287,10 +292,18 @@ export class Renderer3D {
           }
           const tip = new THREE.Vector3()
           rig.gunTip.getWorldPosition(tip)
-          this.spawnFlash(tip, w.pellets > 1 ? 1.6 : 1)
-          v.vsx -= 0.12
-          v.vsy += 0.08
-          if (e.p === localPlayer) this.shake = Math.max(this.shake, w.pellets > 1 ? 0.12 : 0.05)
+          this.spawnFlash(tip, w.scope ? 2.6 : w.pellets > 1 ? 1.6 : 1)
+          v.vsx -= w.scope ? 0.3 : 0.12
+          v.vsy += w.scope ? 0.2 : 0.08
+          if (e.p === localPlayer) {
+            if (w.scope) {
+              // 저격: 크게 흔들리고, 카메라가 반동으로 뒤로 밀리며, 조준경이 번쩍인다
+              this.shake = Math.max(this.shake, 0.32)
+              this.kick = 1.1
+              this.kickDir = angleToRad(e.aim)
+              this.scopeFlash = 1
+            } else this.shake = Math.max(this.shake, w.pellets > 1 ? 0.12 : 0.05)
+          }
           // 단군덕 패시브(중계): 시야 밖 상대의 총성 위치를 1.2초 표시
           if (localPlayer >= 0 && state.players[localPlayer].char === 'dangun' && this.hidden[e.p] && state.players[e.p].team !== state.players[localPlayer].team) {
             this.pings.push({ x: e.x * U, z: e.y * U, life: 1.2, max: 1.2 })
@@ -596,6 +609,22 @@ export class Renderer3D {
     ctx.beginPath()
     ctx.arc(cur.x, cur.y, r + 2, 0, Math.PI * 2)
     ctx.stroke()
+    // 발사 섬광: 조준경 테두리가 금빛으로 번쩍이고 안쪽이 하얗게 밝아진다 — 쐈다는 걸 눈으로 알게
+    if (this.scopeFlash > 0) {
+      const f = this.scopeFlash
+      ctx.strokeStyle = `rgba(255,214,90,${(0.9 * f).toFixed(3)})`
+      ctx.lineWidth = 6 + 10 * f
+      ctx.beginPath()
+      ctx.arc(cur.x, cur.y, r + 2, 0, Math.PI * 2)
+      ctx.stroke()
+      const g2 = ctx.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, r)
+      g2.addColorStop(0, `rgba(255,245,210,${(0.35 * f).toFixed(3)})`)
+      g2.addColorStop(1, 'rgba(255,245,210,0)')
+      ctx.fillStyle = g2
+      ctx.beginPath()
+      ctx.arc(cur.x, cur.y, r, 0, Math.PI * 2)
+      ctx.fill()
+    }
     // 십자선
     ctx.strokeStyle = 'rgba(220,230,210,0.75)'
     ctx.lineWidth = 1
@@ -746,7 +775,7 @@ export class Renderer3D {
       ctx.fillText(name, s.x, s.y)
       if (!showHp) continue
       const w = mine ? 48 : 36
-      const hpK = Math.max(0, p.hp / c.maxHp)
+      const hpK = Math.max(0, p.hp / p.maxHp)
       const fade = mine || ally || spectator ? 1 : Math.min(1, this.hitShow[i] * 2)
       ctx.globalAlpha = fade
       // 체력: 머리 위 가로 막대
@@ -856,9 +885,22 @@ export class Renderer3D {
     // 후라이팬 휘두르기
     rig.arms.rotation.y = v.swing > 0 ? Math.sin(v.swing * Math.PI) * 1.5 : 0
     root.scale.set(v.sx, v.sy, v.sx)
-    // 스폰 보호: 살짝 반투명 깜빡임
-    if (p.invuln > 0) setRigOpacity(rig, 0.6 + 0.3 * Math.sin(this.t * 14))
-    else if (p.invuln === 0 && p.aliveTicks < 92) setRigOpacity(rig, 1)
+    // 무적(스폰 보호 · 우원덕이 구른 뒤): **황금 보호막**. 전에는 몸을 반투명하게 깜빡였는데
+    // 눈에 띄지 않아 우원덕 패시브가 있는지도 몰랐다(2026-09-06 제보). 구르는 동안은 구르기 연출이 이미 말해 준다
+    const guarded = p.invuln > 0 && p.dashTimer === 0
+    if (guarded && !rig.shield) {
+      rig.shield = makeShield(rig.centerY * 1.45)
+      rig.shield.position.y = rig.centerY
+      rig.root.add(rig.shield)
+    }
+    if (rig.shield) {
+      rig.shield.visible = guarded
+      if (guarded) {
+        const k = 1 + 0.05 * Math.sin(this.t * 9)
+        rig.shield.scale.set(k, k, k)
+        ;(rig.shield.material as THREE.MeshBasicMaterial).opacity = 0.28 + 0.1 * Math.sin(this.t * 9)
+      }
+    }
   }
 
   /** 바닥의 힐팩. 살짝 떠서 위아래로 흔들리고 천천히 돈다 — 눈에 띄어야 주우러 간다 */
@@ -1008,6 +1050,8 @@ export class Renderer3D {
       if (v.swing > 0) v.swing = Math.max(0, v.swing - dt * 4)
     }
     this.shake = Math.max(0, this.shake - dt * 1.4)
+    this.kick = Math.max(0, this.kick - dt * 5)
+    this.scopeFlash = Math.max(0, this.scopeFlash - dt * 3.2)
   }
 
   private updateCamera(curr: GameState, pos: { x: number; z: number }[], dt: number, opts: RenderOptions): void {
@@ -1060,6 +1104,11 @@ export class Renderer3D {
         tz += Math.sin(r) * reach
       }
       dist = FOLLOW_DIST * (this.scoped ? 1.45 : 1)
+    }
+    // 저격 반동: 조준 반대쪽으로 밀렸다가 돌아온다
+    if (this.kick > 0) {
+      tx -= Math.cos(this.kickDir) * this.kick
+      tz -= Math.sin(this.kickDir) * this.kick
     }
     // 맵 밖이 덜 보이도록 클램프 (요 45° 라 두 축 같은 여유)
     const margin = dist * 0.3

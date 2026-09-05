@@ -25,6 +25,9 @@ import {
   RESPAWN_TICKS,
   SPAWN_PROTECT_TICKS,
   STAMINA_MAX,
+  CHICKEN_HEAL,
+  CHICKEN_MAXHP_CAP,
+  CHICKEN_MAXHP_PER_KILL,
   SPRINT_COST,
   SPRINT_MIN,
   SPRINT_MUL,
@@ -46,6 +49,7 @@ export function createState(cfg: MatchConfig, map: GameMap): GameState {
     // 아직 아무도 안 들어온 자리는 판에 나오지 않는다 (난입하면 그때 채운다)
     if (cfg.absent?.[i]) {
       p.left = true
+      p.vacant = true
       p.alive = false
       p.hp = 0
     }
@@ -98,6 +102,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     y: 0,
     aim: 0,
     hp: c.maxHp,
+    maxHp: c.maxHp,
     alive: true,
     respawnTimer: 0,
     weapon: c.weapon,
@@ -120,6 +125,7 @@ function makePlayer(id: number, char: PlayerState['char'], team: number): Player
     sprinting: false,
     aliveTicks: 0,
     left: false,
+    vacant: false,
     choosing: false,
     streak: 0,
     stamina: STAMINA_MAX,
@@ -197,7 +203,7 @@ function stepMedkits(state: GameState): void {
     // 플레이어 순서대로 본다 (동시에 밟으면 번호가 앞선 사람이 줍는다 — 양쪽 화면에서 같아야 한다)
     for (const p of state.players) {
       if (!p.alive || p.left || p.choosing) continue
-      const max = CHARACTERS[p.char].maxHp
+      const max = p.maxHp
       if (p.hp >= max) continue
       const dx = p.x - m.x
       const dy = p.y - m.y
@@ -222,6 +228,7 @@ export function joinPlayer(state: GameState, map: GameMap, idx: number, char: Ch
   const p = state.players[idx]
   if (!p) return
   p.left = false
+  p.vacant = false
   p.char = char
   p.weapon = CHARACTERS[char].weapon
   p.team = team
@@ -323,8 +330,8 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
   p.recoil = Math.max(0, p.recoil - recover)
 
   // 매직덕 패시브: 피격 3초 후 초당 4 회복
-  if (c.id === 'magic' && state.tick - p.lastHitTick > 180 && p.hp < c.maxHp) {
-    p.hp = Math.min(c.maxHp, p.hp + 6 / 60)
+  if (c.id === 'magic' && state.tick - p.lastHitTick > 180 && p.hp < p.maxHp) {
+    p.hp = Math.min(p.maxHp, p.hp + 6 / 60)
   }
 
   p.aim = input.aim & 1023
@@ -368,7 +375,7 @@ function stepPlayer(state: GameState, map: GameMap, p: PlayerState, input: Input
     const inv = mx !== 0 && my !== 0 ? 0.70710678 : 1
     p.dashDx = mx * inv
     p.dashDy = my * inv
-    p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.3) : DASH_TICKS // 주우재덕: 대시 거리 +30%
+    p.dashTimer = c.id === 'juwoojae' ? Math.round(DASH_TICKS * 1.3) : DASH_TICKS // 우재덕: 대시 거리 +30%
     p.dashCooldown = c.dashCooldown
     p.ads = false
     if (c.id === 'uwon') p.invuln = Math.max(p.invuln, p.dashTimer + 12) // 우원덕: 대시가 끝난 뒤에도 0.2초 무적
@@ -580,7 +587,11 @@ function hurt(state: GameState, shooter: PlayerState, victim: PlayerState, dmg: 
     shooter.kills++
     shooter.killStreak++
     if (shooter.killStreak > shooter.bestStreak) shooter.bestStreak = shooter.killStreak
-    if (shooter.char === 'tongdak') shooter.hp = Math.min(CHARACTERS[shooter.char].maxHp, shooter.hp + 50)
+    if (shooter.char === 'tongdak') {
+      // 통천덕: 잡을수록 커진다. 최대 체력 +15(최대 +60), 체력 +20. 죽으면 원래대로(respawn)
+      shooter.maxHp = Math.min(CHARACTERS.tongdak.maxHp + CHICKEN_MAXHP_CAP, shooter.maxHp + CHICKEN_MAXHP_PER_KILL)
+      shooter.hp = Math.min(shooter.maxHp, shooter.hp + CHICKEN_HEAL)
+    }
     state.events.push({ type: 'death', p: victim.id, by: shooter.id, x: victim.x, y: victim.y })
     // 죽은 자리에 힐팩을 남긴다. 이긴 쪽이 그 자리를 차지하면 이어서 싸울 수 있다
     dropMedkit(state, victim.x, victim.y)
@@ -639,6 +650,7 @@ function respawn(state: GameState, map: GameMap, p: PlayerState): void {
     }
   }
   placeAt(p, spot)
+  p.maxHp = c.maxHp
   p.hp = c.maxHp
   p.alive = true
   p.ammo = w.magSize

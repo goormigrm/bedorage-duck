@@ -83,6 +83,8 @@ function capsuleDown(r: number, len: number, m: THREE.Material): THREE.Mesh {
 }
 
 export interface CharacterRig {
+  /** 무적 보호막 (렌더러가 처음 필요할 때 만든다) */
+  shield?: THREE.Mesh
   root: THREE.Group
   body: THREE.Group
   head: THREE.Group
@@ -205,6 +207,7 @@ function buildGun(w: WeaponDef, R: number): { group: THREE.Group; tip: THREE.Obj
   const len = (0.26 + w.length / 120) * Math.max(0.8, R / 0.42)
   const bodyM = mat(w.color)
   const darkM = mat(0x2b2b2b)
+  if (w.melee) return buildPan(len, bodyM, darkM)
   g.add(capsuleZ(0.055, len, bodyM))
   const grip = capsuleDown(0.03, 0.14, darkM)
   grip.position.set(0, 0.02, 0.08)
@@ -220,6 +223,39 @@ function buildGun(w: WeaponDef, R: number): { group: THREE.Group; tip: THREE.Obj
   }
   const tip = new THREE.Object3D()
   tip.position.set(0, 0.028, len + 0.03)
+  g.add(tip)
+  return { group: g, tip }
+}
+
+/**
+ * 후라이팬. 총과 같은 막대 모양으로 만들면 위에서 보면 그냥 검은 막대다(2026-09-06 제보).
+ * 판을 **바닥과 나란히 눕혀** 쿼터뷰에서 둥근 판이 보이게 한다: 손잡이 끝에 넓은 원판 + 테두리 + 안쪽 밝은 면.
+ */
+function buildPan(len: number, bodyM: THREE.MeshLambertMaterial, darkM: THREE.MeshLambertMaterial): { group: THREE.Group; tip: THREE.Object3D } {
+  const g = new THREE.Group()
+  const handleLen = len * 0.62
+  const handle = capsuleZ(0.028, handleLen, darkM)
+  handle.position.set(0, 0.01, 0)
+  g.add(handle)
+  const r = len * 0.42
+  const cz = handleLen * 0.5 + r * 0.92
+  // 판: 얇은 원기둥(축이 Y 라 그대로 두면 바닥과 나란하다)
+  const pan = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.9, 0.035, 28), bodyM)
+  pan.position.set(0, 0.012, cz)
+  pan.castShadow = true
+  g.add(pan)
+  // 테두리: 위로 살짝 올라온 벽
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 0.96, 0.022, 8, 28), darkM)
+  rim.rotation.x = Math.PI / 2
+  rim.position.set(0, 0.04, cz)
+  g.add(rim)
+  // 안쪽 면: 밝은 회색이라 "판" 으로 읽힌다
+  const inner = new THREE.Mesh(new THREE.CircleGeometry(r * 0.8, 24), mat(0x6f767c))
+  inner.rotation.x = -Math.PI / 2
+  inner.position.set(0, 0.031, cz)
+  g.add(inner)
+  const tip = new THREE.Object3D()
+  tip.position.set(0, 0.03, cz)
   g.add(tip)
   return { group: g, tip }
 }
@@ -288,7 +324,7 @@ function buildHair(
       break
     }
     case 'bob': {
-      // 단발(통닭덕): 정수리 캡 + 볼 옆·뒤로 턱까지 내려오는 커튼 + 일자 앞머리.
+      // 단발(통천덕): 정수리 캡 + 볼 옆·뒤로 턱까지 내려오는 커튼 + 일자 앞머리.
       // 얼굴은 +Z 쪽(phi = pi/2)이라 커튼은 그 앞을 비워 둔다.
       head.add(eggCap(R, 1.05, Math.PI * 0.32, hairM))
       head.add(eggCap(R, 1.05, Math.PI * 0.64, hairM, Math.PI * 0.82, Math.PI * 1.36))
@@ -330,6 +366,15 @@ function buildHair(
 }
 
 /** 죽었을 때 재질을 반투명으로 (페이드) */
+/** 무적 보호막(황금 구). 렌더러가 필요할 때 만들어 rig.root 에 붙인다 */
+export function makeShield(radius: number): THREE.Mesh {
+  const geo = new THREE.SphereGeometry(radius, 22, 16)
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.3, depthWrite: false })
+  const m = new THREE.Mesh(geo, mat)
+  m.renderOrder = 5
+  return m
+}
+
 export function setRigOpacity(rig: CharacterRig, opacity: number): void {
   rig.root.traverse((o) => {
     const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined

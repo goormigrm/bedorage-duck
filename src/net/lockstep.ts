@@ -6,11 +6,17 @@ import { EMPTY_INPUT, INPUT_BYTES, Input, cloneInput, readInput, writeInput } fr
 import { RoomLink } from './room'
 
 const REDUNDANCY = 8
+/** 내 입력은 이만큼(30초) 남겨 둔다 — 늦게 붙는 피어에게 몰아 보내기 위해 */
+const KEEP_MINE = 1800
 
 export class Lockstep {
   /** 플레이어별 틱 → 입력 */
   private inputs: Map<number, Input>[] = []
   private dropped: boolean[] = []
+  /** 이 자리에서 패킷을 하나라도 받았는가 (난입자를 판에 넣기 전에 회선이 진짜 뚫렸는지 본다) */
+  private heard: boolean[] = []
+  /** 자리별로 받은 가장 앞선 틱 (난입자가 판을 따라잡았는지 본다) */
+  private latestOf: number[] = []
   latestRemoteTick = -1
 
   constructor(
@@ -29,6 +35,8 @@ export class Lockstep {
       for (let t = startTick; t < startTick + delay; t++) m.set(t, cloneInput(EMPTY_INPUT))
       this.inputs.push(m)
       this.dropped.push(false)
+      this.heard.push(false)
+      this.latestOf.push(-1)
     }
     link.onInput((buf, from) => this.receive(buf, from))
   }
@@ -41,9 +49,17 @@ export class Lockstep {
     this.send(target)
   }
 
+  /** 내가 보낸 가장 앞선 틱 */
+  private latestLocal = -1
+
   private send(latest: number): void {
+    this.latestLocal = Math.max(this.latestLocal, latest)
+    this.link.sendInput(this.pack(latest, Math.min(REDUNDANCY, latest - this.startTick + 1)))
+  }
+
+  /** latest 부터 거슬러 count 틱의 내 입력을 한 패킷으로 */
+  private pack(latest: number, count: number): Uint8Array {
     const mine = this.inputs[this.me]
-    const count = Math.min(REDUNDANCY, latest - this.startTick + 1)
     const buf = new ArrayBuffer(5 + count * INPUT_BYTES)
     const v = new DataView(buf)
     v.setUint32(0, latest)
@@ -52,7 +68,24 @@ export class Lockstep {
       const inp = mine.get(latest - i) ?? EMPTY_INPUT
       writeInput(v, 5 + i * INPUT_BYTES, inp)
     }
-    this.link.sendInput(new Uint8Array(buf))
+    return new Uint8Array(buf)
+  }
+
+  /**
+   * 늦게 연결된 피어에게 지난 입력을 전부 몰아 보낸다.
+   * 평소에는 최근 8틱만 겹쳐 보내므로, 난입자와 어떤 게스트의 연결이 8틱 넘게 늦으면
+   * 그 사이 틱이 영영 비어 둘 다 멈춘다(실제 망에서는 피어마다 연결되는 시점이 다르다).
+   * 메시가 완성되는 순간 이걸 부르면 그 구멍이 메워진다. 패킷 한 개에 최대 255틱.
+   */
+  resendTo(peerId: string): void {
+    if (this.latestLocal < 0) return
+    const from = Math.max(this.startTick, this.latestLocal - KEEP_MINE + 1)
+    let hi = this.latestLocal
+    while (hi >= from) {
+      const count = Math.min(255, hi - from + 1)
+      this.link.sendInput(this.pack(hi, count), peerId)
+      hi -= count
+    }
   }
 
   private receive(raw: Uint8Array | ArrayBuffer, from: string): void {
@@ -63,6 +96,8 @@ export class Lockstep {
     const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
     const latest = v.getUint32(0)
     const count = v.getUint8(4)
+    this.heard[idx] = true
+    if (latest > this.latestOf[idx]) this.latestOf[idx] = latest
     const m = this.inputs[idx]
     for (let i = 0; i < count; i++) {
       const t = latest - i
@@ -106,10 +141,35 @@ export class Lockstep {
     return this.dropped[idx] === true
   }
 
-  /** 오래된 입력 정리 (리싱크용으로 600틱은 남긴다) */
+  heardFrom(idx: number): boolean {
+    return this.heard[idx] === true
+  }
+
+  /** 그 자리에서 받은 가장 앞선 틱 (-1 = 아직 없음) */
+  latestFrom(idx: number): number {
+    return this.latestOf[idx] ?? -1
+  }
+
+  /**
+   * 난입자를 fromTick 부터 판에 넣는다. rejoin 과 달리 **fromTick 이전은 전부 빈 입력으로 덮어쓴다** —
+   * 난입자는 관전하는 동안에도 입력을 보내고 있었는데, 그걸 누구는 쓰고 누구는 안 쓰면 판이 어긋난다
+   * (리싱크가 지난 틱을 다시 돌릴 때 특히). 모두가 같은 틱부터, 그 전은 모두 빈 입력.
+   */
+  activate(idx: number, fromTick: number): void {
+    if (idx < 0 || idx >= this.dropped.length) return
+    this.dropped[idx] = false
+    const m = this.inputs[idx]
+    for (const k of [...m.keys()]) if (k < fromTick) m.delete(k)
+    for (let t = Math.max(0, fromTick - 600); t < fromTick; t++) m.set(t, cloneInput(EMPTY_INPUT))
+  }
+
+  /** 오래된 입력 정리 (남의 것은 리싱크용으로 600틱, 내 것은 몰아 보내기용으로 KEEP_MINE 틱) */
   prune(currentTick: number): void {
-    const cut = currentTick - 600
-    if (cut <= 0) return
-    for (const m of this.inputs) for (const k of m.keys()) if (k < cut) m.delete(k)
+    for (let i = 0; i < this.inputs.length; i++) {
+      const cut = currentTick - (i === this.me ? KEEP_MINE : 600)
+      if (cut <= 0) continue
+      const m = this.inputs[i]
+      for (const k of m.keys()) if (k < cut) m.delete(k)
+    }
   }
 }

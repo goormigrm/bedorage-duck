@@ -378,9 +378,14 @@ export class Sfx {
         this.noiseBurst(node, t0, 0.05, 'highpass', 4000, 2500, 0.5)
         break
       case 'sniper':
-        this.noiseBurst(node, t0, 0.06, 'highpass', 2500, 1500, 0.9)
-        this.tone(node, t0, 0.32, 'sine', 100, 30, 1.0)
-        this.noiseBurst(node, t0 + 0.02, 0.3, 'lowpass', 800, 150, 0.6)
+        // 크랙(날카롭고 길게) + 몸을 치는 저음 + 메아리 꼬리 + 0.25초 뒤 노리쇠 — 조준경 안에서도 "쐈다" 가 들리게
+        this.noiseBurst(node, t0, 0.09, 'highpass', 3200, 1800, 1.2)
+        this.tone(node, t0, 0.05, 'square', 1400, 400, 0.35)
+        this.tone(node, t0, 0.45, 'sine', 80, 22, 1.3)
+        this.noiseBurst(node, t0 + 0.02, 0.42, 'lowpass', 900, 120, 0.8)
+        this.noiseBurst(node, t0 + 0.14, 0.35, 'bandpass', 600, 300, 0.35)
+        this.tone(node, t0 + 0.26, 0.03, 'square', 2600, 1800, 0.22)
+        this.tone(node, t0 + 0.33, 0.04, 'square', 1900, 1200, 0.25)
         break
       default:
         break

@@ -146,14 +146,33 @@ export type CtlMessage =
   | { t: 'drop'; p: number; tick: number }
   /** 팀 신호: 같은 편에게 "여기" 를 찍는다. sim 밖(렌더 전용)이라 결정론과 무관하다 */
   | { t: 'mark'; p: number; x: number; y: number }
-  /** 진행 중인 방에 새로 들어가겠다 (게스트 → 호스트) */
-  | { t: 'joinAsk'; char: string; name: string }
   /**
-   * 호스트 → 모두: 빈 자리 p 에 tick 부터 사람이 들어온다.
-   * **id 는 난입자의 피어 id 다.** 이게 없으면 호스트가 아닌 사람은 난입자의 입력이 누구 것인지
-   * 몰라서 통째로 버리고, 그 자리 입력을 영원히 기다리다 모두가 멈춘다(2026-09-06 제보).
+   * 난입 (진행 중인 방에 새로 들어가기). 순서:
+   *   1. 게스트 → 호스트 joinAsk. 호스트는 자리를 잡아 두고 곧바로 resume(판 전체)을 보낸다.
+   *   2. 난입자는 그 판으로 세션을 열되 **관전 상태**다 — 자기 자리는 아직 판에 없고, 모두의 락스텝도 그 자리를 기다리지 않는다.
+   *   3. 난입자가 모든 피어와 연결되면 joinReady. 호스트가 그 사람 입력까지 실제로 받고 있으면 joinLive 를 방송한다.
+   *   4. joinLive 의 tick 에 모두가 같은 틱에 자리를 채우고, 그때부터 그 사람 입력을 기다린다.
+   *   준비가 늦으면(8초) 호스트가 joinCancel 로 자리를 되돌리고 그 사람을 돌려보낸다(rejoinNo).
+   * 기존 사람들은 3·4 사이에도 그 자리를 기다리지 않으므로 **난입 때문에 멈추는 일이 없다.**
    */
-  | { t: 'joinAt'; p: number; tick: number; char: string; team: number; name: string; id: string }
+  | { t: 'joinAsk'; char: string; name: string }
+  /** 난입자 → 호스트: 모두와 연결됐다 (호스트가 준 피어 목록 기준) */
+  | { t: 'joinReady' }
+  /**
+   * 호스트 → 모두: 자리 p 에 tick 부터 사람이 들어온다. **id 는 난입자의 피어 id 다.**
+   * 이게 없으면 호스트가 아닌 사람은 난입자의 입력이 누구 것인지 몰라서 통째로 버리고,
+   * 그 자리 입력을 영원히 기다리다 모두가 멈춘다(2026-09-06 제보).
+   */
+  | { t: 'joinLive'; p: number; tick: number; char: string; team: number; name: string; id: string }
+  /**
+   * 호스트 → 모두: 자리 p 에 들어오기로 한 사람(id)의 배정을 물린다 (앉기 전에 나갔거나 준비가 늦었다).
+   * 이게 없으면 그 자리에 유령이 소환되고 모두가 그 입력을 기다리다 멈춘다.
+   */
+  | { t: 'joinCancel'; p: number; id: string }
+  /** 아무나 → 모두: 지난 입력을 다시 보내 달라 (난입자가 세션을 연 직후 — 그 전에 온 패킷은 받을 곳이 없었다) */
+  | { t: 'inputsPlease' }
+  /** 호스트 → 모두: 팀전에서 누가 나가 경기를 끝낸다 (p = 나간 사람). 받은 쪽은 그 자리에서 결과를 띄운다 */
+  | { t: 'abort'; p: number }
   /** 호스트 → 돌아온 사람에게만: 그 시점의 판 전체 (이걸로 이어서 시작한다) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | { t: 'resume'; p: number; tick: number; state: any; cfg: any }
@@ -187,7 +206,8 @@ export interface RoomLink {
   readonly rtt: number
   /** to 를 생략하면 모두에게 */
   sendCtl(m: CtlMessage, to?: string | string[]): void
-  sendInput(buf: Uint8Array): void
+  /** to 를 주면 그 피어에게만 (늦게 연결된 피어에게 지난 입력을 몰아 보낼 때) */
+  sendInput(buf: Uint8Array, to?: string): void
   onCtl(cb: (m: CtlMessage, from: string) => void): void
   onInput(cb: (buf: Uint8Array, from: string) => void): void
   onPeerJoin(cb: (id: string) => void): void
@@ -228,8 +248,10 @@ export function openRoom(code: string, role: 'host' | 'guest'): RoomLink {
         void sendCtlRaw(m)
       }
     },
-    sendInput(buf) {
-      if (peers.size > 0) void sendInRaw(buf)
+    sendInput(buf, to) {
+      if (to !== undefined) {
+        if (peers.has(to)) void sendInRaw(buf, to)
+      } else if (peers.size > 0) void sendInRaw(buf)
     },
     onCtl(cb) {
       ctlCbs.push(cb)

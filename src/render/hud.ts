@@ -85,6 +85,11 @@ interface Banner {
   color: string
 }
 
+/** 나간 자리 표시. 한 번도 사람이 앉지 않은 자리는 "나감" 이 아니라 "빈 자리" */
+function leftLabel(p: PlayerState): string {
+  return p.vacant ? '빈 자리' : '나감'
+}
+
 export class Hud {
   readonly ctx: CanvasRenderingContext2D
   private banner: Banner | null = null
@@ -339,7 +344,7 @@ export class Hud {
         ctx.fillText(opts.names[i] + (i === opts.localPlayer ? ' (나)' : ''), cx, 30)
         ctx.font = '400 30px "Black Han Sans", "IBM Plex Sans KR", sans-serif'
         ctx.fillStyle = p.left ? '#666' : '#e6edf3'
-        ctx.fillText(p.left ? '나감' : `${p.kills}`, cx, 54)
+        ctx.fillText(p.left ? leftLabel(p) : `${p.kills}`, cx, 54)
         if (i > 0) {
           ctx.fillStyle = 'rgba(255,255,255,0.1)'
           ctx.fillRect(px + 20 + colW * i, 24, 1, 42)
@@ -427,7 +432,7 @@ export class Hud {
       // 체력 바는 관전자와 아군에게만. 상대 정보는 숨긴다
       const reveal = opts.localPlayer === -1 || (teams && opts.localPlayer >= 0 && s.players[opts.localPlayer].team === m.p.team)
       if (reveal) {
-        const hpK = m.p.left ? 0 : Math.max(0, m.p.hp / c.maxHp)
+        const hpK = m.p.left ? 0 : Math.max(0, m.p.hp / m.p.maxHp)
         ctx.fillStyle = 'rgba(255,255,255,0.1)'
         roundRect(ctx, x + 150, ry + rowH / 2 - 4, 70, 8, 3)
         ctx.fill()
@@ -438,7 +443,7 @@ export class Hud {
       ctx.font = '600 12px "IBM Plex Mono", monospace'
       ctx.textAlign = 'right'
       ctx.fillStyle = '#a9b4c0'
-      const status = m.p.left ? '나감' : m.p.choosing ? '캐릭터 선택 중' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`
+      const status = m.p.left ? leftLabel(m.p) : m.p.choosing ? '캐릭터 선택 중' : !m.p.alive ? `리스폰 ${Math.ceil(m.p.respawnTimer / 60)}` : `${m.p.kills}킬`
       ctx.fillText(status, x + w - 12, ry + rowH / 2 - 1)
     })
   }
@@ -471,7 +476,7 @@ export class Hud {
     ctx.font = '400 11px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#7d8896'
     ctx.fillText(`${c.passiveName} · ${c.basedOn}`, ix + ctx.measureText(name).width + 60, by + 24)
-    const hpK = Math.max(0, p.hp / c.maxHp)
+    const hpK = Math.max(0, p.hp / p.maxHp)
     ctx.fillStyle = 'rgba(255,255,255,0.1)'
     roundRect(ctx, ix, by + 34, 200, 12, 4)
     ctx.fill()
@@ -480,7 +485,7 @@ export class Hud {
     ctx.fill()
     ctx.font = '600 12px "IBM Plex Mono", monospace'
     ctx.fillStyle = '#e6edf3'
-    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${c.maxHp}` : p.left ? '나감' : p.choosing ? '선택 중' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
+    ctx.fillText(p.alive ? `${Math.ceil(p.hp)} / ${p.maxHp}` : p.left ? leftLabel(p) : p.choosing ? '선택 중' : `리스폰 ${Math.ceil(p.respawnTimer / 60)}`, ix + 208, by + 45)
     ctx.font = '500 12px "IBM Plex Sans KR", sans-serif'
     ctx.fillStyle = '#a9b4c0'
     ctx.fillText(w.name, ix, by + 70)
