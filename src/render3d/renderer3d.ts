@@ -43,6 +43,8 @@ interface WorldText {
   max: number
   color: string
   big: boolean
+  /** 막 뜰 때 튀어 오르는 정도 (기본 0.8, 헤드샷은 더 크게) */
+  pop?: number
 }
 
 interface DuckVis {
@@ -52,6 +54,8 @@ interface DuckVis {
   vsy: number
   walk: number
   flash: number
+  /** 피격 플래시 색 (몸통 빨강 · 머리 금색) */
+  flashColor: number
   deadT: number
   fall: number
   /** 피격 튐 쿨다운 (한 틱에 여러 발 맞아도 한 번만) */
@@ -332,24 +336,38 @@ export class Renderer3D {
         }
         case 'hit': {
           const v = this.vis[e.p]
+          const head = e.part === PART_HEAD
           this.hitShow[e.p] = 2.5
-          v.flash = 0.12
+          // 맞은 몸이 번쩍: 몸통은 **빨강**, 머리는 **금색**으로 더 오래 (2026-09-05 — 흰색은 눈에 안 띄었다)
+          v.flash = head ? 0.22 : 0.15
+          v.flashColor = head ? 0xffd84a : 0xff3b30
           // 산탄·기관총처럼 한 틱에 여러 발 맞아도 튐은 한 번만 (예전엔 겹쳐서 튀었다)
           if (v.hitCd <= 0) {
             v.hitCd = 0.1
-            v.vsx += 0.28
-            v.vsy -= 0.24
+            v.vsx += head ? 0.4 : 0.28
+            v.vsy -= head ? 0.34 : 0.24
           }
-          const head = e.part === PART_HEAD
-          this.texts.push({ x: e.x * U, z: e.y * U, y: 1.9, text: head ? `${e.dmg} 헤드` : `${e.dmg}`, life: 0.8, max: 0.8, color: head ? '#ffd84a' : '#ffffff', big: head })
-          // 덕코프식 명중: 빨간 덩어리 대신 **불꽃이 튀고 하얗게 번쩍인다**
-          for (let i = 0; i < 9; i++) {
+          this.texts.push({
+            x: e.x * U, z: e.y * U, y: head ? 2.1 : 1.9,
+            text: head ? `헤드샷 ${e.dmg}` : `${e.dmg}`,
+            life: head ? 1.0 : 0.8, max: head ? 1.0 : 0.8,
+            color: head ? '#ffd84a' : '#ff5a4a', big: head, pop: head ? 1.6 : 0.8,
+          })
+          // 덕코프식 명중: 불꽃이 튀고 번쩍인다. 몸통은 빨강·주황, 머리는 금색·흰색으로 더 많이
+          const n = head ? 16 : 10
+          for (let i = 0; i < n; i++) {
             const a = Math.random() * Math.PI * 2
-            const sp = 0.07 + Math.random() * 0.12
-            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.1, Math.sin(a) * sp, 0.22 + Math.random() * 0.1, i % 3 === 0 ? 0xffb347 : 0xfff3c0, 0.42)
+            const sp = (head ? 0.1 : 0.07) + Math.random() * 0.13
+            const col = head ? (i % 3 === 0 ? 0xfff3c0 : 0xffd84a) : i % 3 === 0 ? 0xff9a6a : 0xff4a3a
+            this.spawnParticle(e.x * U, GUN_H, e.y * U, Math.cos(a) * sp, 0.05 + Math.random() * 0.12, Math.sin(a) * sp, 0.24 + Math.random() * 0.12, col, head ? 0.5 : 0.44)
           }
-          this.spawnImpact(e.x * U, GUN_H, e.y * U, head ? 0xffe08a : 0xffffff, head ? 1.9 : 1.4)
-          // 쏜 사람이 나면 조준점에 히트마커
+          this.spawnImpact(e.x * U, GUN_H, e.y * U, head ? 0xffd84a : 0xff5a4a, head ? 2.8 : 1.7)
+          if (head) {
+            // 헤드샷: 하얀 심 + 바닥에 금빛 링
+            this.spawnImpact(e.x * U, GUN_H + 0.1, e.y * U, 0xffffff, 1.3)
+            this.spawnRing(e.x * U, e.y * U, 0.3, 1.7, 0.4, 0xffd84a)
+          }
+          // 쏜 사람이 나면 조준점에 히트마커 (몸통 빨강 · 머리 금색 크게)
           if (e.by === localPlayer) this.hud.hitMark(head)
           if (e.p === localPlayer) {
             this.shake = Math.max(this.shake, 0.18)
@@ -555,8 +573,8 @@ export class Renderer3D {
     const st: ScreenText[] = this.texts.map((t) => {
       const p = this.worldToScreen(t.x, t.y + (1 - t.life / t.max) * 0.8, t.z)
       const k = t.life / t.max
-      // 막 뜰 때 크게 튀었다가 제 크기로 (덕코프 숫자 느낌)
-      return { x: p.x, y: p.y, text: t.text, k, color: t.color, big: t.big, scale: 1 + 0.8 * Math.max(0, (k - 0.72) / 0.28) }
+      // 막 뜰 때 크게 튀었다가 제 크기로 (덕코프 숫자 느낌). 헤드샷은 더 크게 튄다
+      return { x: p.x, y: p.y, text: t.text, k, color: t.color, big: t.big, scale: 1 + (t.pop ?? 0.8) * Math.max(0, (k - 0.72) / 0.28) }
     })
     this.hud.drawTexts(st)
     this.drawPings()
@@ -908,7 +926,7 @@ export class Renderer3D {
     v.sx = Math.max(0.62, Math.min(1.5, v.sx + v.vsx * dt))
     v.sy = Math.max(0.62, Math.min(1.5, v.sy + v.vsy * dt))
     v.flash = Math.max(0, v.flash - dt)
-    rig.setFlash(v.flash > 0 ? Math.min(1, v.flash * 8) : 0)
+    rig.setFlash(v.flash > 0 ? Math.min(1, v.flash * 8) : 0, v.flashColor)
 
     // 걷기: 다리 스윙 + 달걀 몸 뒤뚱(좌우 기울기) + 통통 튀기
     if (p.moving) v.walk += dt * (p.sprinting ? 17 : 13) // 달리면 다리도 빨리 움직인다
@@ -1231,7 +1249,7 @@ export class Renderer3D {
 }
 
 function newVis(): DuckVis {
-  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, deadT: -1, fall: 0, hitCd: 0, swing: 0 }
+  return { sx: 1, sy: 1, vsx: 0, vsy: 0, walk: 0, flash: 0, flashColor: 0xffffff, deadT: -1, fall: 0, hitCd: 0, swing: 0 }
 }
 
 export { hex, PLAYER_RADIUS }

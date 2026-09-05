@@ -71,10 +71,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     recoilRecover: deg(0.5), speed: 14, life: 55, moveMul: 0.96, length: 18, color: 0x7c8590,
     falloffStart: 320, falloffEnd: 700, falloffMin: 0.62,
   },
+  // 2026-09-05 탄속 17 → 24 (사용자: 소총 밸런스 — 더 빠르게). 수명은 사거리(약 1200px)가 그대로이도록 70 → 50
   rifle: {
     id: 'rifle', name: '소총', damage: 23, pellets: 1, fireInterval: 10, auto: true,
     magSize: 30, reloadTicks: 130, spreadHip: deg(6.5), spreadAds: deg(1.4), recoil: deg(2.6),
-    recoilRecover: deg(0.5), speed: 17, life: 70, moveMul: 0.92, length: 24, color: 0x5f6b48,
+    recoilRecover: deg(0.5), speed: 24, life: 50, moveMul: 0.92, length: 24, color: 0x5f6b48,
     falloffStart: 420, falloffEnd: 820, falloffMin: 0.78,
   },
   // 근접에서 압도적(탄당 17×7 = 119), 멀면 급감. 한 방에 죽이지는 못한다

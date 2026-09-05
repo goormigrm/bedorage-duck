@@ -396,7 +396,11 @@ export class Sfx {
     const { node, t0 } = this.bus(s, 0.9)
     this.tone(node, t0, 0.06, 'triangle', 900, 300, 0.7)
     this.noiseBurst(node, t0, 0.04, 'bandpass', 2200, 1200, 0.4, 1.5)
-    if (head) this.tone(node, t0 + 0.01, 0.12, 'sine', 1500, 1100, 0.5)
+    if (head) {
+      // 헤드샷: 높은 '팅' 두 겹 — 몸통 명중과 확실히 구분되게
+      this.tone(node, t0 + 0.01, 0.14, 'sine', 1500, 1100, 0.6)
+      this.tone(node, t0 + 0.02, 0.2, 'triangle', 2400, 1900, 0.45)
+    }
   }
 
   private death(s: Spatial): void {

@@ -102,7 +102,8 @@ export interface CharacterRig {
   stride: number
   /** 피격 플래시용 재질 목록 */
   flashMats: THREE.MeshLambertMaterial[]
-  setFlash(k: number): void
+  /** 피격 플래시. tint 는 색(기본 흰색) — 몸통은 빨강, 머리는 금색 */
+  setFlash(k: number, tint?: number): void
 }
 
 export function buildCharacter(def: CharacterDef): CharacterRig {
@@ -194,8 +195,8 @@ export function buildCharacter(def: CharacterDef): CharacterRig {
     root, body, head, arms, legL, legR, gunTip: gun.tip, def, weapon, height, centerY,
     stride: Math.max(0.7, Math.min(1.55, legStretch)),
     flashMats,
-    setFlash(k: number) {
-      const e = k > 0 ? new THREE.Color(k, k, k) : new THREE.Color(0, 0, 0)
+    setFlash(k: number, tint = 0xffffff) {
+      const e = k > 0 ? new THREE.Color(tint).multiplyScalar(k) : new THREE.Color(0, 0, 0)
       for (const m of flashMats) m.emissive.copy(e)
     },
   }

@@ -142,7 +142,7 @@ export class Hud {
    * 각도는 **화면 기준**이라 호가 가리키는 쪽을 그대로 보면 된다.
    */
   hitMark(head: boolean): void {
-    this.hitMarkMax = head ? 0.32 : 0.22
+    this.hitMarkMax = head ? 0.45 : 0.24
     this.hitMarkT = this.hitMarkMax
     this.hitMarkHead = head
   }
@@ -643,19 +643,26 @@ export class Hud {
     ctx.beginPath()
     ctx.arc(cur.x, cur.y, on ? 2.2 : 1.5, 0, Math.PI * 2)
     ctx.fill()
-    // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다
+    // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다. 몸통은 **빨강**, 머리는 **금색**으로 더 크고 오래 + 링
     if (this.hitMarkT > 0) {
       const k = this.hitMarkT / this.hitMarkMax
-      const d0 = r + 6 + (1 - k) * 5
-      const d1 = d0 + (this.hitMarkHead ? 11 : 8)
-      ctx.strokeStyle = this.hitMarkHead ? `rgba(255,216,74,${k.toFixed(3)})` : `rgba(255,255,255,${k.toFixed(3)})`
-      ctx.lineWidth = this.hitMarkHead ? 3 : 2.5
+      const head = this.hitMarkHead
+      const d0 = r + 6 + (1 - k) * (head ? 9 : 5)
+      const d1 = d0 + (head ? 16 : 10)
+      ctx.strokeStyle = head ? `rgba(255,216,74,${k.toFixed(3)})` : `rgba(255,70,58,${k.toFixed(3)})`
+      ctx.lineWidth = head ? 4 : 3
       ctx.beginPath()
       for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
         ctx.moveTo(cur.x + sx * d0 * 0.7071, cur.y + sy * d0 * 0.7071)
         ctx.lineTo(cur.x + sx * d1 * 0.7071, cur.y + sy * d1 * 0.7071)
       }
       ctx.stroke()
+      if (head) {
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(cur.x, cur.y, d1 + 4 + (1 - k) * 10, 0, Math.PI * 2)
+        ctx.stroke()
+      }
     }
   }
 }
