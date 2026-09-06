@@ -483,7 +483,7 @@ export class Lobby {
                   ? '<span class="pill ok">난입 가능</span>'
                   : '<span class="pill">게임 중</span>'
         return `<div class="room">
-          <span class="rhost"><b>${c ? c.name : r.hostChar}</b>의 방</span>
+          <span class="rhost"><b>${r.hostName && r.hostName.trim() ? esc(r.hostName.trim()) : c ? c.name : r.hostChar}</b>의 방</span>
           <span class="rmap">${m}</span>
           <span class="rmode">${ROOM_MODE_LABEL[r.mode] ?? r.mode}</span>
           <span class="rkill">${r.targetKills}킬</span>
@@ -534,6 +534,7 @@ export class Lobby {
     this.lobbyLink.announce({
       code: this.link.code,
       hostChar: this.char,
+      hostName: this.nick,
       map: this.mapId,
       targetKills: this.killsRoom,
       mode: this.roomMode,

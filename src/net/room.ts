@@ -32,6 +32,8 @@ export function makeRoomCode(): string {
 export interface RoomInfo {
   code: string
   hostChar: string
+  /** 방장 닉네임 (없으면 캐릭터 이름으로 보여 준다). 목록에 "○○의 방" — 2026-09-06 */
+  hostName?: string
   map: string
   targetKills: number
   mode: RoomMode

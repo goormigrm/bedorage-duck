@@ -62,7 +62,8 @@ npm run dev     # http://localhost:5173/bedorage-duck/
 | `npm run dev` | 개발 서버 (HMR) |
 | `npm test` | vitest — 결정론·카메라·성능·밸런스 |
 | `npm run build` | `tsc --noEmit` + vite build → `dist/` |
-| `npx vite-node tools/balance.ts` | 봇 1:1 전 조합 밸런스 계측 (`ffa` 붙이면 4인) |
+| `npx vite-node tools/balance.ts` | 봇 1:1 전 조합 밸런스 계측 — 보통 봇, `seeds=5` 로 최종 수치 (`ffa` 붙이면 4인) |
+| `node tools/rooms.mjs` | 방 지키기 — 배포 사이트에 사람처럼 보이는 방을 열어 둔다 (운영용, Playwright + 크롬) |
 
 `main` 에 push 하면 GitHub Actions 가 테스트·빌드 후 GitHub Pages 로 배포합니다.
 커밋 작성자는 저장소마다 설정해야 합니다: `git config user.name goormigrm` / `git config user.email 1117tkdrms@gmail.com`

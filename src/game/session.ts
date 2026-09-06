@@ -75,6 +75,12 @@ export class Session {
   private bots: BotMemory[] = []
   /** 아래 조작 안내 띠 표시 여부 (처음 두 판 · 이후 메뉴에서) */
   private keysShown = true
+  /**
+   * 자동 조종(`?autopilot=1`): 내 캐릭터를 보통 난이도 봇이 움직인다. 방을 지키는 운영용 — tools/rooms.mjs 가 이 주소로
+   * 브라우저를 여러 개 띄워 사람처럼 보이는 방을 만들어 둔다(2026-09-06). 주소 뒤 플래그라 다른 사람에게는 안 보인다.
+   * 소리는 끄고 화면은 2fps 로만 그린다(탭이 여러 개라 부담을 줄인다)
+   */
+  private readonly autopilot = typeof location !== 'undefined' && location.search.includes('autopilot=1')
   private lastEmoteAt = -1e9
   private lockstep: Lockstep | null = null
   private peerIndex = new Map<string, number>()
@@ -205,6 +211,8 @@ export class Session {
       this.sfx.toggle()
       syncMute()
     }
+    // 자동 조종 탭(방 지키기)은 소리를 안 낸다 — 크롬을 여러 개 띄우니 배경음이 겹친다
+    if (this.autopilot) this.sfx.setMuted(true)
     syncMute()
     this.syncMute = syncMute
     this.sfx.startBgm()
@@ -238,8 +246,14 @@ export class Session {
     this.startLobbyBeacon()
     this.ticker = new Ticker(() => this.tick())
     this.ticker.start()
-    this.raf = requestAnimationFrame(this.frame)
-    ;(window as unknown as { __bd?: unknown }).__bd = { tick: () => this.state.tick, phase: () => this.state.phase, state: () => this.state }
+    this.raf = this.autopilot ? (setTimeout(() => this.frame(performance.now()), 500) as unknown as number) : requestAnimationFrame(this.frame)
+    // 디버그·운영 훅. others = 나와 봇 자리를 뺀 '사람' 수 (방 지키기 스크립트가 판을 이어갈지 방을 다시 열지 정한다)
+    ;(window as unknown as { __bd?: unknown }).__bd = {
+      tick: () => this.state.tick,
+      phase: () => this.state.phase,
+      state: () => this.state,
+      others: () => this.state.players.filter((p, i) => i !== this.cfg.localPlayer && !p.left && !p.vacant && !this.cfg.bots?.[i]).length,
+    }
   }
 
   /**
@@ -256,6 +270,7 @@ export class Session {
       lobby.announce({
         code: this.cfg.link?.code ?? '',
         hostChar: this.state.players[0].char,
+        hostName: this.cfg.names?.[0] ?? '',
         map: info.map,
         mode: info.mode as never,
         targetKills: info.targetKills,
@@ -691,13 +706,15 @@ export class Session {
     const maxSteps = this.joiningIn ? 16 : 4
     while (this.acc >= TICK_MS && steps < maxSteps) {
       const t = this.state.tick
-      const localIn = this.input.sample(
-        this.renderer,
-        me.x,
-        me.y,
-        // 터치 조작이면 조준을 대신 해 준다 (스틱 두 개는 폰에서 무리)
-        this.touch ? { state: this.state, map: this.map, me: this.cfg.localPlayer } : undefined,
-      )
+      const localIn = this.autopilot
+        ? botInput(this.state, this.map, lp, this.bots[lp], 'normal')
+        : this.input.sample(
+            this.renderer,
+            me.x,
+            me.y,
+            // 터치 조작이면 조준을 대신 해 준다 (스틱 두 개는 폰에서 무리)
+            this.touch ? { state: this.state, map: this.map, me: this.cfg.localPlayer } : undefined,
+          )
       let inputs: Input[]
       if (this.lockstep) {
         this.lockstep.pushLocal(t, localIn)
@@ -801,7 +818,7 @@ export class Session {
       cursor: this.aimCursor(),
       touch: this.touch !== null,
     })
-    this.raf = requestAnimationFrame(this.frame)
+    this.raf = this.autopilot ? (setTimeout(() => this.frame(performance.now()), 500) as unknown as number) : requestAnimationFrame(this.frame)
   }
 
   /** 조준선 화면 좌표. 터치면 화면 중앙에서 조준 방향으로 띄운다 */
