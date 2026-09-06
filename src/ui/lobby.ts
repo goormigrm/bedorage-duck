@@ -19,6 +19,8 @@ import { SessionConfig } from '../game/session'
 
 export interface LobbyHandlers {
   onStart: (cfg: Omit<SessionConfig, 'onExit'>) => void
+  /** 페이지 공용 로비 통로 (main.ts 가 하나 열어 돌려 쓴다). 없으면 스스로 연다(테스트) */
+  lobbyLink?: LobbyLink
 }
 
 /** 목표 킬: 5~50, 5 단위 */
@@ -393,9 +395,14 @@ export class Lobby {
   }
 
   // ---------- 방 목록 ----------
+  /** 통로가 페이지 공용이면 닫지 않는다 — 닫았다 다시 열면 Trystero 캐시 때문에 새 통로가 죽는다(main.ts 주석) */
+  private get sharedLobby(): boolean {
+    return !!this.handlers.lobbyLink
+  }
+
   private openLobbyList(): void {
     if (this.lobbyLink) return
-    this.lobbyLink = openLobby()
+    this.lobbyLink = this.handlers.lobbyLink ?? openLobby()
     this.lobbyLink.onRooms((rooms) => {
       this.rooms = rooms
       this.renderRooms()
@@ -420,13 +427,13 @@ export class Lobby {
       btn.disabled = true
       btn.textContent = '찾는 중…'
     }
-    if (this.lobbyLink) {
+    if (this.lobbyLink && !this.sharedLobby) {
       this.lobbyLink.leave()
       this.lobbyLink = null
     }
     this.rooms = []
     this.renderRooms()
-    // 이전 통로가 정리될 짬을 준 뒤 다시 연다
+    // 이전 통로가 정리될 짬을 준 뒤 다시 연다 (공용 통로면 그대로 두고 방송만 다시)
     window.setTimeout(() => {
       if (this.disposed) return
       this.openLobbyList()
@@ -957,7 +964,7 @@ export class Lobby {
           lobby: this.lobbyLink,
           roomInfo: { map: String(cfg.mapId ?? this.mapId), mode: this.roomMode, targetKills: cfg.targetKills, size: this.roomSize },
         }
-      } else {
+      } else if (!this.sharedLobby) {
         this.lobbyLink.leave()
       }
       this.lobbyLink = null
@@ -1123,7 +1130,7 @@ export class Lobby {
     clearInterval(this.onlineTimer)
     this.closeLink()
     if (this.lobbyLink) {
-      this.lobbyLink.leave()
+      if (!this.sharedLobby) this.lobbyLink.leave()
       this.lobbyLink = null
     }
   }

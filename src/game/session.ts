@@ -1207,8 +1207,8 @@ export class Session {
     this.disposed = true
     clearInterval(this.lobbyBeacon)
     if (this.cfg.lobby) {
+      // 방송만 거둔다. 통로는 페이지 공용이라 닫지 않는다 — 닫으면 다음 로비의 새 방이 남에게 안 보인다(main.ts 주석, 2026-09-06)
       this.cfg.lobby.announce(null)
-      this.cfg.lobby.leave()
     }
     cancelAnimationFrame(this.raf)
     this.ticker.stop()
