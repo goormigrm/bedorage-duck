@@ -219,8 +219,17 @@ export interface RoomLink {
 
 export const ROOM_MAX = MAX_PLAYERS
 
+/** 우리가 나간 방 객체. Trystero 는 leave 가 끝나기 전(또는 중간에 멈추면 영영) 같은 방 id 로 옛 객체를 돌려준다 */
+const leftRooms = new WeakSet<Room>()
+
 export function openRoom(code: string, role: 'host' | 'guest'): RoomLink {
   const room: Room = joinRoom({ appId: APP_ID, rtcConfig: RTC_CONFIG }, `room-${code}`)
+  if (leftRooms.has(room)) {
+    // 나간 방을 다시 받았다: 릴레이 구독·방송은 살아 있고 피어 연결은 아래 leave 가 끊어 두었으므로, 상대가 다시 제안하면 이 객체로도 붙는다.
+    // (2026-09-06 사용자 제보: 나갔다가 같은 방에 난입하면 "연결되지 않았습니다" — 새로고침 전까지 재현. 원인 후보라 기록만 남긴다)
+    console.warn(`[room] ${code}: Trystero 가 나갔던 방 객체를 다시 돌려줬다 (leave 미완료)`)
+    leftRooms.delete(room)
+  }
   const [sendCtlRaw, onCtlRaw] = room.makeAction<CtlMessage>('ctl')
   const [sendInRaw, onInRaw] = room.makeAction<Uint8Array>('in')
   const peers = new Set<string>()
@@ -273,13 +282,33 @@ export function openRoom(code: string, role: 'host' | 'guest'): RoomLink {
       leaveCbs.length = 0
       ctlCbs.length = 0
       inCbs.length = 0
-      void room.leave()
+      leftRooms.add(room)
+      const conns = Object.values(room.getPeers())
+      ;(room.leave() as Promise<void>).catch(() => {})
+      // 나가기 메시지가 나갈 짬(0.5초)을 주고 **연결을 직접 끊는다**. Trystero 의 leave 는 피어마다 메시지를 보낸 뒤에야 연결을 닫는데,
+      // 보낼 게 밀려 있거나 죽은 피어가 남아 있으면 거기서 멈추거나 실패해 연결이 열린 채 남는다. 그러면 상대 Trystero 는 우리가 아직
+      // 붙어 있는 줄 알고 같은 피어 id 의 재입장 신호를 무시한다 → 같은 방에 다시 난입하면 "연결되지 않았습니다"(2026-09-06 사용자 제보).
+      // 연결이 실제로 끊기면 상대 쪽이 정리하므로, 그 뒤의 재입장은 새 연결로 붙는다
+      setTimeout(() => {
+        for (const pc of conns) {
+          try {
+            if (pc.connectionState !== 'closed') pc.close()
+          } catch {
+            /* 이미 닫힘 */
+          }
+        }
+      }, 500)
     },
   }
 
-  // 혹시 이미 붙어 있던 방(Trystero 캐시)이면 지금 있는 피어를 "방금 들어온 것" 으로 알려 준다 — 안 그러면 joinAsk 를 보낼 계기가 없다
+  // 혹시 이미 붙어 있던 방(Trystero 캐시)이면 지금 있는 피어를 "방금 들어온 것" 으로 알려 준다 — 안 그러면 joinAsk 를 보낼 계기가 없다.
+  // 끊긴 연결(닫는 중·실패)은 뺀다 — 죽은 피어에게 joinAsk 를 보내 봐야 답이 없고, 진짜 연결은 곧 onPeerJoin 으로 온다
   setTimeout(() => {
-    for (const id of Object.keys(room.getPeers())) if (!peers.has(id)) { peers.add(id); for (const cb of [...joinCbs]) cb(id) }
+    for (const [id, pc] of Object.entries(room.getPeers())) {
+      if (peers.has(id) || pc.connectionState !== 'connected') continue
+      peers.add(id)
+      for (const cb of [...joinCbs]) cb(id)
+    }
   }, 0)
   room.onPeerJoin((id) => {
     peers.add(id)

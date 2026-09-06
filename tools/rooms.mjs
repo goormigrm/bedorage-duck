@@ -6,6 +6,7 @@
 //   ROOMS_SHOW=1 node tools/rooms.mjs                                     # 창을 보이게 (기본은 숨김)
 //   ROOMS_LIMIT=1 node tools/rooms.mjs                                    # 앞에서 N개만
 //   ROOMS_TAG=시험 node tools/rooms.mjs                                    # 닉네임 뒤에 붙임 (개발 서버 시험 때 배포 방과 구분)
+//   ROOMS_MODE=ffa node tools/rooms.mjs                                    # 모든 방을 개인전(또는 teams)으로 고정 (난입 시험용)
 //
 // 필요: npm i -D playwright (설치됨) + 이 PC 의 크롬. 크롬이 없으면 npx playwright install chromium.
 // 방 하나 = 크롬 컨텍스트 하나. 판이 끝나면 8초 뒤 "다시 하기", 혼자 남아 방이 닫히면 로비에서 방을 다시 만든다.
@@ -90,7 +91,7 @@ function pickRoom(r) {
   const modes = r.size % 2 === 0 ? ['ffa', 'teams'] : ['ffa'] // 팀전은 짝수 정원만
   const c = {
     char: r.char || pick(Object.keys(CHAR_NAME), avoidChar),
-    mode: r.mode || pick(modes, avoidMode),
+    mode: r.mode || process.env.ROOMS_MODE || pick(modes, avoidMode), // ROOMS_MODE=ffa 로 시험 때 고정
     map: r.map || pick(MAP_IDS, avoidMap),
     kills: r.kills || pick(KILLS, [prev.kills]),
   }
@@ -167,6 +168,7 @@ async function where(page) {
       st: s.phase === 'over' ? 'over' : 'game',
       others: typeof bd.others === 'function' ? bd.others() : 1,
       snap: {
+        tick: s.tick,
         stalls: typeof bd.stalls === 'function' ? bd.stalls() : { count: 0, ms: 0, now: 0 },
         players: s.players.map((p, i) => ({
           i, name: names[i] || '', char: p.char, left: !!p.left, vacant: !!p.vacant, kills: p.kills, deaths: p.deaths, bot: !!bots[i],
@@ -268,10 +270,25 @@ async function runRoom(browser, r) {
   let overSince = 0
   let lastState = ''
   let gameSince = 0
+  // 판이 멈춘 채(틱이 안 늘어남) 오래 가면 페이지를 다시 연다 — 세션의 12초 무응답 처리가 있지만 마지막 그물
+  let lastTick = -1
+  let tickAt = Date.now()
   for (;;) {
     try {
       const w = await where(page)
       const { st, others } = w
+      if (st === 'game' && w.snap) {
+        if (w.snap.tick !== lastTick) {
+          lastTick = w.snap.tick
+          tickAt = Date.now()
+        } else if (Date.now() - tickAt > 45000) {
+          log(r.nick, `판이 45초째 멈춰 있어(틱 ${lastTick}) 페이지를 다시 연다`)
+          lastTick = -1
+          await page.goto(URL, { waitUntil: 'domcontentloaded' })
+          await sleep(3000)
+          continue
+        }
+      } else lastTick = -1
       if (st !== lastState) {
         if (st === 'game' && lastState !== 'over') {
           gameSince = Date.now()

@@ -110,6 +110,13 @@ export class Session {
   private static readonly ALONE_GRACE_TICKS = 60 * 30
   /** 혼자 남기 시작한 틱 (-1 = 혼자가 아니다) */
   private aloneSince = -1
+  /** "봇과 계속하기" 를 골랐다 — 사람이 다시 들어왔다 나가기 전까지는 혼자 남음 안내를 다시 띄우지 않는다 */
+  private aloneOk = false
+  /** 자리별로 입력이 끊긴 시각(ms, -1 = 정상). 이만큼 넘게 아무 입력도 안 오면 나간 것으로 본다 */
+  private silentSince: number[] = []
+  /** 입력이 이만큼 안 오면 연결이 죽은 것으로 보고 자리를 비운다(호스트) / 호스트가 죽은 것으로 본다(게스트).
+   *  나가기 메시지도 연결 끊김 신호도 못 받는 경우(탭이 멈춤·회선이 조용히 죽음)를 위한 마지막 그물 — 없으면 판이 영영 "상대 입력 대기 중" */
+  private static readonly SILENT_DROP_MS = 12000
   /** 호스트만: 돌아오기로 한 사람 (틱이 되면 상태를 보낸다) */
   private pendingRejoin: {
     peerId: string
@@ -499,6 +506,46 @@ export class Session {
 
   // ---------- 대전: 피어 ----------
 
+  /**
+   * 멈춘 동안 누구 입력이 안 오는지 본다. SILENT_DROP_MS 넘게 조용한 사람은 나간 것으로 처리한다.
+   * 호스트만 게스트를 비운다(모두 같은 틱에 비우도록 drop 을 방송하는 건 호스트의 일). 게스트는 호스트가 조용할 때만 움직인다
+   */
+  private watchSilent(t: number, now: number): void {
+    if (!this.lockstep) return
+    for (let i = 0; i < this.state.players.length; i++) {
+      if (i === this.cfg.localPlayer || this.dropped.has(i) || this.cfg.bots?.[i] || this.lockstep.isBot(i)) continue
+      const p = this.state.players[i]
+      if (p.left || p.vacant) continue
+      if (this.lockstep.latestFrom(i) >= t) {
+        this.silentSince[i] = -1
+        continue
+      }
+      if (!(this.silentSince[i] >= 0)) {
+        this.silentSince[i] = now
+        continue
+      }
+      if (now - this.silentSince[i] < Session.SILENT_DROP_MS) continue
+      if (!this.isHost && i !== 0) continue
+      const id = [...this.peerIndex].find(([, v]) => v === i)?.[0]
+      this.silentSince[i] = -1
+      console.warn(`[session] ${this.names[i]} 입력이 ${Math.round(Session.SILENT_DROP_MS / 1000)}초 없음 → 나간 것으로 처리`)
+      if (id) this.onPeerGone(id)
+      else this.dropSeat(i)
+    }
+  }
+
+  /** 피어 id 를 모를 때(전달받은 목록이 비었을 때) 자리만으로 이탈 처리 — onPeerGone 의 자리 부분과 같다 */
+  private dropSeat(idx: number): void {
+    if (this.dropped.has(idx)) return
+    this.dropped.add(idx)
+    this.lockstep?.drop(idx)
+    if (this.isHost) {
+      const tick = this.state.tick + Session.DROP_DELAY_TICKS
+      this.pendingDrops.push({ p: idx, tick })
+      this.cfg.link?.sendCtl({ t: 'drop', p: idx, tick })
+    }
+  }
+
   /** 피어가 나갔다 (연결 끊김 또는 leave 메시지) */
   private onPeerGone(id: string): void {
     if (this.disposed) return
@@ -547,8 +594,16 @@ export class Session {
     const t = this.state.tick
     const keep: PendingDrop[] = []
     for (const d of this.pendingDrops) {
-      if (d.tick <= t) dropPlayer(this.state, d.p)
-      else keep.push(d)
+      if (d.tick <= t) {
+        dropPlayer(this.state, d.p)
+        // 호스트가 **나를** 비웠다(내 입력이 오래 안 갔다): 판에 남아 있어 봐야 유령이다 → 안내하고 로비로
+        if (d.p === this.cfg.localPlayer && !this.isHost && this.overlay.hidden) {
+          this.showOverlay('연결이 끊겼습니다', '내 입력이 한동안 방에 닿지 않아 자리가 비워졌습니다. 로비에서 다시 난입할 수 있습니다.', [
+            { label: '로비로', primary: true, onClick: () => this.exit() },
+          ])
+          this.paused = true
+        }
+      } else keep.push(d)
     }
     this.pendingDrops = keep
     this.checkAlone()
@@ -560,25 +615,40 @@ export class Session {
    */
   private checkAlone(): void {
     if (this.cfg.mode !== 'p2p' || this.state.phase === 'over') return
-    const remaining = this.state.players.filter((p) => !p.left).length
+    // **사람**만 센다. 봇 자리는 남아 있어도 혼자다 — 전에는 봇을 세서 봇으로 채운 방은 사람이 다 나가도 영영 "게임 중" 으로
+    // 남았다(2026-09-06 사용자 제보: 판이 끝난 뒤에도 방 지키기 방이 목록에 그대로). 방 지키기는 이 안내의 "로비로" 를 눌러 방을 새로 연다
+    const remaining = this.state.players.filter((p, i) => !p.left && !this.cfg.bots?.[i]).length
     if (remaining >= 2) {
       if (this.aloneSince >= 0) {
         this.aloneSince = -1
         this.message = ''
       }
+      this.aloneOk = false
       return
     }
+    if (this.aloneOk) return
     if (this.aloneSince < 0) this.aloneSince = this.state.tick
     const left = Session.ALONE_GRACE_TICKS - (this.state.tick - this.aloneSince)
+    const hasBots = this.cfg.bots?.some(Boolean) ?? false
     if (left > 0) {
-      this.message = `혼자 남았습니다 · ${Math.ceil(left / 60)}초 안에 아무도 안 들어오면 방이 닫힙니다`
+      this.message = `${hasBots ? '사람은 혼자 남았습니다' : '혼자 남았습니다'} · ${Math.ceil(left / 60)}초 안에 아무도 안 들어오면 방이 닫힙니다`
       return
     }
     if (this.overlay.hidden) {
       this.message = ''
-      this.showOverlay('아무도 들어오지 않았습니다', '방을 닫습니다.', [
-        { label: '로비로', primary: true, onClick: () => this.exit() },
-      ])
+      const buttons = [{ label: '로비로', primary: true, onClick: () => this.exit() }]
+      if (hasBots)
+        buttons.push({
+          label: '봇과 계속하기',
+          primary: false,
+          onClick: () => {
+            this.aloneOk = true
+            this.aloneSince = -1
+            this.paused = false
+            this.hideOverlay()
+          },
+        })
+      this.showOverlay('아무도 들어오지 않았습니다', hasBots ? '봇만 남았습니다. 방을 닫거나 봇과 계속할 수 있습니다.' : '방을 닫습니다.', buttons)
       this.paused = true
     }
   }
@@ -690,6 +760,13 @@ export class Session {
     this.pendingDrops = []
     this.acc = 0
     this.paused = false
+    // 끊김·혼자 남음 집계는 판마다 (방 지키기 기록이 판 단위다)
+    this.stallCount = 0
+    this.stallMs = 0
+    this.stallSince = -1
+    this.silentSince.length = 0
+    this.aloneSince = -1
+    this.aloneOk = false
     this.hideOverlay()
     if (this.cfg.link) this.lockstep = this.newLockstep()
   }
@@ -733,8 +810,10 @@ export class Session {
         }
         if (!this.lockstep.hasAll(t)) {
           if (this.stallSince < 0) this.stallSince = now
+          this.watchSilent(t, now)
           break
         }
+        if (this.silentSince.length) this.silentSince.length = 0
         if (this.stallSince >= 0) {
           // 0.4초 넘게 멈춘 것만 '끊김' 으로 센다 (화면에 "상대 입력 대기 중…" 이 뜨는 기준과 같다). 방 지키기 로그가 읽는다
           const d = now - this.stallSince

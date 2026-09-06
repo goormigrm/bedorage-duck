@@ -62,6 +62,8 @@ export class Lobby {
   private myReady = false
   private myTeam = 0
   private waitTimer = 0
+  /** 이번 입장에서 통로를 다시 연 횟수 (피어가 안 붙으면 2번까지 다시 연다) */
+  private joinTries = 0
   private rooms: RoomInfo[] = []
   private starting = false
   private disposed = false
@@ -648,17 +650,39 @@ export class Lobby {
     } else {
       this.renderRoom()
     }
+    this.joinTries = 0
+    this.armJoinWait(code, barge)
+  }
+
+  /**
+   * 피어가 붙지 않으면 통로를 **다시 연다**(8초 → 6초 → 6초, 합쳐 20초). 릴레이 신호가 한 번 새거나 상대가 옛 연결을 아직
+   * 정리하지 못했을 때 새 구독·새 방송으로 다시 두드리는 것이 그냥 기다리는 것보다 낫다(2026-09-06 사용자 제보:
+   * 나갔다가 같은 방에 난입하면 20초 뒤 "연결되지 않았습니다", 새로고침하면 됨). 세 번째도 안 되면 포기한다
+   */
+  private armJoinWait(code: string, barge: boolean): void {
+    clearTimeout(this.waitTimer)
     this.waitTimer = window.setTimeout(() => {
-      if (this.link && !this.hostId && !this.bargeSent) {
-        this.status(
-          '연결되지 않았습니다. 방이 아직 열려 있는지 확인하세요. 회사·학교망이면 폰 핫스팟으로 시도해 보세요.',
-          'bad',
-          `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`,
-        )
-        this.bindCancel()
-        this.closeLink()
+      if (!this.link || this.hostId || this.bargeSent) return
+      if (this.joinTries < 2) {
+        this.joinTries++
+        console.warn(`[lobby] ${code}: 피어가 붙지 않아 통로를 다시 연다 (${this.joinTries}번째)`)
+        const old = this.link
+        this.link = null
+        old.leave()
+        this.link = openRoom(code, 'guest')
+        this.wireLink()
+        if (barge) this.showJoining(1)
+        this.armJoinWait(code, barge)
+        return
       }
-    }, 20000)
+      this.status(
+        '연결되지 않았습니다. 방이 아직 열려 있는지 확인하세요. 회사·학교망이면 폰 핫스팟으로 시도해 보세요.',
+        'bad',
+        `<div class="row"><button class="btn secondary" id="btn-cancel">닫기</button></div>`,
+      )
+      this.bindCancel()
+      this.closeLink()
+    }, this.joinTries === 0 ? 8000 : 6000)
   }
 
   private wireLink(): void {
