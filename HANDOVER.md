@@ -43,7 +43,7 @@ node tools/rooms.mjs               # 방 지키기 (배포 사이트에 사람�
 PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크린샷·GIF 를 뜨려면 `?shot=1`(아래 "스크린샷·GIF 다시 뜨기").
 
-## 현재 상태 (2026-09-06 · v1.10.0 — 오픈 베타 + 방 지키기)
+## 현재 상태 (2026-09-06 · v1.10.1 — 오픈 베타 + 방 지키기)
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
@@ -172,11 +172,12 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 
 ### 방 지키기 (2026-09-06 · 운영 도구)
 
-동시 접속이 없으면 사람들이 혼자 하기만 하고 나간다 → **사람처럼 보이는 방 5개**를 열어 두는 스크립트. 켜고 끄는 건 사용자가 한다.
+동시 접속이 없으면 사람들이 혼자 하기만 하고 나간다 → **사람처럼 보이는 방(기본 2개)**을 열어 두는 스크립트. 켜고 끄는 건 사용자가 한다.
 - 켜기: `tools\rooms.cmd` 더블클릭 (또는 `node tools/rooms.mjs`). **끄기: 그 창을 닫거나 Ctrl+C** — 방도 같이 사라진다.
 - 방 목록·닉네임·캐릭터·모드는 `tools/rooms.mjs` 맨 위 `ROOMS` 배열. 시험: `ROOMS_URL=http://localhost:5173/bedorage-duck/ ROOMS_LIMIT=2 node tools/rooms.mjs`, 창 보기 `ROOMS_SHOW=1`.
 - 원리: 방장 자리는 `?autopilot=1`(보통 봇이 내 캐릭터를 움직임, DESIGN 8.7), 빈 자리는 대기실 "봇으로 채우기". 게스트에게 봇 표시는 없다.
-- 비용: 크롬 컨텍스트 5개(headless, SwiftShader) — CPU 를 꽤 쓴다. 노트북에서 돌리면 발열. 필요한 만큼만 `ROOMS_LIMIT`.
+- 비용: 크롬 컨텍스트 하나에 CPU 가 꽤 든다(headless, SwiftShader) → 기본 2개. 더 열려면 `ROOMS` 주석을 푼다. 노트북이면 발열.
+- `rooms.cmd` 는 **영문만** 써야 한다 — 한글이 들어가면 cmd 가 줄을 잘못 읽어 창이 바로 닫힌다(2026-09-06 겪음). 창이 바로 닫히면 터미널에서 `node tools/rooms.mjs` 로 오류를 본다.
 - 주의: 로비 방송은 개발 서버와 배포 사이트가 같은 릴레이라 로컬 시험 방도 배포 사이트 사람에게 보인다. Playwright 는 devDependency(무료), 브라우저는 이 PC 크롬을 쓴다(없으면 `npx playwright install chromium`).
 
 ### 오픈 베타 운영 (배포 뒤)

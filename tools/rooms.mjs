@@ -1,7 +1,7 @@
 // 방 지키기 — 배포된 사이트에 사람처럼 보이는 방을 여러 개 열어 두고, 누가 들어와 준비를 누르면 바로 판이 시작되게 한다.
 // 방장 자리는 `?autopilot=1` 로 보통 난이도 봇이 움직이고, 빈 자리는 대기실의 "봇으로 채우기" 로 채운다.
 //
-//   node tools/rooms.mjs            # 켜기 (Ctrl+C 로 끄기)  ← tools/rooms.cmd 를 더블클릭해도 된다
+//   node tools/rooms.mjs            # 켜기 (Ctrl+C 로 끄기)  ← tools/rooms.cmd 를 더블클릭해도 된다 (창을 닫으면 꺼진다)
 //   ROOMS_URL=http://localhost:5173/bedorage-duck/ node tools/rooms.mjs   # 개발 서버로 시험
 //   ROOMS_SHOW=1 node tools/rooms.mjs                                     # 창을 보이게 (기본은 숨김)
 //
@@ -16,12 +16,13 @@ const SHOW = process.env.ROOMS_SHOW === '1'
 const LIMIT = Number(process.env.ROOMS_LIMIT || 0) || 0
 
 /** 방 목록. 닉네임은 8자까지. 캐릭터 id 는 characters.ts (cheolmyeon chim dangun magic jupeol uwon giyeol pungwol oknyang tongdak juwoojae seungwoo) */
+// 기본 2개 (크롬 하나에 CPU 가 꽤 든다 — 2026-09-06 사용자). 더 열고 싶으면 아래 주석을 풀거나 줄을 더한다
 const ROOMS = [
   { nick: '구름이구름', char: 'chim', size: 4, mode: 'ffa', kills: 5, map: 'studio', bots: true, diff: 'normal' },
-  { nick: '구르미구름', char: 'uwon', size: 2, mode: 'ffa', kills: 5, map: 'yard', bots: false, diff: 'normal' },
   { nick: '구르미소미', char: 'pungwol', size: 4, mode: 'teams', kills: 10, map: 'garage', bots: true, diff: 'normal' },
-  { nick: '구름소미', char: 'dangun', size: 3, mode: 'ffa', kills: 10, map: 'yard', bots: true, diff: 'normal' },
-  { nick: '소미구르미', char: 'giyeol', size: 4, mode: 'ffa', kills: 15, map: 'studio', bots: true, diff: 'normal' },
+  // { nick: '구르미구름', char: 'uwon', size: 2, mode: 'ffa', kills: 5, map: 'yard', bots: false, diff: 'normal' },
+  // { nick: '구름소미', char: 'dangun', size: 3, mode: 'ffa', kills: 10, map: 'yard', bots: true, diff: 'normal' },
+  // { nick: '소미구르미', char: 'giyeol', size: 4, mode: 'ffa', kills: 15, map: 'studio', bots: true, diff: 'normal' },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

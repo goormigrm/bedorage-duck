@@ -1,7 +1,17 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0.."
-title 배도라지 덕 - 방 지키기 (닫으면 방이 사라집니다)
-echo 방 지키기를 켭니다. 이 창을 닫거나 Ctrl+C 를 누르면 방이 사라집니다.
-node tools\rooms.mjs
+title bedorage-duck rooms (close this window to stop)
+echo === bedorage-duck room keeper ===
+echo Close this window (or press Ctrl+C) to stop. Rooms disappear when stopped.
+echo.
+where node >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] node.exe not found. Install Node.js 20+ and try again.
+  pause
+  exit /b 1
+)
+node tools/rooms.mjs
+echo.
+echo (room keeper exited)
 pause
