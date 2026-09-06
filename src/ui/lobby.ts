@@ -296,6 +296,11 @@ export class Lobby {
       이 게임은 서버가 없어 방을 만든 사람의 연결이 곧 방인데, 폰 회선은 자주 흔들려 모두의 판이 터집니다.<br>
       <b>방 목록에서 참가</b>하거나 <b>혼자 하기</b>를 이용해 주세요. 방은 랜선을 꽂은 PC에서 만드는 것이 가장 안전합니다.`
       nn.classList.add('strong')
+      // 폰 가로 화면은 높이가 375px 안팎이라 제목·소개 띠·안내문에 밀려 방 목록이 화면 밖(스크롤 아래)에 있었다 —
+      // "모바일에서는 방 목록이 안 보인다"(2026-09-06 제보). 소개 띠를 감추고 안내문을 방 목록 아래로 내린다
+      h.querySelector('.lobby')?.classList.add('touch')
+      const charsHead = h.querySelector('#chars')?.previousElementSibling
+      if (charsHead) charsHead.before(nn)
     }
     ;(h.querySelector('#btn-solo-go') as HTMLButtonElement).onclick = () => {
       this.closeDlg()

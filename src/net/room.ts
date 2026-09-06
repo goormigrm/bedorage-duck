@@ -277,6 +277,10 @@ export function openRoom(code: string, role: 'host' | 'guest'): RoomLink {
     },
   }
 
+  // 혹시 이미 붙어 있던 방(Trystero 캐시)이면 지금 있는 피어를 "방금 들어온 것" 으로 알려 준다 — 안 그러면 joinAsk 를 보낼 계기가 없다
+  setTimeout(() => {
+    for (const id of Object.keys(room.getPeers())) if (!peers.has(id)) { peers.add(id); for (const cb of [...joinCbs]) cb(id) }
+  }, 0)
   room.onPeerJoin((id) => {
     peers.add(id)
     for (const cb of [...joinCbs]) cb(id)

@@ -1219,5 +1219,10 @@ export class Session {
     window.removeEventListener('resize', this.fit)
     this.renderer.dispose()
     this.root.remove()
+    // 게임 방 통로를 **닫는다**(2026-09-06). 전에는 안 닫아서 페이지가 그 방에 계속 붙어 있었고, 같은 방에 다시 난입하면
+    // Trystero 가 캐시한 옛 방을 돌려줘 피어 연결 이벤트가 안 나 joinAsk 를 보내지 못했다 → 15초 뒤 "연결되지 않았습니다".
+    // 방금 보낸 leave 메시지가 나갈 짬을 준 뒤 닫는다
+    const link = this.cfg.link
+    if (link) setTimeout(() => link.leave(), 300)
   }
 }

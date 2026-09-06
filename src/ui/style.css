@@ -441,3 +441,10 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 .seg[hidden] { display: none; }
 .setrow.botrow .hintline { font-size: 12px; }
+
+/* 터치 기기 로비: 세로 375px 안팎의 가로 화면에서도 방 목록이 첫 화면에 들어오게 (2026-09-06) */
+.lobby.touch { padding-top: 12px; }
+.lobby.touch .season, .lobby.touch .feats, .lobby.touch .tag { display: none; }
+.lobby.touch h1 { font-size: 34px; margin: 0 0 6px; }
+.lobby.touch .topbar { margin: 4px 0 10px; }
+.lobby.touch .notice { margin-top: 14px; }
