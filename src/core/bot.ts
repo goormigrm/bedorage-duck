@@ -3,7 +3,8 @@
 // 여러 명이 있으면 보이는 적 중 가장 가까운 사람을 표적으로 삼고, 안 보이면 마지막으로 본 곳을 뒤진다.
 
 import { angleDiff, atan2A, cosA, sinA, len } from './fixedmath'
-import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, Input } from './input'
+import { BTN_ADS, BTN_DASH, BTN_FIRE, BTN_RELOAD, BTN_SPRINT, BTN_SWAP, Input } from './input'
+import { CHARACTER_LIST } from './characters'
 import { GameMap, TILE, isWall, rayBlocked } from './map'
 import { Rng, makeRng, rand, randInt, randSigned } from './rng'
 import { GameState, PlayerState, isEnemy } from './state'
@@ -54,8 +55,17 @@ const PREFERRED_RANGE: Record<WeaponId, number> = {
   pan: 42,
 }
 
+/** 봇이 죽었을 때 캐릭터를 바꿀 확률 (2026-09-06 사용자: 봇전에서 봇도 게임 중에 캐릭터를 바꾸게). 계측·시험은 swap 을 끈 봇을 쓴다 */
+export const BOT_SWAP = { chance: 0.4 }
+
 export interface BotMemory {
   rng: Rng
+  /** 죽었을 때 캐릭터를 바꿔도 되는지 (게임에서는 켬, 밸런스 계측·시험은 끔 — 조합이 흐트러진다) */
+  swap: boolean
+  /** 이번 죽음에서 바꿀지 이미 정했는지 */
+  swapDecided: boolean
+  /** 보낼 캐릭터 번호 (CHARACTER_LIST 순서 + 1, 0 = 없음) */
+  swapTo: number
   aim: number
   wobbleBias: number
   wobbleTimer: number
@@ -82,9 +92,12 @@ export interface BotMemory {
   lastMyHp: number
 }
 
-export function makeBot(seed: number): BotMemory {
+export function makeBot(seed: number, opts: { swap?: boolean } = {}): BotMemory {
   return {
     rng: makeRng(seed),
+    swap: opts.swap ?? false,
+    swapDecided: false,
+    swapTo: 0,
     aim: 0,
     wobbleBias: 0,
     wobbleTimer: 0,
@@ -153,8 +166,23 @@ export function botInput(
   const out: Input = { mx: 0, my: 0, aim: mem.aim, buttons: 0, char: 0 }
   if (!me.alive) {
     mem.reaction = d.reaction
+    // 죽어 있는 동안 한 번만 정한다: 확률로 다른 캐릭터를 고르고, Tab + 캐릭터 번호를 한 틱에 보내면 sim 이 그 틱에 바꾼다
+    if (mem.swap && !mem.swapDecided && state.phase === 'playing') {
+      mem.swapDecided = true
+      if (rand(mem.rng) < BOT_SWAP.chance) {
+        let k = randInt(mem.rng, 0, CHARACTER_LIST.length - 1)
+        if (CHARACTER_LIST[k].id === me.char) k = (k + 1) % CHARACTER_LIST.length
+        mem.swapTo = k + 1
+      }
+    }
+    if (mem.swapTo > 0 && !me.choosing) {
+      out.buttons |= BTN_SWAP
+      out.char = mem.swapTo
+      mem.swapTo = 0
+    }
     return out
   }
+  mem.swapDecided = false
 
   const enemy = state.phase === 'playing' ? pickTarget(state, map, me, mem) : null
 

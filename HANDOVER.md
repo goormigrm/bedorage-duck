@@ -43,7 +43,7 @@ node tools/rooms.mjs               # 방 지키기 (배포 사이트에 사람�
 PowerShell 에서 `npm` 이 실행 정책에 막히면 `npm.cmd` 또는 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 PC 에서 모바일 조작을 시험하려면 주소 뒤에 `?touch=1`, 스크린샷·GIF 를 뜨려면 `?shot=1`(아래 "스크린샷·GIF 다시 뜨기").
 
-## 현재 상태 (2026-09-06 · v1.10.3 — 오픈 베타 + 방 지키기)
+## 현재 상태 (2026-09-06 · v1.11.0 — 오픈 베타 + 방 지키기(기록·무작위) + 봇 캐릭터 교체)
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
@@ -178,6 +178,10 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 - 켜기: `tools\rooms.cmd` 더블클릭 (또는 `node tools/rooms.mjs`). **끄기: 그 창을 닫거나 Ctrl+C** — 방도 같이 사라진다.
 - 방 목록·닉네임·캐릭터·모드는 `tools/rooms.mjs` 맨 위 `ROOMS` 배열. 시험: `ROOMS_URL=http://localhost:5173/bedorage-duck/ ROOMS_LIMIT=2 node tools/rooms.mjs`, 창 보기 `ROOMS_SHOW=1`.
 - 원리: 방장 자리는 `?autopilot=1`(보통 봇이 내 캐릭터를 움직임, DESIGN 8.7), 빈 자리는 대기실 "봇으로 채우기". 게스트에게 봇 표시는 없다.
+- **기록: `tools/rooms.log`**(로컬, git 제외 — 메모장으로 연다). 판마다 `판 시작 / 입장 닉(캐릭터) — n번 자리 / 캐릭터 교체 a → b / 끊김 N회(상대 입력 대기, 누적 초) / 판 끝 — 진행 시간 / 결과 — 자리별 킬·데스 / 퇴장 닉 — 플레이 시간, 킬·데스`.
+  "다시 하기" 를 누르면 그 판의 사람은 `퇴장 … · 다시 하기` 로 닫고 다음 판에서 다시 `입장` 으로 센다(판 단위 기록). 끊김은 세션이 `window.__bd.stalls()` 로 내놓는 0.4초 넘는 멈춤(카운트다운 제외).
+- **무작위**: 캐릭터·개인전/팀전·맵은 방을 열 때마다 새로 고른다(다른 방·직전 판과 겹치지 않게), 목표 킬은 5 또는 10(2026-09-06 사용자: 10 이하). `ROOMS` 항목에 `char/mode/map/kills` 를 적으면 고정.
+- 시험할 때 `ROOMS_TAG=시험` 을 붙이면 닉네임이 "구름이구름시험" 이 돼 배포 사이트의 진짜 방과 구분된다(같은 릴레이라 목록이 섞인다).
 - 비용: 크롬 컨텍스트 하나에 CPU 가 꽤 든다(headless, SwiftShader) → 기본 2개. 더 열려면 `ROOMS` 주석을 푼다. 노트북이면 발열.
 - `rooms.cmd` 는 **영문만** 써야 한다 — 한글이 들어가면 cmd 가 줄을 잘못 읽어 창이 바로 닫힌다(2026-09-06 겪음). 창이 바로 닫히면 터미널에서 `node tools/rooms.mjs` 로 오류를 본다.
 - 주의: 로비 방송은 개발 서버와 배포 사이트가 같은 릴레이라 로컬 시험 방도 배포 사이트 사람에게 보인다. **코드를 배포한 뒤에는 방 지키기를 껐다 다시 켠다**(열린 창은 옛 코드). Playwright 는 devDependency(무료), 브라우저는 이 PC 크롬을 쓴다(없으면 `npx playwright install chromium`).

@@ -82,6 +82,9 @@ export class Session {
    */
   private readonly autopilot = typeof location !== 'undefined' && location.search.includes('autopilot=1')
   private lastEmoteAt = -1e9
+  /** 0.4초 넘는 멈춤 횟수·누적 시간 (운영 로그용) */
+  private stallCount = 0
+  private stallMs = 0
   private lockstep: Lockstep | null = null
   private peerIndex = new Map<string, number>()
   private pendingDrops: PendingDrop[] = []
@@ -253,6 +256,9 @@ export class Session {
       phase: () => this.state.phase,
       state: () => this.state,
       others: () => this.state.players.filter((p, i) => i !== this.cfg.localPlayer && !p.left && !p.vacant && !this.cfg.bots?.[i]).length,
+      names: () => this.names,
+      bots: () => this.cfg.bots ?? [],
+      stalls: () => ({ count: this.stallCount, ms: Math.round(this.stallMs), now: this.stallSince >= 0 ? Math.round(performance.now() - this.stallSince) : 0 }),
     }
   }
 
@@ -315,7 +321,7 @@ export class Session {
   }
 
   private makeBots(seed: number): void {
-    this.bots = this.cfg.chars.map((_, i) => makeBot((seed ^ 0x9e37) + i * 7919))
+    this.bots = this.cfg.chars.map((_, i) => makeBot((seed ^ 0x9e37) + i * 7919, { swap: true })) // 게임의 봇은 죽으면 캐릭터를 바꾸기도 한다
   }
 
   private get isHost(): boolean {
@@ -729,7 +735,16 @@ export class Session {
           if (this.stallSince < 0) this.stallSince = now
           break
         }
-        this.stallSince = -1
+        if (this.stallSince >= 0) {
+          // 0.4초 넘게 멈춘 것만 '끊김' 으로 센다 (화면에 "상대 입력 대기 중…" 이 뜨는 기준과 같다). 방 지키기 로그가 읽는다
+          const d = now - this.stallSince
+          if (d > 400 && this.state.phase === 'playing') {
+            // 카운트다운(시작 직후 상대 입력이 처음 오기까지 기다리는 것)은 세지 않는다 — 판 중의 끊김만
+            this.stallCount++
+            this.stallMs += d
+          }
+          this.stallSince = -1
+        }
         inputs = this.lockstep.get(t)
       } else {
         inputs = new Array(n)
@@ -1113,7 +1128,7 @@ export class Session {
 
   /** 난입한 자리의 봇 기억을 새로 만든다 (봇이 조종하던 자리였을 수 있다) */
   private makeBotFor(idx: number): void {
-    this.bots[idx] = makeBot((this.cfg.seed ^ 0x9e37) + idx * 7919 + this.state.tick)
+    this.bots[idx] = makeBot((this.cfg.seed ^ 0x9e37) + idx * 7919 + this.state.tick, { swap: true })
   }
 
   /**
