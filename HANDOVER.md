@@ -188,7 +188,9 @@ tools/gif.py             .frames/<장면>/ → docs/img/gif_<장면>.gif (Pillow
 - `ROOMS_MODE=ffa` 로 모든 방을 개인전으로 고정(난입 시험 — 팀전에는 난입이 없다). 판이 45초째 틱이 안 늘면 페이지를 다시 연다(v1.11.1).
 - 방이 닫히는 조건: 사람이 다 나가면(봇은 안 셈, v1.11.1) 30초 뒤 "아무도 들어오지 않았습니다" → 스크립트가 "로비로" → 새 방. 판이 끝나면 8초 뒤 사람이 남아 있으면 "다시 하기", 없으면 "로비로".
 - 비용: 크롬 컨텍스트 하나에 CPU 가 꽤 든다(headless, SwiftShader) → 기본 2개. 더 열려면 `ROOMS` 주석을 푼다. 노트북이면 발열.
-- `rooms.cmd` 는 **영문만** 써야 한다 — 한글이 들어가면 cmd 가 줄을 잘못 읽어 창이 바로 닫힌다(2026-09-06 겪음). 창이 바로 닫히면 터미널에서 `node tools/rooms.mjs` 로 오류를 본다.
+- `rooms.cmd` 는 **영문만 · CRLF** 여야 한다. cmd 는 배치 파일을 바이트 오프셋으로 되짚어 읽어서, UTF-8 한글이 섞이면 포인터가 어긋나 다음 줄들이 잘리고(`'indow'` 같은 조각이 뜬다) 괄호 블록·`cd` 가 통째로 깨진다(2026-09-06, 2026-09-08 두 번 겪음).
+  LF 도 같은 이유로 괄호 블록을 깬다 → `.gitattributes` 에 `*.cmd text eol=crlf` 로 못 박아 뒀다(안 그러면 `* text=auto eol=lf` 가 LF 로 되돌린다).
+  창이 바로 닫히면 터미널에서 `node tools/rooms.mjs` 로 오류를 본다.
 - 주의: 로비 방송은 개발 서버와 배포 사이트가 같은 릴레이라 로컬 시험 방도 배포 사이트 사람에게 보인다. **코드를 배포한 뒤에는 방 지키기를 껐다 다시 켠다**(열린 창은 옛 코드). Playwright 는 devDependency(무료), 브라우저는 이 PC 크롬을 쓴다(없으면 `npx playwright install chromium`).
 - **다른 PC 에서 처음 켤 때 `Cannot find package 'playwright'` 가 나면 `npm ci` 를 안 한 것이다**(2026-09-08 노트북에서 겪음). `rooms.cmd` 가 이제 알아서 깔지만, 실패하면 **개발 서버를 먼저 끄고** `npm ci` 를 직접 돌린다 — `npm ci` 는 `node_modules` 를 통째로 지우므로 vite 가 떠 있으면 `esbuild.exe` 잠김으로 실패한다.
 
