@@ -259,11 +259,8 @@ function lighten(c: number, k: number): number {
 }
 
 /**
- * 축구장 바닥. 깎은 잔디 줄무늬 + 흰 라인 + 가운데 원 + 문장.
- *
- * 가운데 문장은 **실제 구단 엠블럼이 아니라 같은 색조로 새로 그린 문양**이다.
- * 이 프로젝트는 실존 인물도 패러디 명칭으로 쓰는 비상업 팬게임이라(DESIGN 16장),
- * 등록 상표를 그대로 옮기지 않는다.
+ * 축구장 바닥. 깎은 잔디 줄무늬 + 흰 라인.
+ * 문장·로고는 넣지 않는다 — 실제 구단 엠블럼은 등록 상표이고, 어설픈 대체 문양은 안 넣느니만 못하다(2026-09-08 사용자).
  */
 export function drawPitch(g: CanvasRenderingContext2D, w: number, h: number, px: number, t: MapTheme): void {
   g.fillStyle = hex(t.floor)
@@ -272,54 +269,51 @@ export function drawPitch(g: CanvasRenderingContext2D, w: number, h: number, px:
   g.fillStyle = hex(t.floorAlt)
   for (let x = 0; x < w; x += px * 8) g.fillRect(x, 0, px * 4, h)
 
-  const line = 'rgba(255,255,255,0.72)'
-  g.strokeStyle = line
-  g.lineWidth = Math.max(2, px * 0.18)
+  const LINE = 'rgba(255,255,255,0.72)'
+  const lw = Math.max(2, px * 0.18)
+  g.strokeStyle = LINE
+  g.fillStyle = LINE
+  g.lineWidth = lw
   const m = px * 2.2 // 라인과 테두리 사이 여백
-  // 터치라인
-  g.strokeRect(m, m, w - m * 2, h - m * 2)
-  // 하프라인
-  g.beginPath()
+  g.strokeRect(m, m, w - m * 2, h - m * 2) // 터치라인
+  g.beginPath() // 하프라인
   g.moveTo(w / 2, m)
   g.lineTo(w / 2, h - m)
   g.stroke()
-  // 센터 서클
+
+  // 페널티 박스 + 그 안 골 에어리어 + 페널티 스폿
+  const bw = w * 0.11
+  const bh = h * 0.42
+  const gw = bw * 0.42
+  const gh = bh * 0.48
+  for (const left of [true, false]) {
+    const bx = left ? m : w - m - bw
+    g.strokeRect(bx, (h - bh) / 2, bw, bh)
+    g.strokeRect(left ? m : w - m - gw, (h - gh) / 2, gw, gh)
+    g.beginPath()
+    g.arc(left ? m + bw * 0.66 : w - m - bw * 0.66, h / 2, lw * 1.1, 0, Math.PI * 2)
+    g.fill()
+  }
+
+  // 센터 서클 + 센터 스폿
   const cr = Math.min(w, h) * 0.16
   g.beginPath()
   g.arc(w / 2, h / 2, cr, 0, Math.PI * 2)
   g.stroke()
-  // 좌우 페널티 박스
-  const bw = w * 0.11
-  const bh = h * 0.42
-  for (const left of [true, false]) {
-    const x = left ? m : w - m - bw
-    g.strokeRect(x, (h - bh) / 2, bw, bh)
-  }
-
-  // 가운데 문장 (창작 문양): 보라 방패 + 흰 테두리 + 세로 줄무늬
-  const cx = w / 2
-  const cy = h / 2
-  const s = cr * 0.82
-  const shield = () => {
-    g.beginPath()
-    g.moveTo(cx - s * 0.62, cy - s * 0.78)
-    g.lineTo(cx + s * 0.62, cy - s * 0.78)
-    g.lineTo(cx + s * 0.62, cy + s * 0.18)
-    g.quadraticCurveTo(cx + s * 0.62, cy + s * 0.78, cx, cy + s * 0.95)
-    g.quadraticCurveTo(cx - s * 0.62, cy + s * 0.78, cx - s * 0.62, cy + s * 0.18)
-    g.closePath()
-  }
-  g.fillStyle = hex(t.crest ?? 0x7a52ad)
-  shield()
+  g.beginPath()
+  g.arc(w / 2, h / 2, lw * 1.1, 0, Math.PI * 2)
   g.fill()
-  g.save()
-  shield()
-  g.clip()
-  g.fillStyle = 'rgba(255,255,255,0.30)'
-  for (let i = -2; i <= 2; i += 2) g.fillRect(cx + i * s * 0.24 - s * 0.06, cy - s, s * 0.12, s * 2.2)
-  g.restore()
-  g.strokeStyle = 'rgba(255,255,255,0.85)'
-  g.lineWidth = Math.max(2, px * 0.16)
-  shield()
-  g.stroke()
+
+  // 네 귀퉁이 코너 아크
+  const ca = px * 1.1
+  for (const [x, y, a0] of [
+    [m, m, 0],
+    [w - m, m, Math.PI / 2],
+    [w - m, h - m, Math.PI],
+    [m, h - m, -Math.PI / 2],
+  ] as const) {
+    g.beginPath()
+    g.arc(x, y, ca, a0, a0 + Math.PI / 2)
+    g.stroke()
+  }
 }

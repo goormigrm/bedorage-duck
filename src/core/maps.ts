@@ -21,12 +21,10 @@ export interface MapTheme {
   /** 안개 색 (3D) */
   fog: number
   /**
-   * 축구장 바닥으로 그린다 (잔디 줄무늬 + 흰 라인 + 가운데 원 + 문장).
+   * 축구장 바닥으로 그린다 (잔디 줄무늬 + 흰 라인 + 센터 서클 + 페널티 박스 + 코너 아크).
    * 격자 무늬 대신 이걸 쓴다 — 운동장 맵(안양)용.
    */
   pitch?: boolean
-  /** pitch 일 때 가운데 문장 색 */
-  crest?: number
 }
 
 /**
@@ -98,11 +96,11 @@ export const MAPS: Record<MapId, MapDef> = {
     rows: frame(46, 30),
     gen: { style: 'scatter', density: 6, crates: 12, sandbags: 2, maxLen: 5 },
     theme: {
-      // 잔디 + 보라색 구조물. 문장은 실제 구단 엠블럼이 아니라 같은 색조의 창작 문양이다(비상업 팬게임)
+      // 잔디 + 보라색 구조물. 로고·문장은 넣지 않는다(등록 상표)
       floor: 0x4f8f43, floorAlt: 0x458038, floorLine: 0x5c9b4e,
       wall: 0x5b3a86, wallTop: 0x7a52ad, crate: 0x8e6bc4, outside: 0x171425,
       sunColor: 0xfff6e2, ambientColor: 0x9d8fc4, fog: 0x241d38,
-      pitch: true, crest: 0x7a52ad,
+      pitch: true,
     },
   },
   garage: {
