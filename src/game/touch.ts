@@ -61,6 +61,8 @@ export class TouchControls {
   private moveStick: Stick | null = null
   private detach: (() => void)[] = []
   private talkTimer = 0
+  private toastTimer = 0
+  private lobbyEdge = false
 
   constructor(host: HTMLElement) {
     const el = document.createElement('div')
@@ -84,7 +86,11 @@ export class TouchControls {
         <button class="tchip" data-t="e2">굿 👍</button>
         <button class="tchip" data-t="e3">미안 🙏</button>
       </div>
-      <button class="tbtn menu" data-a="menu">≡</button>`
+      <div class="ttop">
+        <button class="tbtn top" data-a="lobby">로비로</button>
+        <button class="tbtn top" data-a="menu">⚙</button>
+      </div>
+      <div class="ttoast" id="ttoast" hidden></div>`
     host.appendChild(el)
     this.root = el
     this.stickEl = el.querySelector('.tstick') as HTMLElement
@@ -162,9 +168,20 @@ export class TouchControls {
         if (act === 'ads') {
           this.ads = !this.ads
           btn.classList.toggle('on', this.ads)
+          // 조준 중에는 sim 이 달리기를 무시한다 → 화면에서도 확실히 꺼 준다 (2026-09-08)
+          if (this.ads && this.sprint) {
+            this.setSprint(false)
+            this.toast('조준 중에는 달릴 수 없습니다')
+          }
         } else if (act === 'sprint') {
-          this.sprint = !this.sprint
-          btn.classList.toggle('on', this.sprint)
+          this.setSprint(!this.sprint)
+          if (this.sprint && this.ads) {
+            this.ads = false
+            this.root.querySelector('[data-a="ads"]')?.classList.remove('on')
+            this.toast('달리는 동안에는 조준이 풀립니다')
+          }
+        } else if (act === 'lobby') {
+          this.lobbyEdge = true
         } else if (act === 'reload') {
           this.reload = true
           btn.classList.add('on')
@@ -239,6 +256,35 @@ export class TouchControls {
     return v
   }
 
+  /** 로비로 버튼을 눌렀는가 (한 번만) */
+  takeLobby(): boolean {
+    const v = this.lobbyEdge
+    this.lobbyEdge = false
+    return v
+  }
+
+  private setSprint(v: boolean): void {
+    this.sprint = v
+    this.root.querySelector('[data-a="sprint"]')?.classList.toggle('on', v)
+  }
+
+  /** 작고 흐린 안내를 잠깐 띄운다 (사격 영역 안내와 같은 톤) */
+  private toast(text: string): void {
+    const el = this.root.querySelector('#ttoast') as HTMLElement | null
+    if (!el) return
+    el.textContent = text
+    el.hidden = false
+    // 다시 띄울 때 애니메이션이 처음부터 돌도록 리플로우를 한 번 강제한다
+    el.classList.remove('show')
+    void el.offsetWidth
+    el.classList.add('show')
+    clearTimeout(this.toastTimer)
+    this.toastTimer = window.setTimeout(() => {
+      el.classList.remove('show')
+      el.hidden = true
+    }, 1800)
+  }
+
   /** 팀 신호 버튼을 눌렀는가 (한 번만) */
   takeMark(): boolean {
     const v = this.markEdge
@@ -303,6 +349,7 @@ export class TouchControls {
 
   dispose(): void {
     clearTimeout(this.talkTimer)
+    clearTimeout(this.toastTimer)
     for (const off of this.detach) off()
     this.detach = []
     this.root.remove()

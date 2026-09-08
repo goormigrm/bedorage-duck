@@ -481,9 +481,11 @@ export class Session {
       const canSwap = !!me && this.state.phase === 'playing' && (!me.alive || me.aliveTicks <= SWAP_GRACE_TICKS)
       this.touch.setSwapVisible(canSwap)
     }
+    // 폰: ⚙ 는 설정을 바로 열고(메뉴를 거치지 않는다), 로비로는 따로 뺐다 (2026-09-08 사용자)
+    if (this.touch?.takeLobby()) this.exit()
     if (this.touch?.takeMenu()) {
-      if (this.overlay.hidden) this.showMenu()
-      else this.hideOverlay()
+      if (this.overlay.hidden) this.showSettings()
+      else this.closeSettings()
     }
   }
 

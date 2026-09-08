@@ -282,10 +282,20 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
 .tbtn.big { grid-area: fire; width: 100%; height: 68px; border-radius: 36px; font-size: 16px; font-weight: 700;
   color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }
-/* 설정(≡)은 오른쪽 위. 점수판을 피하면서 엄지가 닿게 크게 (2026-09-08: 46 → 56) */
-.tbtn.menu { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 12px);
-  top: calc(env(safe-area-inset-top, 0px) + 10px); width: 56px; height: 56px; font-size: 24px;
-  background: rgba(22,27,34,.85); }
+/* 오른쪽 위: 로비로 · ⚙ 설정을 따로 둔다. ⚙ 는 메뉴를 거치지 않고 설정을 바로 연다 (2026-09-08) */
+.ttop { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 12px);
+  top: calc(env(safe-area-inset-top, 0px) + 10px); display: flex; gap: 8px; }
+.tbtn.top { width: auto; min-width: 56px; height: 52px; padding: 0 16px; border-radius: 26px;
+  font-size: 14px; background: rgba(22,27,34,.85); }
+.tbtn.top[data-a="menu"] { width: 56px; padding: 0; font-size: 24px; }
+
+/* 잠깐 떴다 사라지는 안내 (사격 영역 안내와 같은 톤) */
+.ttoast { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%);
+  padding: 9px 16px; border-radius: 20px; background: rgba(13,17,23,.72);
+  color: rgba(230,237,243,.9); font: 600 13px "IBM Plex Sans KR", sans-serif; white-space: nowrap;
+  pointer-events: none; opacity: 0; transition: opacity .25s; }
+.ttoast.show { opacity: 1; }
+.ttoast[hidden] { display: none; }
 
 /* 대화 창: 팀 신호 + 감정 3종. 버튼 위로 펼쳐지고 4초 뒤 스스로 닫힌다 */
 .tpop { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 88px);
@@ -304,7 +314,9 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
   .tstick i { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
   .tbtn { width: 56px; height: 56px; font-size: 11px; }
   .tbtn.big { height: 56px; font-size: 15px; }
-  .tbtn.menu { width: 50px; height: 50px; font-size: 22px; }
+  .tbtn.top { height: 46px; min-width: 50px; padding: 0 13px; font-size: 13px; }
+  .tbtn.top[data-a="menu"] { width: 50px; padding: 0; font-size: 22px; }
+  .ttoast { font-size: 12px; padding: 8px 14px; }
   .tbtns { gap: 8px; }
   .tchip { min-width: 116px; height: 46px; font-size: 14px; }
   .tpop { bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); right: calc(env(safe-area-inset-right, 0px) + 78px); }
