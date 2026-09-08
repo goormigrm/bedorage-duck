@@ -109,9 +109,10 @@ export class Lobby {
             <label for="nick">닉네임</label>
             <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
           </div>
-          <button class="mychar" id="my-char" title="캐릭터 목록으로">
+          <button class="mychar" id="my-char" title="눌러서 캐릭터 고르기">
+            <span class="mytag">내 캐릭터</span>
             <canvas></canvas>
-            <span><small>내 캐릭터</small><b id="my-char-name"></b></span>
+            <div class="ct"><b id="my-char-name"></b><small id="my-char-sub"></small></div>
           </button>
           <div class="topacts">
             <button class="btn main lg" id="btn-host">방 만들기</button>
@@ -139,6 +140,7 @@ export class Lobby {
         </div>
 
         <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
+        <div class="ctiles" id="ctiles"></div>
         <div class="chars" id="chars"></div>
 
         <div class="dlg" id="dlg-settings" hidden>
@@ -218,6 +220,21 @@ export class Lobby {
 
         <div class="foot">비공식 팬 프로젝트 · 비상업 · 문의 시 즉시 삭제 · <b>문제·제안은 철면수심 다음 카페 게시글로</b> · <a href="https://github.com/goormigrm/bedorage-duck">github.com/goormigrm/bedorage-duck</a></div>
       </div>`
+
+    // 빠르게 고르는 정사각 타일. 아래 자세한 목록과 **같은 것을 고른다** — 어느 쪽을 눌러도 된다 (2026-09-08)
+    const tiles = h.querySelector('#ctiles') as HTMLElement
+    for (const c of CHARACTER_LIST) {
+      const t = document.createElement('button')
+      t.className = 'ctile' + (c.id === this.char ? ' on' : '')
+      t.dataset.id = c.id
+      t.title = `${c.name} · ${WEAPONS[c.weapon].name} · HP ${c.maxHp}`
+      t.style.setProperty('--c', '#' + c.bodyColor.toString(16).padStart(6, '0'))
+      t.innerHTML = `<canvas></canvas><span>${c.name}</span>`
+      t.onclick = () => this.selectChar(c.id)
+      tiles.appendChild(t)
+      const tc = t.querySelector('canvas') as HTMLCanvasElement
+      requestAnimationFrame(() => drawPortrait(tc, c))
+    }
 
     const chars = h.querySelector('#chars') as HTMLElement
     for (const c of CHARACTER_LIST) {
@@ -380,6 +397,8 @@ export class Lobby {
     const el = this.host.querySelector('#my-char') as HTMLElement | null
     if (!def || !el) return
     ;(el.querySelector('#my-char-name') as HTMLElement).textContent = def.name
+    const sub = el.querySelector('#my-char-sub') as HTMLElement | null
+    if (sub) sub.textContent = `${def.basedOn} · ${WEAPONS[def.weapon].name} · HP ${def.maxHp}`
     el.style.setProperty('--c', '#' + def.bodyColor.toString(16).padStart(6, '0'))
     const cv = el.querySelector('canvas') as HTMLCanvasElement
     requestAnimationFrame(() => drawPortrait(cv, def))
@@ -387,7 +406,10 @@ export class Lobby {
 
   private selectChar(id: CharacterId): void {
     this.char = id
-    this.host.querySelectorAll('.char').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.id === id))
+    // 타일·자세한 목록 양쪽의 노란 테두리를 함께 옮긴다
+    this.host
+      .querySelectorAll('.char, .ctile')
+      .forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.id === id))
     this.drawMyChar()
     this.myReady = false
     this.pushSelf()

@@ -67,6 +67,24 @@ button { font-family: inherit; }
 .section-t input.nick.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,81,73,.25); }
 
 /* 캐릭터: 한 줄에 한 명 (초상 · 이름 · 패시브 설명). 카드에 세 줄로 접히면 설명이 안 읽힌다 */
+/* 빠르게 고르는 정사각 타일. 아래 자세한 목록과 같은 것을 고르고, 노란 테두리도 함께 옮겨 간다 (2026-09-08) */
+/* 열 수를 12의 약수로 못 박는다 — auto-fill 이면 10+2 처럼 갈라진다. 6/4/3 은 모두 줄이 고르게 떨어진다 */
+.ctiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 10px; }
+.ctile { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; padding: 6px 4px; cursor: pointer; color: var(--ink);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2);
+  border-radius: 12px; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 4px 12px rgba(0,0,0,.22);
+  transition: transform .12s, border-color .12s, box-shadow .12s; }
+.ctile::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: var(--c, #888); opacity: .85; border-radius: 12px 12px 0 0; }
+.ctile canvas { width: 100%; max-width: 62px; height: auto; aspect-ratio: 1; }
+.ctile span { font: 700 12px "IBM Plex Sans KR", sans-serif; line-height: 1; }
+.ctile:hover { transform: translateY(-2px); border-color: #46525f; }
+.ctile.on { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset, 0 6px 18px rgba(227,179,65,.22); }
+.ctile.on span { color: var(--gold); }
+@media (max-width: 780px) { .ctiles { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 520px) { .ctiles { grid-template-columns: repeat(3, 1fr); } }
+
 .chars { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
 .char {
   position: relative; overflow: hidden; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2); border-radius: 10px;
@@ -412,11 +430,13 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .joining .btn { min-width: 96px; }
 
 /* ===== 로비 재구성 (2026-09-05): 상단 바 · 가로 방 목록 · 설정은 창으로 ===== */
-.topbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 8px 0 14px; }
-.topbar .nickwrap { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; max-width: 420px; }
+/* 상단 바는 아래 방 목록과 같은 너비를 꽉 채운다 — 닉네임·내 캐릭터·버튼이 한 줄에 펼쳐진다 (2026-09-08) */
+.topbar { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; margin: 8px 0 14px; width: 100%; }
+.topbar .nickwrap { display: flex; flex-direction: column; gap: 6px; flex: 0 1 250px; min-width: 190px; justify-content: flex-end; }
 .topbar .nickwrap label { font: 700 13px "IBM Plex Sans KR", sans-serif; color: var(--gold); letter-spacing: .02em; }
 .topbar .nickwrap.empty label::after { content: " · 먼저 정하세요"; color: var(--risk); font-weight: 600; }
-.topbar .topacts { display: flex; gap: 10px; flex: 0 0 auto; }
+.topbar .topacts { display: flex; gap: 8px; flex: 0 0 auto; align-items: flex-end; }
+.topbar .topacts .btn.lg { padding: 13px 18px; }
 .btn.lg { padding: 14px 26px; font-size: 16px; border-radius: 12px; }
 .card.wide { width: 100%; }
 /* 방 목록: 한 줄에 한 방, 열이 맞아야 맵·모드·목표가 한눈에 읽힌다 */
@@ -468,11 +488,29 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .overlay .box .statsmvp b { color: var(--gold); }
 
 /* 로비 상단 "내 캐릭터" */
-.topbar .mychar { display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; background: var(--bg-2); border: 1px solid var(--line-2); border-left: 4px solid var(--c, var(--gold)); border-radius: 12px; cursor: pointer; color: var(--ink); font: inherit; text-align: left; }
+/* 내 캐릭터 — 상단 바에서 남는 공간을 채운다. 목록 항목(.char)과 같은 내용을 보여 준다 (2026-09-08) */
+.topbar .mychar { position: relative; overflow: hidden; flex: 1 1 300px; min-width: 240px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2);
+  border-radius: 12px; padding: 7px 12px 7px 10px; cursor: pointer; text-align: left; color: var(--ink); font: inherit;
+  display: grid; grid-template-columns: auto 44px minmax(0, 1fr); align-items: center; column-gap: 10px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 4px 12px rgba(0,0,0,.22); }
+.topbar .mychar::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--gold)); }
 .topbar .mychar:hover { border-color: var(--gold); }
+/* 세로쓰기 라벨. text-orientation: mixed + rotate(180deg) 는 한글 글자가 거꾸로 선다 →
+   upright 로 글자를 세우고 회전은 쓰지 않는다 (2026-09-08) */
+.topbar .mychar .mytag { font: 700 10px "IBM Plex Sans KR", sans-serif; color: var(--gold); letter-spacing: .04em;
+  writing-mode: vertical-rl; text-orientation: upright; line-height: 1.05; }
 .topbar .mychar canvas { width: 44px; height: 44px; }
-.topbar .mychar small { display: block; font-size: 11px; color: var(--ink-2); }
-.topbar .mychar b { font-size: 15px; }
+.topbar .mychar .ct { min-width: 0; }
+.topbar .mychar .ct b { display: block; font-size: 15px; line-height: 1.2; }
+.topbar .mychar .ct small { display: block; color: var(--ink-3); font-size: 11px; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 설정 버튼: 방 만들기(초록)·혼자 하기(금색)와 구분되게 파란 계열 바탕을 준다 (2026-09-08) */
+.btn.secondary#btn-lobby-settings { background: linear-gradient(180deg, #2b3f5c, #1e2d44); color: #cfe0f5;
+  border: 1px solid #3d5a80; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
+.btn.secondary#btn-lobby-settings:hover:not(:disabled) { background: linear-gradient(180deg, #34506f, #24374f);
+  color: #fff; border-color: var(--acc); }
 
 /* 대기실: 빈 자리를 봇으로 */
 .setrow.botrow { align-items: center; }
