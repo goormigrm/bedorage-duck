@@ -662,7 +662,7 @@ function applyHit(state: GameState, b: Bullet, victim: PlayerState, dOff: number
     // 산탄: 커서가 상대 위였고 **정중앙을 지나는 탄**만 머리 (탄 7개가 전부 머리가 되면 과하다)
     if (part === PART_HEAD && b.headTarget !== victim.id) part = PART_BODY
   } else if (b.headTarget === victim.id) {
-    // 쏠 때 커서(금색)가 이 사람 위였다 → 탄퍼짐·반동으로 빗겨 맞아도 머리. "금색이면 헤드샷" 을 그대로 지킨다
+    // 쏠 때 커서(붉은색)가 이 사람 위였다 → 탄퍼짐·반동으로 빗겨 맞아도 머리. "조준선이 붉으면 헤드샷" 을 그대로 지킨다
     part = PART_HEAD
   } else if (part === PART_HEAD) {
     // 궤적이 정중앙을 지나도 커서가 이 사람 위에 없었으면 몸통

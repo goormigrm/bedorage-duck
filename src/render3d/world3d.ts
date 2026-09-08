@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { GameMap, TILE, TILE_CRATE, TILE_SANDBAG, TILE_WALL } from '../core/map'
+import { MapTheme } from '../core/maps'
 
 export const WALL_H = 1.8
 export const CRATE_H = 0.75
@@ -30,29 +31,32 @@ export function buildWorld(map: GameMap): World3D {
   fc.width = map.w * px
   fc.height = map.h * px
   const g = fc.getContext('2d')!
-  g.fillStyle = hex(t.floor)
-  g.fillRect(0, 0, fc.width, fc.height)
-  for (let ty = 0; ty < map.h; ty++) {
-    for (let tx = 0; tx < map.w; tx++) {
-      const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0
-      if (h % 7 === 0) {
-        g.fillStyle = hex(t.floorAlt)
-        g.fillRect(tx * px, ty * px, px, px)
+  if (t.pitch) drawPitch(g, fc.width, fc.height, px, t)
+  else {
+    g.fillStyle = hex(t.floor)
+    g.fillRect(0, 0, fc.width, fc.height)
+    for (let ty = 0; ty < map.h; ty++) {
+      for (let tx = 0; tx < map.w; tx++) {
+        const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0
+        if (h % 7 === 0) {
+          g.fillStyle = hex(t.floorAlt)
+          g.fillRect(tx * px, ty * px, px, px)
+        }
       }
     }
+    g.strokeStyle = hex(t.floorLine)
+    g.lineWidth = 1
+    g.beginPath()
+    for (let x = 0; x <= map.w; x++) {
+      g.moveTo(x * px + 0.5, 0)
+      g.lineTo(x * px + 0.5, fc.height)
+    }
+    for (let y = 0; y <= map.h; y++) {
+      g.moveTo(0, y * px + 0.5)
+      g.lineTo(fc.width, y * px + 0.5)
+    }
+    g.stroke()
   }
-  g.strokeStyle = hex(t.floorLine)
-  g.lineWidth = 1
-  g.beginPath()
-  for (let x = 0; x <= map.w; x++) {
-    g.moveTo(x * px + 0.5, 0)
-    g.lineTo(x * px + 0.5, fc.height)
-  }
-  for (let y = 0; y <= map.h; y++) {
-    g.moveTo(0, y * px + 0.5)
-    g.lineTo(fc.width, y * px + 0.5)
-  }
-  g.stroke()
   const floorTex = new THREE.CanvasTexture(fc)
   floorTex.colorSpace = THREE.SRGBColorSpace
   floorTex.anisotropy = 8
@@ -252,4 +256,70 @@ function lighten(c: number, k: number): number {
   const g = Math.min(255, Math.round(((c >> 8) & 255) * k))
   const b = Math.min(255, Math.round((c & 255) * k))
   return (r << 16) | (g << 8) | b
+}
+
+/**
+ * 축구장 바닥. 깎은 잔디 줄무늬 + 흰 라인 + 가운데 원 + 문장.
+ *
+ * 가운데 문장은 **실제 구단 엠블럼이 아니라 같은 색조로 새로 그린 문양**이다.
+ * 이 프로젝트는 실존 인물도 패러디 명칭으로 쓰는 비상업 팬게임이라(DESIGN 16장),
+ * 등록 상표를 그대로 옮기지 않는다.
+ */
+export function drawPitch(g: CanvasRenderingContext2D, w: number, h: number, px: number, t: MapTheme): void {
+  g.fillStyle = hex(t.floor)
+  g.fillRect(0, 0, w, h)
+  // 깎은 잔디 줄무늬 (세로 방향, 4칸 폭)
+  g.fillStyle = hex(t.floorAlt)
+  for (let x = 0; x < w; x += px * 8) g.fillRect(x, 0, px * 4, h)
+
+  const line = 'rgba(255,255,255,0.72)'
+  g.strokeStyle = line
+  g.lineWidth = Math.max(2, px * 0.18)
+  const m = px * 2.2 // 라인과 테두리 사이 여백
+  // 터치라인
+  g.strokeRect(m, m, w - m * 2, h - m * 2)
+  // 하프라인
+  g.beginPath()
+  g.moveTo(w / 2, m)
+  g.lineTo(w / 2, h - m)
+  g.stroke()
+  // 센터 서클
+  const cr = Math.min(w, h) * 0.16
+  g.beginPath()
+  g.arc(w / 2, h / 2, cr, 0, Math.PI * 2)
+  g.stroke()
+  // 좌우 페널티 박스
+  const bw = w * 0.11
+  const bh = h * 0.42
+  for (const left of [true, false]) {
+    const x = left ? m : w - m - bw
+    g.strokeRect(x, (h - bh) / 2, bw, bh)
+  }
+
+  // 가운데 문장 (창작 문양): 보라 방패 + 흰 테두리 + 세로 줄무늬
+  const cx = w / 2
+  const cy = h / 2
+  const s = cr * 0.82
+  const shield = () => {
+    g.beginPath()
+    g.moveTo(cx - s * 0.62, cy - s * 0.78)
+    g.lineTo(cx + s * 0.62, cy - s * 0.78)
+    g.lineTo(cx + s * 0.62, cy + s * 0.18)
+    g.quadraticCurveTo(cx + s * 0.62, cy + s * 0.78, cx, cy + s * 0.95)
+    g.quadraticCurveTo(cx - s * 0.62, cy + s * 0.78, cx - s * 0.62, cy + s * 0.18)
+    g.closePath()
+  }
+  g.fillStyle = hex(t.crest ?? 0x7a52ad)
+  shield()
+  g.fill()
+  g.save()
+  shield()
+  g.clip()
+  g.fillStyle = 'rgba(255,255,255,0.30)'
+  for (let i = -2; i <= 2; i += 2) g.fillRect(cx + i * s * 0.24 - s * 0.06, cy - s, s * 0.12, s * 2.2)
+  g.restore()
+  g.strokeStyle = 'rgba(255,255,255,0.85)'
+  g.lineWidth = Math.max(2, px * 0.16)
+  shield()
+  g.stroke()
 }

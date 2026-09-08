@@ -2,6 +2,7 @@
 // 2명이면 좌우 카드, 3~4명이면 내 카드 + 오른쪽 아래 상대 목록. 팀전은 위 점수판이 A팀 : B팀.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
+import { AimStyle, drawAim, loadAimStyle } from './aim'
 import { GameState, PlayerState, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS, WeaponId } from '../core/weapons'
 
@@ -53,7 +54,7 @@ export interface RenderOptions {
   message?: string
   /** 화면 좌표 커서 (로컬 플레이어용 조준선) */
   cursor?: { x: number; y: number }
-  /** 커서가 적 위에 올라가 있다 (헤드샷이 날 수 있는 상태) → 조준선이 금색 */
+  /** 커서가 적 위에 올라가 있다 (헤드샷이 날 수 있는 상태) → 조준선이 붉은색 */
   cursorOn?: boolean
   timeScale?: number
   /** 시야 제한 (기본 true, 관전이면 무시) */
@@ -128,6 +129,8 @@ export class Hud {
   private countdownPulse = 0
   private lastCountdownSec = -1
   private dpr = 1
+  /** 조준선 모양. 내 화면 설정이라 localStorage 에서 읽는다 (P2P 로 보내지 않는다) */
+  private aimStyle: AimStyle = loadAimStyle()
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d')
@@ -663,23 +666,9 @@ export class Hud {
   private drawCursor(cur: { x: number; y: number }, me: PlayerState, on: boolean): void {
     const ctx = this.ctx
     const r = me.ads ? 6 : 12 + me.recoil * 0.4
-    // 상대 위에 올라가 있으면 금색 — 지금 쏘면 헤드샷이 날 수 있다는 신호
-    ctx.strokeStyle = on ? 'rgba(255,216,74,0.95)' : 'rgba(255,255,255,0.9)'
-    ctx.lineWidth = on ? 2.5 : 2
-    ctx.beginPath()
-    ctx.moveTo(cur.x - r - 6, cur.y)
-    ctx.lineTo(cur.x - r, cur.y)
-    ctx.moveTo(cur.x + r, cur.y)
-    ctx.lineTo(cur.x + r + 6, cur.y)
-    ctx.moveTo(cur.x, cur.y - r - 6)
-    ctx.lineTo(cur.x, cur.y - r)
-    ctx.moveTo(cur.x, cur.y + r)
-    ctx.lineTo(cur.x, cur.y + r + 6)
-    ctx.stroke()
-    ctx.fillStyle = on ? 'rgba(255,216,74,0.95)' : 'rgba(255,255,255,0.9)'
-    ctx.beginPath()
-    ctx.arc(cur.x, cur.y, on ? 2.2 : 1.5, 0, Math.PI * 2)
-    ctx.fill()
+    // 상대 위에 올라가 있으면 **붉은색** — 지금 쏘면 헤드샷이 날 수 있다는 신호.
+    // 금색이었는데 스튜디오 크림색 바닥에서 흰색과 잘 구분되지 않았다 (2026-09-08)
+    drawAim(ctx, this.aimStyle, cur.x, cur.y, r, on ? 'rgba(255,64,52,1)' : 'rgba(255,255,255,0.96)')
     // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다. 몸통은 **빨강**, 머리는 **금색**으로 더 크고 오래 + 링
     if (this.hitMarkT > 0) {
       const k = this.hitMarkT / this.hitMarkMax

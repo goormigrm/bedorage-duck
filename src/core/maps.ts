@@ -1,7 +1,7 @@
 // 맵 레지스트리. 맵을 추가하려면 MAPS 에 항목 하나를 넣으면 로비·프리뷰·네트워크가 자동으로 인식한다.
 // rows 는 **크기와 테두리**만 정한다. 안쪽 구조물은 map.ts 가 매 판 시드로 생성한다(gen).
 
-export type MapId = 'studio' | 'yard' | 'garage'
+export type MapId = 'studio' | 'yard' | 'garage' | 'anyang'
 
 export interface MapTheme {
   /** 바닥 기본/보조 색 */
@@ -20,6 +20,13 @@ export interface MapTheme {
   ambientColor: number
   /** 안개 색 (3D) */
   fog: number
+  /**
+   * 축구장 바닥으로 그린다 (잔디 줄무늬 + 흰 라인 + 가운데 원 + 문장).
+   * 격자 무늬 대신 이걸 쓴다 — 운동장 맵(안양)용.
+   */
+  pitch?: boolean
+  /** pitch 일 때 가운데 문장 색 */
+  crest?: number
 }
 
 /**
@@ -82,6 +89,20 @@ export const MAPS: Record<MapId, MapDef> = {
       floor: 0x9fb26a, floorAlt: 0x93a660, floorLine: 0x86985a,
       wall: 0x6e6a60, wallTop: 0x8d887b, crate: 0xa87b45, outside: 0x1b2418,
       sunColor: 0xfff7e0, ambientColor: 0x8fb0c8, fog: 0x2c3a2a,
+    },
+  },
+  anyang: {
+    id: 'anyang',
+    name: '안양종합운동장',
+    desc: '보라색 종합운동장. 잔디가 트여 있어 시야가 멀리 가고, 관중석 구조물이 엄폐가 된다.',
+    rows: frame(46, 30),
+    gen: { style: 'scatter', density: 6, crates: 12, sandbags: 2, maxLen: 5 },
+    theme: {
+      // 잔디 + 보라색 구조물. 문장은 실제 구단 엠블럼이 아니라 같은 색조의 창작 문양이다(비상업 팬게임)
+      floor: 0x4f8f43, floorAlt: 0x458038, floorLine: 0x5c9b4e,
+      wall: 0x5b3a86, wallTop: 0x7a52ad, crate: 0x8e6bc4, outside: 0x171425,
+      sunColor: 0xfff6e2, ambientColor: 0x9d8fc4, fog: 0x241d38,
+      pitch: true, crest: 0x7a52ad,
     },
   },
   garage: {

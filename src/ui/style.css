@@ -450,6 +450,13 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .seg[hidden] { display: none; }
 .setrow.botrow .hintline { font-size: 12px; }
 
+/* 조준선 고르기 — 방 설정이 아니라 내 화면 설정이라 따로 둔다 (2026-09-08) */
+.setrow.aimrow { align-items: center; gap: 10px 12px; margin-top: 14px; }
+.setrow.aimrow .aimlab { background: none; border: 0; padding: 0; font-size: 13px; color: var(--ink-3); gap: 8px; }
+.setrow.aimrow .aimlab b { font: 700 10.5px "IBM Plex Mono", monospace; color: var(--ink-2); letter-spacing: .08em; }
+.aimpv { width: 44px; height: 44px; border: 1px solid var(--line-2); border-radius: 8px;
+  background: linear-gradient(135deg, #d8d3bf 0%, #d8d3bf 50%, #4a5340 50%, #4a5340 100%); }
+
 /* 대기실 안 방장 설정 — 방을 다시 만들지 않고 맵·모드·목표·정원을 바꾼다 (2026-09-08) */
 .roomset { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center;
   margin: 12px 0 4px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; }

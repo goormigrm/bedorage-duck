@@ -11,6 +11,7 @@ import {
   CtlMessage, LobbyLink, Member, ROOM_MODE_LABEL, RoomInfo, RoomLink, RoomMode,
   makeRoomCode, openLobby, openRoom,
 } from '../net/room'
+import { AIM_STYLES, AimStyle, drawAim, loadAimStyle, saveAimStyle } from '../render/aim'
 import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
 import { isTouchDevice } from '../game/touch'
@@ -47,6 +48,8 @@ export class Lobby {
   private roomMode: RoomMode = 'ffa'
   /** 방 정원 (호스트가 방 만들 때 정한다). 2명만 모여도 시작할 수 있고, 나머지 자리는 난입으로 채운다 */
   private roomSize = 4
+  /** 조준선 모양 (내 화면 전용, localStorage 기억) */
+  private aim: AimStyle = loadAimStyle()
   /** 닉네임 (선택, 8자, localStorage 기억) */
   private nick = ''
   private lobbyLink: LobbyLink | null = null
@@ -172,6 +175,9 @@ export class Lobby {
             <div class="row"><label>목표 킬</label><select class="sel" id="kills-solo">
               ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === 5 ? 'selected' : ''}>${k} 킬</option>`).join('')}
             </select></div>
+            <div class="row"><label>조준선</label><div class="seg" id="seg-aim2">
+              ${AIM_STYLES.map((a) => `<button data-v="${a.id}" class="${a.id === this.aim ? 'on' : ''}" title="${a.desc}">${a.name}</button>`).join('')}
+            </div></div>
             <div class="row"><label>맵</label><div class="seg" id="seg-map2">
               ${MAP_LIST.map((m) => `<button data-v="${m.id}" class="${m.id === this.mapId ? 'on' : ''}" title="${m.desc}">${m.name}</button>`).join('')}
             </div></div>
@@ -232,6 +238,7 @@ export class Lobby {
     }
     this.seg('#seg-map', onMap)
     this.seg('#seg-map2', onMap)
+    this.bindAim('#seg-aim2')
     this.seg('#seg-diff', (v) => (this.difficulty = v as Difficulty))
     this.seg('#seg-bots', (v) => {
       this.bots = Number(v)
@@ -1055,6 +1062,13 @@ export class Lobby {
             ? `<p class="roomhint dim">빈 자리는 호스트가 <b>봇</b>으로 채웁니다.</p>`
             : ''
       }
+      <div class="setrow aimrow">
+        <span class="aimlab"><b>조준선</b>내 화면에만 적용됩니다</span>
+        <div class="seg small" id="seg-aim">
+          ${AIM_STYLES.map((a) => `<button data-v="${a.id}" class="${a.id === this.aim ? 'on' : ''}" title="${a.desc}">${a.name}</button>`).join('')}
+        </div>
+        <canvas class="aimpv" id="aim-pv" width="72" height="72"></canvas>
+      </div>
       <div class="room-actions">
         <button class="btn main" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
         ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
@@ -1089,9 +1103,37 @@ export class Lobby {
       })
     }
     this.bindHostSettings()
+    this.bindAim('#seg-aim', '#aim-pv')
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
     const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
     if (teamBtn) teamBtn.onclick = () => this.changeTeam()
+  }
+
+  /**
+   * 조준선 고르기. **방 설정이 아니라 내 화면 설정**이라 방송하지 않고 localStorage 에만 남긴다.
+   * 대기실과 혼자 하기 창 양쪽에 붙는다 (2026-09-08 사용자 요청).
+   */
+  private bindAim(seg: string, preview?: string): void {
+    const el = this.host.querySelector(seg)
+    if (!el) return
+    const pv = preview ? (this.host.querySelector(preview) as HTMLCanvasElement | null) : null
+    const draw = () => {
+      if (!pv) return
+      const ctx = pv.getContext('2d')
+      if (!ctx) return
+      ctx.clearRect(0, 0, pv.width, pv.height)
+      drawAim(ctx, this.aim, pv.width / 2, pv.height / 2, 12, 'rgba(255,255,255,0.96)')
+    }
+    el.querySelectorAll('button').forEach((b) => {
+      b.onclick = () => {
+        el.querySelectorAll('button').forEach((x) => x.classList.remove('on'))
+        b.classList.add('on')
+        this.aim = b.dataset.v as AimStyle
+        saveAimStyle(this.aim)
+        draw()
+      }
+    })
+    requestAnimationFrame(draw)
   }
 
   /**

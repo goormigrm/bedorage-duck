@@ -618,7 +618,7 @@ export class Renderer3D {
       const me = pos[opts.localPlayer]
       this.drawScope(opts.cursor, this.worldToScreen(me.x, 0.6, me.z))
     }
-    // 커서가 적 위에 있는가 (보이는 적만) → 조준선 금색
+    // 커서가 적 위에 있는가 (보이는 적만) → 조준선 붉은색
     let cursorOn = false
     if (opts.cursor && opts.localPlayer >= 0 && curr.players[opts.localPlayer]?.alive) {
       const w = this.screenToWorld(opts.cursor.x, opts.cursor.y)
