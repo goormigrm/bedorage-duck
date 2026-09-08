@@ -117,7 +117,7 @@ export class Lobby {
         <div class="status" id="status"></div>
 
         <div class="card rooms-card wide">
-          <h2>방 목록 <span class="k" id="rooms-count"></span><span class="k" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
+          <h2>방 목록 <span class="k count" id="rooms-count"></span><span class="k online" id="online">접속 확인 중</span><button class="lnk refresh" id="btn-refresh" title="목록을 다시 받아옵니다">새로고침</button></h2>
           <div class="rhead"><span>방</span><span>맵</span><span>모드</span><span>목표</span><span>인원</span><span>상태</span><span></span></div>
           <div class="rooms" id="rooms"><div class="empty">열린 방이 없습니다. 방을 만들거나 잠시 기다려 보세요.</div></div>
           <div class="pager" id="pager" hidden>
@@ -417,8 +417,11 @@ export class Lobby {
     if (!this.onlineTimer) {
       this.onlineTimer = window.setInterval(() => {
         if (this.disposed) return
-        const el = this.host.querySelector('#online')
-        if (el) el.textContent = this.lobbyLink ? `접속 ${this.lobbyLink.onlineCount()}명` : '연결 중…'
+        const el = this.host.querySelector('#online') as HTMLElement | null
+        if (!el) return
+        const n = this.lobbyLink ? this.lobbyLink.onlineCount() : -1
+        el.textContent = n >= 0 ? `접속 ${n}명` : '연결 중…'
+        el.classList.toggle('live', n > 0)
       }, 1500)
     }
   }
@@ -465,7 +468,7 @@ export class Lobby {
     if (!el) return
     const visible = this.rooms.filter((r) => r.state !== 'closed' && !(this.link && r.code === this.link.code))
     const count = this.host.querySelector('#rooms-count')
-    if (count) count.textContent = visible.length > 0 ? `${visible.length}개` : ''
+    if (count) count.textContent = `방 ${visible.length}개`
     const head = this.host.querySelector('.rhead') as HTMLElement | null
     if (head) head.hidden = visible.length === 0
     if (visible.length === 0) {
@@ -1030,10 +1033,11 @@ export class Lobby {
       <div class="room-head"><div class="section-t" style="margin:0">${title}</div>
         <div class="row"><button class="btn secondary" id="btn-cancel">${this.role === 'host' ? '방 닫기' : '나가기'}</button></div></div>
       <p class="roomhint dim">이 사이트 안에서만 함께합니다.<br>친구는 <b>방 목록</b>에서 이 방을 찾아 들어옵니다.</p>
+      ${this.role === 'host' ? this.hostSettingsHtml() : ''}
       <div class="setrow">
-        <span><b>맵</b>${MAPS[this.mapId].name}</span>
+        ${this.role === 'host' ? '' : `<span><b>맵</b>${MAPS[this.mapId].name}</span>
         <span><b>모드</b>${ROOM_MODE_LABEL[this.roomMode]}</span>
-        <span><b>목표</b>${this.killsRoom}킬</span>
+        <span><b>목표</b>${this.killsRoom}킬</span>`}
         <span><b>인원</b>${this.members.length}/${this.roomSize}명</span>
         ${connected && link.peers.size > 0 ? `<span><b>핑</b>${link.rtt} ms</span>` : ''}
       </div>
@@ -1084,9 +1088,88 @@ export class Lobby {
         }
       })
     }
+    this.bindHostSettings()
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
     const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
     if (teamBtn) teamBtn.onclick = () => this.changeTeam()
+  }
+
+  /**
+   * 대기실 안에서 방장이 고치는 설정 (맵·모드·목표 킬·정원).
+   * 방을 다시 만들지 않고 바꿀 수 있어야 한다는 요청 (2026-09-08).
+   * 바꾸면 `hostChanged()` 가 준비를 모두 풀고 방송하므로, 바뀐 설정을 모르는 채로 시작되지 않는다.
+   */
+  private hostSettingsHtml(): string {
+    const seg = (id: string, items: { v: string; label: string; on: boolean; off?: string }[]) =>
+      `<div class="seg small" id="${id}">${items
+        .map(
+          (it) =>
+            `<button data-v="${it.v}" class="${it.on ? 'on' : ''}"${it.off ? ` disabled title="${it.off}"` : ''}>${it.label}</button>`,
+        )
+        .join('')}</div>`
+    const here = this.members.length
+    return `<div class="roomset">
+      <div class="row"><label>맵</label>${seg(
+        'rs-map',
+        MAP_LIST.map((m) => ({ v: m.id, label: m.name, on: m.id === this.mapId })),
+      )}</div>
+      <div class="row"><label>모드</label>${seg('rs-mode', [
+        { v: 'ffa', label: '개인전', on: this.roomMode === 'ffa' },
+        // 팀전은 편을 반씩 갈라야 해서 정원이 짝수일 때만
+        { v: 'teams', label: '팀전', on: this.roomMode === 'teams', off: this.roomSize % 2 === 0 ? undefined : '정원이 짝수여야 합니다' },
+      ])}</div>
+      <div class="row"><label>목표 킬</label><select class="sel" id="rs-kills">
+        ${KILL_OPTIONS.map((k) => `<option value="${k}" ${k === this.killsRoom ? 'selected' : ''}>${k} 킬</option>`).join('')}
+      </select></div>
+      <div class="row"><label>정원</label>${seg(
+        'rs-size',
+        [2, 3, 4].map((n) => ({
+          v: String(n),
+          label: `${n}명`,
+          on: n === this.roomSize,
+          // 이미 들어와 있는 사람보다 적게 줄이면 누군가를 내보내야 한다
+          off: n < here ? `이미 ${here}명이 들어와 있습니다` : undefined,
+        })),
+      )}</div>
+      <p class="roomhint dim">설정을 바꾸면 <b>모두의 준비가 풀립니다</b>. 바뀐 줄 모르고 시작되지 않게 하려는 것입니다.</p>
+    </div>`
+  }
+
+  private bindHostSettings(): void {
+    if (this.role !== 'host') return
+    const on = (sel: string, cb: (v: string) => void) =>
+      this.host.querySelectorAll<HTMLButtonElement>(`${sel} button`).forEach((b) => {
+        if (b.disabled) return
+        b.onclick = () => cb(b.dataset.v!)
+      })
+    on('#rs-map', (v) => {
+      if (isMapId(v)) this.mapId = v
+      this.hostChanged()
+    })
+    on('#rs-mode', (v) => {
+      this.roomMode = v as RoomMode
+      // 팀은 들어온 순서대로 반씩 가른다 (방 만들기 창과 같은 규칙)
+      this.members.forEach((m, i) => (m.team = this.roomMode === 'teams' ? i % 2 : 0))
+      this.myTeam = this.members.find((m) => m.id === this.link?.selfId)?.team ?? 0
+      this.hostChanged()
+    })
+    on('#rs-size', (v) => {
+      this.roomSize = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Number(v)))
+      // 홀수 정원으로 줄이면 팀을 못 가른다 → 개인전으로 되돌린다
+      if (this.roomMode === 'teams' && this.roomSize % 2 !== 0) {
+        this.roomMode = 'ffa'
+        this.members.forEach((m) => (m.team = 0))
+        this.myTeam = 0
+      }
+      this.hostChanged()
+    })
+    const kills = this.host.querySelector('#rs-kills') as HTMLSelectElement | null
+    if (kills) {
+      kills.onchange = () => {
+        this.killsRoom = Number(kills.value)
+        this.hostChanged()
+      }
+    }
   }
 
   /**

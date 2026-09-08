@@ -61,7 +61,7 @@
 
 | | 메인 PC | 노트북 (BOOK-K87ADP9N6K) |
 |---|---|---|
-| 폴더 | `C:\Users\tkdrm\OneDrive\Desktop\철FPS` | `C:\Users\tkdrm\OneDrive\바탕 화면\철FPS\bedorage-duck` |
+| 폴더 | `C:\Users\tkdrm\OneDrive\Desktop\철FPS` | `C:\Users\tkdrm\Workspace\personal\철FPS\bedorage-duck` |
 | Node | v24.19.0 ✅ | v24.19.0 ✅ |
 | git | 2.55.0 ✅ | 2.42.0 ✅ |
 | gh CLI | 2.97.0, 로그인 ✅ | 2.100.0, 로그인 ✅ |

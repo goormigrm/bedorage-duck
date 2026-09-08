@@ -324,6 +324,14 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
   display: flex; align-items: center; gap: 8px; }
 .card h2 .k { font: 500 10px "IBM Plex Mono", monospace; color: var(--gold); border: 1px solid currentColor;
   border-radius: 999px; padding: 1px 7px; letter-spacing: .06em; }
+/* 방 개수·접속 인원은 "지금 사람이 있나" 를 보는 값이라 크게 (2026-09-08) */
+.card h2 .k.count { font: 700 14px "IBM Plex Sans KR", sans-serif; letter-spacing: 0; padding: 3px 11px; }
+.card h2 .k.online { font: 700 15px "IBM Plex Sans KR", sans-serif; letter-spacing: 0; padding: 3px 12px 3px 10px;
+  color: var(--ink-3); display: inline-flex; align-items: center; gap: 7px; }
+.card h2 .k.online::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .5; }
+.card h2 .k.online.live { color: #7ee787; border-color: #3fb95066; background: #3fb9501a; }
+.card h2 .k.online.live::before { opacity: 1; box-shadow: 0 0 8px #3fb95099; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .card .cardp { margin: 0; color: var(--ink-2); font-size: 13px; }
 .rooms-card .rooms { max-height: 260px; }
 /* 사이드가 좁으므로 대기실 자리 카드는 세로로 쌓는다 */
@@ -441,6 +449,21 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 .seg[hidden] { display: none; }
 .setrow.botrow .hintline { font-size: 12px; }
+
+/* 대기실 안 방장 설정 — 방을 다시 만들지 않고 맵·모드·목표·정원을 바꾼다 (2026-09-08) */
+.roomset { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center;
+  margin: 12px 0 4px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; }
+.roomset .row { display: contents; }
+/* 라벨은 한글이라 mono·대문자 변환이 의미가 없다. 읽기 쉬운 크기로 */
+.roomset label { min-width: 0; margin: 0; font: 600 12.5px "IBM Plex Sans KR", sans-serif; color: var(--ink-2);
+  letter-spacing: 0; text-transform: none; justify-self: end; white-space: nowrap; }
+.roomset .seg, .roomset select.sel { justify-self: start; }
+.roomset .seg button:disabled { opacity: .35; cursor: not-allowed; }
+.roomset .roomhint { grid-column: 1 / -1; margin: 4px 0 0; font-size: 12.5px; }
+@media (max-width: 640px) {
+  .roomset { grid-template-columns: 1fr; }
+  .roomset label { justify-self: start; }
+}
 
 /* 터치 기기 로비: 세로 375px 안팎의 가로 화면에서도 방 목록이 첫 화면에 들어오게 (2026-09-06) */
 .lobby.touch { padding-top: 12px; }
