@@ -435,8 +435,23 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .topbar .nickwrap { display: flex; flex-direction: column; gap: 6px; flex: 0 1 250px; min-width: 190px; justify-content: flex-end; }
 .topbar .nickwrap label { font: 700 13px "IBM Plex Sans KR", sans-serif; color: var(--gold); letter-spacing: .02em; }
 .topbar .nickwrap.empty label::after { content: " · 먼저 정하세요"; color: var(--risk); font-weight: 600; }
-.topbar .topacts { display: flex; gap: 8px; flex: 0 0 auto; align-items: flex-end; }
+/* 남는 공간은 내 캐릭터를 늘리지 말고 **버튼 앞 여백**으로 둔다 —
+   글씨 오른쪽이 텅 빈 넓은 카드는 어색하다 (2026-09-08 사용자) */
+.topbar .topacts { display: flex; gap: 8px; flex: 0 0 auto; align-items: flex-end; margin-left: auto; }
 .topbar .topacts .btn.lg { padding: 13px 18px; }
+
+/* 좁은 화면(폰 가로)에서도 한 줄로 — 닉네임·버튼·초상을 조금씩 줄인다 */
+@media (max-width: 1000px) {
+  .topbar { gap: 10px; }
+  .topbar .nickwrap { flex: 0 1 190px; min-width: 150px; }
+  .topbar .nickwrap input.nick.big { font-size: 17px; padding: 8px 11px; }
+  .topbar .topacts { gap: 6px; }
+  .topbar .topacts .btn.lg { padding: 11px 12px; font-size: 14px; border-radius: 10px; }
+  .topbar .mychar { padding: 5px 10px 5px 8px; column-gap: 9px; }
+  .topbar .mychar canvas { max-height: 52px; min-height: 40px; }
+  .topbar .mychar .ct b { font-size: 15px; }
+  .topbar .mychar .ct small { font-size: 10.5px; }
+}
 .btn.lg { padding: 14px 26px; font-size: 16px; border-radius: 12px; }
 .card.wide { width: 100%; }
 /* 방 목록: 한 줄에 한 방, 열이 맞아야 맵·모드·목표가 한눈에 읽힌다 */
@@ -490,7 +505,7 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 /* 로비 상단 "내 캐릭터" */
 /* 내 캐릭터 — 상단 바에서 남는 공간을 채운다. 카드 높이를 초상이 꽉 채우게 한다 (2026-09-08).
    전에는 세로쓰기 '내 캐릭터' 라벨이 77px 로 높이를 혼자 밀어올려, 44px 초상이 텅 빈 칸에 떠 있었다. */
-.topbar .mychar { position: relative; overflow: hidden; flex: 1 1 300px; min-width: 240px;
+.topbar .mychar { position: relative; overflow: hidden; flex: 0 1 auto; min-width: 0;
   background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2);
   border-radius: 12px; padding: 6px 12px 6px 10px; cursor: pointer; text-align: left; color: var(--ink); font: inherit;
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 11px;
