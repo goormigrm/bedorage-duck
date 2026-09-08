@@ -110,9 +110,8 @@ export class Lobby {
             <input class="nick big" id="nick" maxlength="8" placeholder="닉네임 (8자)" value="${this.nick.replace(/"/g, '&quot;')}" autocomplete="off" spellcheck="false">
           </div>
           <button class="mychar" id="my-char" title="눌러서 캐릭터 고르기">
-            <span class="mytag">내 캐릭터</span>
             <canvas></canvas>
-            <div class="ct"><b id="my-char-name"></b><small id="my-char-sub"></small></div>
+            <div class="ct"><span class="mytag">내 캐릭터</span><b id="my-char-name"></b><small id="my-char-sub"></small></div>
           </button>
           <div class="topacts">
             <button class="btn main lg" id="btn-host">방 만들기</button>
