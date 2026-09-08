@@ -51,6 +51,7 @@ export class Sfx {
   private bgmNextBeat = 0
   private bgmBeatIndex = 0
   private bgmOn = false
+  private bgmTrack: 'game' | 'lobby' = 'game'
   /** 교전 강도 0..1 (배경음 레이어) */
   private intensity = 0
   /** 발소리: 플레이어별 걸음 위상(0~1). 1 을 넘을 때마다 한 걸음 */
@@ -480,6 +481,22 @@ export class Sfx {
   // 132 BPM 단조 추격 루프: 16분 베이스 + 킥/스네어/하이햇 + 아르페지오 + 리드 모티프.
   // 교전이 있으면 intensity 가 올라 레이어가 두꺼워진다.
 
+  /**
+   * 대기실 곡. 게임 곡과 **같은 악기·같은 드럼**을 쓰되 화성과 리듬을 바꿔 "같은 계열, 다른 곡" 으로 만든다.
+   * 118 BPM, Am - F - C - G (같은 조성인데 장３화음으로 풀려 밝다). 8분 베이스 + 엇박 스탭 + 통통 튀는 아르페지오.
+   * 게임 곡이 조여 오는 추격이라면 이쪽은 시작 전 들뜬 느낌이다 (2026-09-08 사용자 요청).
+   */
+  private static readonly LOBBY_PROG = [
+    { root: 55.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 43.65, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 65.4, notes: [261.6, 329.6, 392.0] }, // C
+    { root: 49.0, notes: [196.0, 246.9, 293.7] }, // G
+  ]
+  /** 대기실 훅 (16분 위치 → 음). 게임 리드보다 짧고 밝게 */
+  private static readonly LOBBY_HOOK = [
+    0, 0, 659.3, 0, 0, 0, 783.99, 0, 0, 880, 0, 0, 659.3, 0, 0, 0,
+  ]
+
   /** 4마디 진행 (Am - F - G - Em): [근음, 3화음] */
   private static readonly PROG = [
     { root: 55.0, notes: [220.0, 261.6, 329.6] }, // Am
@@ -492,7 +509,9 @@ export class Sfx {
     880, 0, 0, 987.8, 0, 830.6, 0, 0, 659.3, 0, 739.99, 0, 880, 0, 0, 0,
   ]
 
-  startBgm(): void {
+  /** @param track 'game' 추격 루프 · 'lobby' 대기실 루프 */
+  startBgm(track: 'game' | 'lobby' = 'game'): void {
+    this.bgmTrack = track
     this.bgmOn = true
     if (this.ctx) this.startBgmScheduler()
   }
@@ -515,6 +534,7 @@ export class Sfx {
   private scheduleBgm(): void {
     const ctx = this.ctx
     if (!ctx || !this.bgmGain || ctx.state !== 'running') return
+    if (this.bgmTrack === 'lobby') return this.scheduleLobbyBgm(ctx)
     const step16 = 60 / 132 / 4 // 16분음표 길이
     this.intensity = Math.max(0, this.intensity - 0.0016)
     while (this.bgmNextBeat < ctx.currentTime + 0.3) {
@@ -549,6 +569,45 @@ export class Sfx {
       }
       // 8마디마다 긴장 상승음
       if (step === 48 && this.intensity > 0.15) this.bgmRiser(t, step16 * 16)
+
+      this.bgmNextBeat += step16
+      this.bgmBeatIndex++
+    }
+  }
+
+  /**
+   * 대기실 루프. 118 BPM, 8분 베이스 + 엇박 스탭 + 아르페지오 + 가끔 훅.
+   * 게임 곡과 달리 intensity 를 보지 않는다 — 대기실에는 교전이 없다.
+   */
+  private scheduleLobbyBgm(ctx: AudioContext): void {
+    const step16 = 60 / 118 / 4
+    while (this.bgmNextBeat < ctx.currentTime + 0.3) {
+      const t = this.bgmNextBeat
+      const step = this.bgmBeatIndex % 64
+      const bar = (step / 16) | 0
+      const s16 = step % 16
+      const ch = Sfx.LOBBY_PROG[bar]
+
+      // 드럼: 킥 1·3박, 스네어 2·4박, 셰이커는 엇박에 가볍게
+      if (s16 === 0 || s16 === 8 || s16 === 11) this.bgmKick(t)
+      if (s16 === 4 || s16 === 12) this.bgmSnare(t, 0.2)
+      if (s16 % 2 === 1) this.bgmHat(t, s16 === 7 || s16 === 15 ? 0.05 : 0.028)
+      // 8분 베이스 — 게임 곡의 조여 오는 16분과 대비된다
+      if (s16 % 2 === 0) this.bgmNote(t, ch.root, 'sawtooth', step16 * 1.7, 0.34, 260)
+      // 엇박 스탭(3화음) — 들뜬 느낌을 만드는 핵심
+      if (s16 === 3 || s16 === 7 || s16 === 10 || s16 === 14) {
+        for (const n of ch.notes) this.bgmNote(t, n, 'triangle', step16 * 1.3, 0.075, 2400)
+      }
+      // 통통 튀는 아르페지오 (위로 올라갔다 내려온다)
+      if (s16 % 4 === 0) {
+        const up = [0, 1, 2, 1][(step / 4) % 4]
+        this.bgmNote(t, ch.notes[up] * 2, 'triangle', step16 * 2.4, 0.06, 3400)
+      }
+      // 훅은 2·4마디에만 — 계속 나오면 대기실에서 질린다
+      if (bar % 2 === 1) {
+        const hf = Sfx.LOBBY_HOOK[s16]
+        if (hf) this.bgmNote(t, hf, 'square', step16 * 3, 0.075, 3000)
+      }
 
       this.bgmNextBeat += step16
       this.bgmBeatIndex++

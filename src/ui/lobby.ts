@@ -11,6 +11,7 @@ import {
   CtlMessage, LobbyLink, Member, ROOM_MODE_LABEL, RoomInfo, RoomLink, RoomMode,
   makeRoomCode, openLobby, openRoom,
 } from '../net/room'
+import { Sfx } from '../audio/sfx'
 import { bindSettings, settingsHtml } from './settings'
 import { drawPortrait } from '../render/character'
 import { drawMapPreview } from '../render/minimap'
@@ -73,6 +74,12 @@ export class Lobby {
   private rejoinTimer = 0
   private onlineTimer = 0
 
+  /**
+   * 대기실 배경음. 게임과 같은 절차 생성 엔진에 다른 곡을 얹는다(파일 없음 = 저작권 없음).
+   * 브라우저 자동재생 정책 때문에 **첫 클릭·키 입력 전에는 소리가 안 난다** — Sfx 가 알아서 풀어 준다.
+   */
+  private sfx = new Sfx()
+
   constructor(
     private host: HTMLElement,
     private handlers: LobbyHandlers,
@@ -84,6 +91,7 @@ export class Lobby {
     }
     this.render()
     this.openLobbyList()
+    this.sfx.startBgm('lobby')
   }
 
   // ---------- 화면 ----------
@@ -1107,7 +1115,10 @@ export class Lobby {
   private bindRoomSettings(): void {
     const box = this.host.querySelector('.roomset.settings')
     if (!box) return
-    bindSettings(box, { rerender: () => this.renderRoom() })
+    bindSettings(box, {
+      applyMute: (m) => this.sfx.setMuted(m), // 대기실 음악도 그 자리에서 꺼진다
+      rerender: () => this.renderRoom(),
+    })
   }
 
   /**
@@ -1255,6 +1266,8 @@ export class Lobby {
 
   dispose(): void {
     this.disposed = true
+    // 게임이 자기 Sfx 를 새로 만든다 → 로비 것은 여기서 확실히 닫는다 (AudioContext 가 쌓이지 않게)
+    this.sfx.dispose()
     clearInterval(this.onlineTimer)
     this.closeLink()
     if (this.lobbyLink) {
