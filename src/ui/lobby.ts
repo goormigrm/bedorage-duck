@@ -116,6 +116,7 @@ export class Lobby {
           <div class="topacts">
             <button class="btn main lg" id="btn-host">방 만들기</button>
             <button class="btn lg" id="btn-solo">혼자 하기</button>
+            <button class="btn secondary lg" id="btn-lobby-settings">⚙ 설정</button>
           </div>
         </div>
         <div class="notice" id="net-notice">
@@ -139,6 +140,15 @@ export class Lobby {
 
         <div class="section-t">캐릭터 <small>내가 쓸 캐릭터. 리스폰 대기 중에도 바꿀 수 있다</small></div>
         <div class="chars" id="chars"></div>
+
+        <div class="dlg" id="dlg-settings" hidden>
+          <div class="dbox">
+            <h3>설정</h3>
+            <p class="cardp">내 화면에만 적용됩니다.<br>게임 중에도 오른쪽 위 <b>⚙ 설정</b>에서 바꿀 수 있습니다.</p>
+            <div id="settings-body"></div>
+            <div class="dacts"><button class="btn main" data-close>닫기</button></div>
+          </div>
+        </div>
 
         <div class="dlg" id="dlg-host" hidden>
           <div class="dbox">
@@ -297,6 +307,7 @@ export class Lobby {
     ;(h.querySelector('#my-char') as HTMLButtonElement).onclick = () => h.querySelector('#chars')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     this.drawMyChar()
     ;(h.querySelector('#btn-host') as HTMLButtonElement).onclick = () => this.openDlg('#dlg-host')
+    ;(h.querySelector('#btn-lobby-settings') as HTMLButtonElement).onclick = () => this.openSettings()
     if (isTouchDevice()) {
       // 폰은 방을 만들 수 없다. 방장의 연결이 곧 방인데 폰 회선은 자주 흔들려 모두의 판이 터진다 (2026-09-05 요청)
       const hb = h.querySelector('#btn-host') as HTMLButtonElement
@@ -1064,10 +1075,6 @@ export class Lobby {
             ? `<p class="roomhint dim">빈 자리는 호스트가 <b>봇</b>으로 채웁니다.</p>`
             : ''
       }
-      <div class="roomset settings">
-        <p class="setlead">설정 <small>내 화면에만 적용됩니다 · 게임 중에도 ⚙ 설정에서 바꿀 수 있습니다</small></p>
-        ${settingsHtml()}
-      </div>
       <div class="room-actions">
         <button class="btn main" id="btn-ready" ${connected ? '' : 'disabled'}>${this.myReady ? '준비 취소' : '준비'}</button>
         ${teams ? `<button class="btn secondary" id="btn-team" ${connected ? '' : 'disabled'}>팀 바꾸기</button>` : ''}
@@ -1102,22 +1109,31 @@ export class Lobby {
       })
     }
     this.bindHostSettings()
-    this.bindRoomSettings()
     ;(this.host.querySelector('#btn-ready') as HTMLButtonElement).onclick = () => this.toggleReady()
     const teamBtn = this.host.querySelector('#btn-team') as HTMLButtonElement | null
     if (teamBtn) teamBtn.onclick = () => this.changeTeam()
   }
 
   /**
-   * 대기실 안의 설정 패널 (소리 · 조준선 · 조작 설명).
-   * 방 설정이 아니라 **내 화면 설정**이라 방송하지 않는다. 게임 안 ⚙ 설정과 같은 패널을 쓴다.
+   * 로비 설정 창 (소리 · 조준선 · 조작 설명). 인게임과 **같은 패널**이고 값은 localStorage 에 남는다
+   * → 로비에서 맞춘 것이 게임에 그대로 들어가고, 게임에서 바꾼 것이 로비로 돌아와도 유지된다.
+   * 방 설정이 아니라 내 화면 설정이라 방송하지 않는다.
+   * 대기실 안이 아니라 **오른쪽 위 버튼**에 둔다 — 대기실은 방을 만들어야 나오는 화면이라
+   * 혼자 하기만 하는 사람은 설정에 닿을 수가 없었다 (2026-09-08 사용자).
    */
-  private bindRoomSettings(): void {
-    const box = this.host.querySelector('.roomset.settings')
-    if (!box) return
-    bindSettings(box, {
+  private openSettings(): void {
+    this.renderSettingsBody()
+    this.openDlg('#dlg-settings')
+  }
+
+  /** 값이 바뀌면 창은 그대로 두고 안쪽만 다시 그린다 (openDlg 를 다시 부르면 창이 껌뻑인다) */
+  private renderSettingsBody(): void {
+    const body = this.host.querySelector('#settings-body') as HTMLElement | null
+    if (!body) return
+    body.innerHTML = settingsHtml()
+    bindSettings(body, {
       applyMute: (m) => this.sfx.setMuted(m), // 대기실 음악도 그 자리에서 꺼진다
-      rerender: () => this.renderRoom(),
+      rerender: () => this.renderSettingsBody(),
     })
   }
 
