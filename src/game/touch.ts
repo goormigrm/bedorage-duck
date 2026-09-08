@@ -51,7 +51,8 @@ export class TouchControls {
   private swapEdge = false
   private menuEdge = false
   private markEdge = false
-  private emoteEdge = false
+  /** 보낼 감정 번호 (0 = 없음). 1 ㅋㅋㅋ · 2 굿 · 3 미안 */
+  private emoteEdge = 0
   /** 사격 중인 손가락들 (영역·버튼 공용). 하나라도 있으면 발사 */
   private fire = new Set<number>()
 
@@ -59,6 +60,7 @@ export class TouchControls {
   private stickEl: HTMLElement
   private moveStick: Stick | null = null
   private detach: (() => void)[] = []
+  private talkTimer = 0
 
   constructor(host: HTMLElement) {
     const el = document.createElement('div')
@@ -69,13 +71,18 @@ export class TouchControls {
       <div class="tstick" hidden><i></i></div>
       <div class="tbtns">
         <button class="tbtn" data-a="reload">재장전</button>
-        <button class="tbtn" data-a="swap">교체</button>
         <button class="tbtn" data-a="ads">조준</button>
-        <button class="tbtn" data-a="dash">구르기</button>
         <button class="tbtn" data-a="sprint">달리기</button>
-        <button class="tbtn mark" data-a="mark" hidden>신호</button>
-        <button class="tbtn emote" data-a="emote">ㅋㅋ</button>
+        <button class="tbtn" data-a="dash">구르기</button>
+        <button class="tbtn talk" data-a="talk">대화</button>
+        <button class="tbtn swap" data-a="swap" hidden>교체</button>
         <button class="tbtn big" data-a="fire">사격</button>
+      </div>
+      <div class="tpop" id="tpop" hidden>
+        <button class="tchip mark" data-t="mark">📍 여기로</button>
+        <button class="tchip" data-t="e1">ㅋㅋㅋ</button>
+        <button class="tchip" data-t="e2">굿 👍</button>
+        <button class="tchip" data-t="e3">미안 🙏</button>
       </div>
       <button class="tbtn menu" data-a="menu">≡</button>`
     host.appendChild(el)
@@ -168,7 +175,7 @@ export class TouchControls {
         else if (act === 'swap') this.swapEdge = true
         else if (act === 'menu') this.menuEdge = true
         else if (act === 'mark') this.markEdge = true
-        else if (act === 'emote') this.emoteEdge = true
+        else if (act === 'talk') this.toggleTalk()
       }
       const release = (e: PointerEvent) => {
         if (act === 'reload') {
@@ -182,6 +189,21 @@ export class TouchControls {
       this.on(btn, 'pointerdown', press)
       this.on(btn, 'pointerup', release)
       this.on(btn, 'pointercancel', release)
+    }
+
+    // 대화 창 안의 칩: 누르면 그 신호/감정을 보내고 창을 닫는다
+    for (const chip of Array.from(el.querySelectorAll<HTMLButtonElement>('.tchip'))) {
+      const press = (e: PointerEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const t = chip.dataset.t
+        if (t === 'mark') this.markEdge = true
+        else if (t === 'e1') this.emoteEdge = 1
+        else if (t === 'e2') this.emoteEdge = 2
+        else if (t === 'e3') this.emoteEdge = 3
+        this.closeTalk()
+      }
+      this.on(chip, 'pointerdown', press)
     }
   }
 
@@ -225,22 +247,52 @@ export class TouchControls {
   }
 
   /** 감정 표현 버튼(ㅋㅋ)을 눌렀는가 (한 번만) */
-  takeEmote(): boolean {
+  takeEmote(): number {
     const v = this.emoteEdge
-    this.emoteEdge = false
+    this.emoteEdge = 0
     return v
   }
 
-  /** 팀전에서만 신호 버튼을 보여 준다 */
+  /** 팀전에서만 "여기로" 신호를 보여 준다 (대화 창 안) */
   setMarkVisible(v: boolean): void {
-    const b = this.root.querySelector('[data-a="mark"]') as HTMLElement | null
+    const b = this.root.querySelector('.tchip.mark') as HTMLElement | null
     if (b) b.hidden = !v
+  }
+
+  /** 캐릭터를 바꿀 수 있을 때만 교체 버튼을 낸다 — 늘 띄우면 오른쪽이 버튼 밭이 된다 */
+  setSwapVisible(v: boolean): void {
+    const b = this.root.querySelector('.tbtn.swap') as HTMLElement | null
+    if (b && b.hidden === v) b.hidden = !v
+  }
+
+  /**
+   * 대화 창(신호·감정) 열고 닫기. 버튼 하나로 네 가지를 쓴다 —
+   * 신호·감정을 각각 버튼으로 두니 오른쪽이 너무 빽빽했다 (2026-09-08).
+   */
+  private toggleTalk(): void {
+    const pop = this.root.querySelector('#tpop') as HTMLElement | null
+    const btn = this.root.querySelector('[data-a="talk"]') as HTMLElement | null
+    if (!pop) return
+    const open = pop.hidden
+    pop.hidden = !open
+    btn?.classList.toggle('on', open)
+    clearTimeout(this.talkTimer)
+    // 열어 두고 잊어버리면 화면을 가리므로 잠시 뒤 스스로 닫힌다
+    if (open) this.talkTimer = window.setTimeout(() => this.closeTalk(), 4000)
+  }
+
+  private closeTalk(): void {
+    const pop = this.root.querySelector('#tpop') as HTMLElement | null
+    if (pop) pop.hidden = true
+    this.root.querySelector('[data-a="talk"]')?.classList.remove('on')
+    clearTimeout(this.talkTimer)
   }
 
   /** 창(메뉴·결과·캐릭터 선택)이 떠 있는 동안은 조작을 치운다 — 창 버튼이 눌려야 하므로 */
   setVisible(v: boolean): void {
     this.root.hidden = !v
     if (!v) {
+      this.closeTalk()
       this.move = { x: 0, y: 0 }
       this.moveStick = null
       this.stickEl.hidden = true
@@ -250,6 +302,7 @@ export class TouchControls {
   }
 
   dispose(): void {
+    clearTimeout(this.talkTimer)
     for (const off of this.detach) off()
     this.detach = []
     this.root.remove()

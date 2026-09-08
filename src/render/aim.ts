@@ -14,7 +14,17 @@ export const AIM_STYLES: { id: AimStyle; name: string; desc: string }[] = [
   { id: 'dot', name: '점', desc: '가장 깔끔하다. 정확한 한 점만' },
 ]
 
+/** 조준선 크기 배율. 화면이 크거나 눈이 편한 정도가 사람마다 달라서 (2026-09-08) */
+export const AIM_SIZES: { id: AimSize; name: string; mul: number }[] = [
+  { id: 's', name: '작게', mul: 0.8 },
+  { id: 'm', name: '보통', mul: 1 },
+  { id: 'l', name: '크게', mul: 1.35 },
+  { id: 'xl', name: '아주 크게', mul: 1.7 },
+]
+export type AimSize = 's' | 'm' | 'l' | 'xl'
+
 const KEY = 'bd.aim'
+const SIZE_KEY = 'bd.aimSize'
 
 export function loadAimStyle(): AimStyle {
   try {
@@ -34,6 +44,28 @@ export function saveAimStyle(v: AimStyle): void {
   }
 }
 
+export function loadAimSize(): AimSize {
+  try {
+    const v = localStorage.getItem(SIZE_KEY)
+    if (AIM_SIZES.some((s) => s.id === v)) return v as AimSize
+  } catch {
+    /* 저장소가 막힌 브라우저 */
+  }
+  return 'm'
+}
+
+export function saveAimSize(v: AimSize): void {
+  try {
+    localStorage.setItem(SIZE_KEY, v)
+  } catch {
+    /* 무시 */
+  }
+}
+
+export function aimSizeMul(v: AimSize): number {
+  return AIM_SIZES.find((s) => s.id === v)?.mul ?? 1
+}
+
 /**
  * 조준선을 그린다.
  * @param r 퍼짐 반경(정조준이면 작다). 모양에 따라 크기 기준으로 쓴다
@@ -46,11 +78,12 @@ export function drawAim(
   y: number,
   r: number,
   color: string,
+  mul = 1,
 ): void {
   // 두 번 그린다: 어두운 외곽선 → 밝은 선. 밝은 바닥에서도 묻히지 않게
   const pass = (draw: () => void, w: number) => {
     ctx.strokeStyle = 'rgba(8,10,14,0.8)'
-    ctx.lineWidth = w + 3
+    ctx.lineWidth = w + 3 * mul
     ctx.lineCap = 'round'
     draw()
     ctx.strokeStyle = color
@@ -60,7 +93,7 @@ export function drawAim(
   const dot = (rad: number) => {
     ctx.fillStyle = 'rgba(8,10,14,0.8)'
     ctx.beginPath()
-    ctx.arc(x, y, rad + 1.4, 0, Math.PI * 2)
+    ctx.arc(x, y, rad + 1.4 * mul, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = color
     ctx.beginPath()
@@ -81,26 +114,27 @@ export function drawAim(
       ctx.stroke()
     }, w)
 
+  const R = r * mul
   switch (style) {
     case 'bold':
-      ticks(r, 11, 4)
-      dot(2.6)
+      ticks(R, 11 * mul, 4 * mul)
+      dot(2.6 * mul)
       break
     case 'circle':
       pass(() => {
         ctx.beginPath()
-        ctx.arc(x, y, r + 3, 0, Math.PI * 2)
+        ctx.arc(x, y, R + 3 * mul, 0, Math.PI * 2)
         ctx.stroke()
-      }, 2.5)
-      dot(2)
+      }, 2.5 * mul)
+      dot(2 * mul)
       break
     case 'dot':
-      dot(4)
+      dot(4 * mul)
       break
     case 'cross':
     default:
-      ticks(r, 8, 2.5)
-      dot(2)
+      ticks(R, 8 * mul, 2.5 * mul)
+      dot(2 * mul)
       break
   }
 }

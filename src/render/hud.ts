@@ -2,7 +2,7 @@
 // 2명이면 좌우 카드, 3~4명이면 내 카드 + 오른쪽 아래 상대 목록. 팀전은 위 점수판이 A팀 : B팀.
 
 import { CHARACTERS, CharacterDef } from '../core/characters'
-import { AimStyle, drawAim, loadAimStyle } from './aim'
+import { AimSize, AimStyle, aimSizeMul, drawAim, loadAimSize, loadAimStyle } from './aim'
 import { GameState, PlayerState, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS, WeaponId } from '../core/weapons'
 
@@ -129,8 +129,15 @@ export class Hud {
   private countdownPulse = 0
   private lastCountdownSec = -1
   private dpr = 1
-  /** 조준선 모양. 내 화면 설정이라 localStorage 에서 읽는다 (P2P 로 보내지 않는다) */
+  /** 조준선 모양·크기. 내 화면 설정이라 localStorage 에서 읽는다 (P2P 로 보내지 않는다) */
   private aimStyle: AimStyle = loadAimStyle()
+  private aimSize: AimSize = loadAimSize()
+
+  /** 설정 창에서 바꾸면 바로 반영한다 (판을 다시 시작하지 않아도) */
+  refreshAim(): void {
+    this.aimStyle = loadAimStyle()
+    this.aimSize = loadAimSize()
+  }
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d')
@@ -668,7 +675,7 @@ export class Hud {
     const r = me.ads ? 6 : 12 + me.recoil * 0.4
     // 상대 위에 올라가 있으면 **붉은색** — 지금 쏘면 헤드샷이 날 수 있다는 신호.
     // 금색이었는데 스튜디오 크림색 바닥에서 흰색과 잘 구분되지 않았다 (2026-09-08)
-    drawAim(ctx, this.aimStyle, cur.x, cur.y, r, on ? 'rgba(255,64,52,1)' : 'rgba(255,255,255,0.96)')
+    drawAim(ctx, this.aimStyle, cur.x, cur.y, r, on ? 'rgba(255,64,52,1)' : 'rgba(255,255,255,0.96)', aimSizeMul(this.aimSize))
     // 히트마커: 네 귀퉁이 사선이 바깥으로 벌어지며 사라진다. 몸통은 **빨강**, 머리는 **금색**으로 더 크고 오래 + 링
     if (this.hitMarkT > 0) {
       const k = this.hitMarkT / this.hitMarkMax

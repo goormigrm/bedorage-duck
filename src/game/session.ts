@@ -8,7 +8,7 @@ import { buildMap } from '../core/map'
 import { DEFAULT_MAP, MapId, MapScale, scaleForPlayers } from '../core/maps'
 import { createState, dropPlayer, hashState, joinPlayer, snapshot, step, syncSandbags } from '../core/sim'
 import { angleToRad } from '../core/fixedmath'
-import { GameState, PlayerState, TICK_MS, isTeamMatch, teamKills } from '../core/state'
+import { GameState, PlayerState, SWAP_GRACE_TICKS, TICK_MS, isTeamMatch, teamKills } from '../core/state'
 import { WEAPONS } from '../core/weapons'
 import { drawPortrait } from '../render/character'
 import { Lockstep } from '../net/lockstep'
@@ -19,6 +19,7 @@ import { U } from '../render3d/world3d'
 import { Renderer3D } from '../render3d/renderer3d'
 import { Sfx } from '../audio/sfx'
 import { LocalInput } from './localInput'
+import { bindSettings, keysShownPref, settingsHtml } from '../ui/settings'
 import { TouchControls, enterLandscape, isTouchDevice } from './touch'
 import { Ticker } from './ticker'
 
@@ -73,8 +74,10 @@ export class Session {
   private touch: TouchControls | null = null
   private sfx = new Sfx()
   private bots: BotMemory[] = []
-  /** 아래 조작 안내 띠 표시 여부 (처음 두 판 · 이후 메뉴에서) */
+  /** 아래 조작 안내 띠 표시 여부 (처음 두 판 · 이후 설정에서) */
   private keysShown = true
+  /** 설정 창이 열려 있는가 (열려 있으면 소리 등을 바꿀 때 다시 그린다) */
+  private settingsOpen = false
   /**
    * 자동 조종(`?autopilot=1`): 내 캐릭터를 보통 난이도 봇이 움직인다. 방을 지키는 운영용 — tools/rooms.mjs 가 이 주소로
    * 브라우저를 여러 개 띄워 사람처럼 보이는 방을 만들어 둔다(2026-09-06). 주소 뒤 플래그라 다른 사람에게는 안 보인다.
@@ -184,7 +187,7 @@ export class Session {
       <div class="game-root">
         <div class="game-stage" id="stage">
           <div class="game-ui">
-            <div class="top-right"><button class="btn secondary" id="btn-mute">소리</button><button class="btn secondary" id="btn-lobby">로비로</button></div>
+            <div class="top-right"><button class="btn secondary" id="btn-lobby">로비로</button><button class="btn secondary" id="btn-settings">⚙ 설정</button></div>
             <div class="keys"><b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>좌클릭</b> 사격 · <b>우클릭</b> 정조준 · <b>Space</b> 구르기 · <b>Shift</b> 달리기 · <b>R</b> 재장전 · <b>Tab</b> 캐릭터 교체(리스폰 대기·3초) · <b>V</b> 팀 신호 · <b>1·2·3</b> 감정 · <b>N</b> 소리 · <b>Esc</b> 메뉴</div>
             <div class="overlay" id="overlay" hidden><div class="box" id="overlay-box"></div></div>
           </div>
@@ -197,8 +200,7 @@ export class Session {
     try {
       const games = Number(localStorage.getItem('bd.games') ?? '0')
       localStorage.setItem('bd.games', String(games + 1))
-      const pref = localStorage.getItem('bd.keys')
-      this.keysShown = pref !== null ? pref === '1' : games < 2
+      this.keysShown = keysShownPref(games < 2)
     } catch {
       this.keysShown = true
     }
@@ -215,12 +217,9 @@ export class Session {
     }
     this.input.attach(this.stage, this.touch)
     ;(host.querySelector('#btn-lobby') as HTMLButtonElement).onclick = () => this.exit()
-    const muteBtn = host.querySelector('#btn-mute') as HTMLButtonElement
-    const syncMute = () => (muteBtn.textContent = this.sfx.muted ? '소리 꺼짐' : '소리 켜짐')
-    muteBtn.onclick = () => {
-      this.sfx.toggle()
-      syncMute()
-    }
+    ;(host.querySelector('#btn-settings') as HTMLButtonElement).onclick = () => this.showSettings()
+    // 소리 상태는 이제 설정 창 안에서 보여 준다. 이 함수는 N 키·메뉴가 라벨을 갱신할 때 쓴다
+    const syncMute = () => this.refreshSettings()
     // 자동 조종 탭(방 지키기)은 소리를 안 낸다 — 크롬을 여러 개 띄우니 배경음이 겹친다
     if (this.autopilot) this.sfx.setMuted(true)
     syncMute()
@@ -394,6 +393,41 @@ export class Session {
     if (el) el.hidden = !this.keysShown
   }
 
+  /**
+   * 설정 창 (소리 · 조준선 모양/크기 · 조작 안내).
+   * PC 는 오른쪽 위 ⚙ 설정, 폰은 ≡ 메뉴 안에서 연다.
+   * 전부 **내 화면 설정**이라 P2P 로 보내지 않고 localStorage 에만 남는다.
+   */
+  private showSettings(): void {
+    if (this.cfg.mode === 'solo') this.paused = true
+    this.settingsOpen = true
+    this.renderSettings()
+  }
+
+  /** 설정 창이 떠 있으면 내용만 다시 그린다 (라벨·선택 상태 갱신) */
+  private refreshSettings(): void {
+    if (this.settingsOpen) this.renderSettings()
+  }
+
+  private renderSettings(): void {
+    this.showOverlay('설정', '내 화면에만 적용됩니다.', [{ label: '닫기', primary: true, onClick: () => this.closeSettings() }], settingsHtml(!!this.touch))
+    bindSettings(this.overlay, {
+      applyMute: (m) => this.sfx.setMuted(m),
+      applyAim: () => this.renderer.hud.refreshAim(),
+      applyKeys: (shown) => {
+        this.keysShown = shown
+        this.applyKeys()
+      },
+      touch: !!this.touch,
+      rerender: () => this.renderSettings(),
+    })
+  }
+
+  private closeSettings(): void {
+    this.settingsOpen = false
+    this.hideOverlay()
+  }
+
   private showMenu(): void {
     const solo = this.cfg.mode === 'solo'
     if (solo) this.paused = true
@@ -401,35 +435,8 @@ export class Session {
       solo ? '일시정지' : '메뉴',
       solo ? '봇은 기다려 줍니다.' : '대전 중에는 게임이 멈추지 않습니다.',
       [
-        // 조작 안내 띠 켜고 끄기 (터치는 띠 자체가 없다)
-        ...(this.touch
-          ? []
-          : [
-              {
-                label: this.keysShown ? '조작 안내 숨기기' : '조작 안내 보기',
-                primary: false,
-                onClick: () => {
-                  this.keysShown = !this.keysShown
-                  try {
-                    localStorage.setItem('bd.keys', this.keysShown ? '1' : '0')
-                  } catch {
-                    /* 저장 못 해도 이번 판은 반영된다 */
-                  }
-                  this.applyKeys()
-                  this.showMenu()
-                },
-              },
-            ]),
-        // 모바일은 화면 위쪽에 ≡ 하나만 두고 소리·로비로를 이 안에 넣는다
-        {
-          label: this.sfx.muted ? '소리 켜기' : '소리 끄기',
-          primary: false,
-          onClick: () => {
-            this.sfx.toggle()
-            this.syncMute()
-            this.showMenu() // 라벨 갱신
-          },
-        },
+        // 소리·조준선·조작 안내는 설정 창으로 모았다 (2026-09-08)
+        { label: '⚙ 설정', primary: false, onClick: () => this.showSettings() },
         { label: '계속', primary: true, onClick: () => this.hideOverlay() },
         { label: '로비로', primary: false, onClick: () => this.exit() },
       ],
@@ -466,7 +473,14 @@ export class Session {
   /** 터치 메뉴 버튼 */
   private pollTouchMenu(): void {
     if (this.touch?.takeMark() && isTeamMatch(this.state)) this.sendMark()
-    if (this.touch?.takeEmote()) this.sendEmote(1)
+    const emote = this.touch?.takeEmote() ?? 0
+    if (emote) this.sendEmote(emote)
+    if (this.touch) {
+      // 교체 버튼은 실제로 바꿀 수 있을 때만 (죽어서 기다리는 중 · 리스폰 3초 안) — sim 의 조건과 같다
+      const me = this.state.players[this.cfg.localPlayer]
+      const canSwap = !!me && this.state.phase === 'playing' && (!me.alive || me.aliveTicks <= SWAP_GRACE_TICKS)
+      this.touch.setSwapVisible(canSwap)
+    }
     if (this.touch?.takeMenu()) {
       if (this.overlay.hidden) this.showMenu()
       else this.hideOverlay()

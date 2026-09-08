@@ -265,29 +265,49 @@ input.code:focus { outline: 2px solid var(--duck); border-color: transparent; }
   border: 2px solid rgba(230,237,243,.22); background: rgba(13,17,23,.3); pointer-events: none; }
 .tstick i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
   background: rgba(230,237,243,.3); border: 2px solid rgba(255,255,255,.4); display: block; }
-.tbtns { position: fixed; right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto;
-  grid-template-areas: "reload ads" "swap dash" "sprint mark" "emote emote" "fire fire"; gap: 9px; justify-items: end; }
-.tbtn { width: 62px; height: 62px; border-radius: 50%; border: 1px solid var(--line); background: rgba(22,27,34,.72);
+/* 오른쪽 버튼 무리. 신호·감정을 "대화" 하나로 합치고 교체는 쓸 수 있을 때만 나온다 →
+   상시 6개(전 8개). 엄지로 닿는 아래쪽에 자주 쓰는 것을 둔다 (2026-09-08) */
+.tbtns { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); display: grid; grid-template-columns: auto auto;
+  grid-template-areas: "swapx reload" "talk ads" "sprint dash" "fire fire"; gap: 10px; justify-items: end; }
+.tbtn { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: rgba(22,27,34,.72);
   color: var(--ink-2); font: 600 12px "IBM Plex Sans KR", sans-serif; cursor: pointer; padding: 0; pointer-events: auto;
   -webkit-tap-highlight-color: transparent; touch-action: none; }
 .tbtn[data-a="reload"] { grid-area: reload; }
-.tbtn[data-a="swap"] { grid-area: swap; }
+.tbtn[data-a="swap"] { grid-area: swapx; }
 .tbtn[data-a="ads"] { grid-area: ads; }
 .tbtn[data-a="dash"] { grid-area: dash; }
-.tbtn[data-a="mark"] { grid-area: mark; }
 .tbtn[data-a="sprint"] { grid-area: sprint; }
-.tbtn[data-a="emote"] { grid-area: emote; width: 62px; height: 44px; border-radius: 22px; font-size: 13px; }
-.tbtn.big { grid-area: fire; width: 100%; height: 62px; border-radius: 34px; font-size: 15px; font-weight: 700;
+.tbtn[data-a="talk"] { grid-area: talk; font-size: 13px; }
+.tbtn.big { grid-area: fire; width: 100%; height: 68px; border-radius: 36px; font-size: 16px; font-weight: 700;
   color: var(--duck); border-color: rgba(255,216,74,.45); background: rgba(255,216,74,.14); }
 .tbtn.on { background: linear-gradient(180deg, #ffe27a, #e6b52e); color: var(--duck-ink); border-color: #b98c1a; }
+/* 설정(≡)은 오른쪽 위. 점수판을 피하면서 엄지가 닿게 크게 (2026-09-08: 46 → 56) */
 .tbtn.menu { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 12px);
-  top: calc(env(safe-area-inset-top, 0px) + 10px); width: 46px; height: 46px; font-size: 20px; }
+  top: calc(env(safe-area-inset-top, 0px) + 10px); width: 56px; height: 56px; font-size: 24px;
+  background: rgba(22,27,34,.85); }
+
+/* 대화 창: 팀 신호 + 감정 3종. 버튼 위로 펼쳐지고 4초 뒤 스스로 닫힌다 */
+.tpop { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 88px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none; z-index: 3; }
+.tpop[hidden] { display: none; }
+.tchip { pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent;
+  min-width: 132px; height: 52px; padding: 0 18px; border-radius: 26px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(22,27,34,.92); color: var(--ink);
+  font: 600 15px "IBM Plex Sans KR", sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.tchip.mark { color: var(--duck); border-color: rgba(255,216,74,.5); background: rgba(255,216,74,.16); }
+.tchip[hidden] { display: none; }
+
 @media (max-height: 420px) {
   .tstick { width: 112px; height: 112px; margin: -56px 0 0 -56px; }
   .tstick i { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
-  .tbtn { width: 54px; height: 54px; font-size: 11px; }
-  .tbtn.big { height: 50px; font-size: 14px; }
-  .tbtns { gap: 7px; }
+  .tbtn { width: 56px; height: 56px; font-size: 11px; }
+  .tbtn.big { height: 56px; font-size: 15px; }
+  .tbtn.menu { width: 50px; height: 50px; font-size: 22px; }
+  .tbtns { gap: 8px; }
+  .tchip { min-width: 116px; height: 46px; font-size: 14px; }
+  .tpop { bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); right: calc(env(safe-area-inset-right, 0px) + 78px); }
 }
 
 /* ---- 모바일 상단: 점수판(캔버스 중앙)과 버튼이 겹치지 않게 ---- */
@@ -450,10 +470,29 @@ input.nick.big.need { border-color: var(--risk); box-shadow: 0 0 0 3px rgba(248,
 .seg[hidden] { display: none; }
 .setrow.botrow .hintline { font-size: 12px; }
 
-/* 조준선 고르기 — 방 설정이 아니라 내 화면 설정이라 따로 둔다 (2026-09-08) */
-.setrow.aimrow { align-items: center; gap: 10px 12px; margin-top: 14px; }
-.setrow.aimrow .aimlab { background: none; border: 0; padding: 0; font-size: 13px; color: var(--ink-3); gap: 8px; }
-.setrow.aimrow .aimlab b { font: 700 10.5px "IBM Plex Mono", monospace; color: var(--ink-2); letter-spacing: .08em; }
+/* 게임 안 설정 창 — 소리 · 조준선 모양/크기 · 조작 안내 (2026-09-08) */
+.setpanel { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center;
+  margin: 4px 0 14px; text-align: left; }
+.setpanel .srow { display: contents; }
+.setpanel label { min-width: 0; margin: 0; font: 600 13px "IBM Plex Sans KR", sans-serif; color: var(--ink-2);
+  letter-spacing: 0; text-transform: none; justify-self: end; white-space: nowrap; }
+/* 세그먼트와 미리보기를 한 칸에 묶는다 — 그리드 칸이 밀리지 않게 */
+.setpanel .sctl { display: flex; align-items: center; gap: 10px; justify-self: start; }
+.setpanel .aimpv { flex: none; }
+@media (pointer: coarse) {
+  /* 폰에서는 손가락으로 누르므로 칸을 키우고 한 줄씩 쌓는다 */
+  .setpanel { grid-template-columns: 1fr; gap: 2px 0; }
+  .setpanel label { justify-self: start; margin-top: 10px; font-size: 14px; }
+  .setpanel .seg button { padding: 11px 17px; font-size: 15px; }
+  .setpanel .aimpv { display: none; }
+}
+
+/* 대기실 안 설정 패널 — 방 설정이 아니라 내 화면 설정이라 따로 둔다 (2026-09-08) */
+.roomset.settings { display: block; margin-top: 12px; }
+.roomset.settings .setlead { margin: 0 0 10px; font: 700 13px "IBM Plex Sans KR", sans-serif; color: var(--ink); }
+.roomset.settings .setlead small { font-weight: 500; color: var(--ink-3); margin-left: 8px; }
+.roomset.settings .setpanel { margin: 0; }
+/* 조준선 미리보기: 밝은 바닥/어두운 바닥을 반씩 깔아 대비를 바로 본다 */
 .aimpv { width: 44px; height: 44px; border: 1px solid var(--line-2); border-radius: 8px;
   background: linear-gradient(135deg, #d8d3bf 0%, #d8d3bf 50%, #4a5340 50%, #4a5340 100%); }
 
