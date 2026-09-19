@@ -2,6 +2,21 @@
 
 새것이 위. 날짜 · 커밋 단위. 인수인계 요약은 [HANDOVER.md](HANDOVER.md).
 
+## v1.14.7 — 2026-09-19 (Nostr 중계 5곳 → 10곳)
+
+- **방 참가 안정성 점검**(배도라지RPG v0.19.2 에서 같은 원인으로 참가가 20~40초 걸린 것을 보고). Trystero 는 기본 중계 18곳 중 앱 ID 로 섞은 **앞 5곳**을 쓴다.
+  덕(`bedorage-duck-v3`)에 뽑힌 5곳 중 **3곳이 죽어 있었다**: black.nostrcity.club · relay.nostrdice.com 접속 실패, relay.verified-nostr.com 접속 중 멈춤 → 실패.
+  남은 두 곳 중 relay.mostro.network 는 열려 있어도 **거의 나르지 않았다**(측정 20초 동안 이벤트 0건, 18곳을 동시에 찔렀을 때 왕복 7.2초 — nos.lol 1.4초) → 사실상 **nos.lol 한 곳**으로 돌고 있었다.
+  (HANDOVER 에 적혀 있던 nos.lol 의 PoW 거절은 지금은 없다 — OK 18건 · 거절 0건.)
+- 지금 참가는 빨랐지만(두 탭, `openRoom` 게스트 → 피어 연결 6회 **1.1~1.3초**) nos.lol 하나만 흔들려도 아무도 못 만난다 → **`relayRedundancy: 10`**(로비·게임 방 두 곳, `room.ts RELAYS`).
+  - 늘린 뒤: 열린 곳 nos.lol · mostro · **nostr.sathoarder.com** · relay.fountain.fm(열리지만 이 이벤트 종류를 거절 — `CLOSED: kinds not supported`). 실제로 나르는 곳 **nos.lol 25건 · sathoarder 25건**.
+    참가 6회 **0.95~1.1초**. 콘솔의 Trystero `relay failure` 경고는 전후 모두 0건(나머지는 죽은 중계의 WebSocket 접속 실패 줄뿐).
+  - **옛 버전과 호환**: 새 10곳의 앞 5곳이 옛 5곳과 같은 순서다(`getRelaySockets()` 로 확인). 배포 사이트(v1.14.6) 탭 + 개발 서버 탭 둘이 공용 로비에서 서로 보였다(세 탭 모두 "접속 3명").
+  - 18곳 전부를 브라우저에서 찔러 보면 왕복이 되는 곳은 5곳(nos.lol · mostro · sathoarder · yabu.me · nostr.data.haus). 18곳으로 늘리면 둘을 더 얻지만,
+    Trystero 는 상대 방송을 본 **중계마다 WebRTC 제안을 따로** 만들어서 공용 로비 인원 × 중계 수만큼 연결 시도가 불어난다 → RPG 와 같은 10곳에서 멈췄다.
+- 알아 둘 Trystero 동작: 중계 목록은 **페이지에서 처음 부르는 `joinRoom`(= 로비)** 설정으로 한 번만 정해진다. 첫 접속에 실패한 중계는 나중에 살아나도 그 페이지에선 안 쓴다.
+- 공지글·플레이 가이드: 확인했고 바꿀 것 없음(플레이어에게 보이는 변화 없음, FAQ 문구는 그대로 맞다).
+
 ## v1.14.6 — 2026-09-08 (상단 바 한 줄 · 내 캐릭터 폭)
 
 - 내 캐릭터 칩이 `flex: 1 1 300px` 이라 **남는 공간을 다 가져가** 글씨 오른쪽이 텅 비어 어색했다(제보).
